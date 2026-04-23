@@ -13,6 +13,11 @@ export type Chunk = {
   metadata?: Record<string, unknown>;
 };
 
+export type ChunkRow = Chunk & {
+  embedding: number[];
+  file_hash: string;
+};
+
 export type MatchRow = {
   id: number;
   content: string;
@@ -22,13 +27,61 @@ export type MatchRow = {
   similarity: number;
 };
 
-function md5(s: string): string {
+export function md5(s: string): string {
   return createHash("md5").update(s).digest("hex");
+}
+
+/**
+ * Returns a Map<file_origin, file_hash> for every file already indexed under projectId.
+ * Used by sync_local_memory to skip files whose content hasn't changed.
+ */
+export async function listFileHashes(projectId: string): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const pageSize = 1000;
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("memory_chunks")
+      .select("file_origin, file_hash")
+      .eq("project_id", projectId)
+      .not("file_hash", "is", null)
+      .range(from, from + pageSize - 1);
+
+    if (error) throw new Error(`listFileHashes failed: ${error.message}`);
+    if (!data || data.length === 0) break;
+
+    for (const row of data) {
+      if (row.file_origin && row.file_hash && !map.has(row.file_origin)) {
+        map.set(row.file_origin, row.file_hash);
+      }
+    }
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return map;
+}
+
+/**
+ * Remove every chunk belonging to a given (project, file). Used before re-embedding
+ * a changed file so stale chunk_indexes don't linger.
+ */
+export async function deleteChunksForFile(
+  projectId: string,
+  fileOrigin: string,
+): Promise<number> {
+  const { error, count } = await supabase
+    .from("memory_chunks")
+    .delete({ count: "exact" })
+    .eq("project_id", projectId)
+    .eq("file_origin", fileOrigin);
+  if (error) throw new Error(`deleteChunksForFile failed: ${error.message}`);
+  return count ?? 0;
 }
 
 export async function upsertChunks(
   projectId: string,
-  rows: Array<Chunk & { embedding: number[] }>,
+  rows: ChunkRow[],
 ): Promise<{ count: number }> {
   if (rows.length === 0) return { count: 0 };
 
@@ -39,6 +92,7 @@ export async function upsertChunks(
     chunk_index: r.chunk_index,
     embedding: r.embedding,
     content_hash: md5(r.content),
+    file_hash: r.file_hash,
     metadata: r.metadata ?? {},
     updated_at: new Date().toISOString(),
   }));
@@ -63,7 +117,6 @@ export async function searchChunks(
     match_count: matchCount,
     min_similarity: minSimilarity,
   });
-
   if (error) throw new Error(`Supabase search failed: ${error.message}`);
   return (data ?? []) as MatchRow[];
 }
@@ -84,7 +137,6 @@ export async function upsertRule(
     p_embedding: embedding,
     p_metadata: metadata,
   });
-
   if (error) throw new Error(`Supabase upsertRule failed: ${error.message}`);
   return data as number;
 }

@@ -9,7 +9,7 @@ import { currentProjectId } from "./project.js";
 
 const server = new McpServer({
   name: "claude-memory-mcp",
-  version: "0.2.0",
+  version: "0.3.0",
 });
 
 const projectIdSchema = z
@@ -22,13 +22,17 @@ const projectIdSchema = z
 
 server.tool(
   "sync_local_memory",
-  "Scan configured folders (MEMORY_ROOTS) for .md files, chunk them, embed via Ollama, and upsert to Supabase tagged with the current project_id.",
+  "Scan configured folders (MEMORY_ROOTS) for .md files and upsert them to Supabase. Uses file-level MD5 hash-gating: unchanged files are skipped, changed files are re-embedded, new files are added. Returns counts for scanned / skipped / added / updated / orphans. Chunks are bulk-upserted in batches of 100.",
   {
     roots: z
       .array(z.string())
       .optional()
       .describe("Override MEMORY_ROOTS from .env with an explicit list of folders."),
     project_id: projectIdSchema,
+    force: z
+      .boolean()
+      .optional()
+      .describe("Re-embed every file regardless of hash. Default false."),
   },
   async (args) => {
     const result = await syncLocalMemory(args);
