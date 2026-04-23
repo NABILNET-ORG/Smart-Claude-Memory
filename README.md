@@ -10,6 +10,7 @@
 [![pgvector](https://img.shields.io/badge/pgvector-HNSW-336791?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Ollama](https://img.shields.io/badge/Ollama-local%20embeddings-000)](https://ollama.com/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](#license)
+[![Version](https://img.shields.io/badge/version-0.3.0-green)](#)
 
 </div>
 
@@ -25,7 +26,7 @@ Claude sessions load `memory.md`, `rules.md`, `cloud.md`, and a dozen other cont
 
 | Tool | Purpose |
 |---|---|
-| `sync_local_memory` | Scan folders → chunk → embed → upsert |
+| `sync_local_memory` | Scan folders → **MD5 hash-gate** → chunk → embed → **bulk upsert**. Skips unchanged files. |
 | `search_memory` | Semantic search over the current project's chunks |
 | `update_rule` | Targeted single-chunk upsert without re-scanning |
 
@@ -81,6 +82,55 @@ search_memory({ query: "auth flow", project_id: "acme-api" })
 
 ---
 
+## Incremental sync (v0.3.0)
+
+For corpora with thousands of files, re-embedding on every call is wasteful. `sync_local_memory` now runs a **hash-gated** pipeline:
+
+1. Snapshot `Map<file_origin, file_hash>` for the current `project_id` in one paginated SELECT.
+2. For each local file, compute MD5 **before** chunking or embedding.
+3. If the hash matches the DB, skip — zero Ollama calls, zero writes.
+4. If it differs (or is new), chunk + embed and buffer the rows.
+5. Flush in batches of 100 chunks per upsert to minimize round-trips.
+6. If a file is gone locally but still in the DB, it's reported in `orphan_files` (not auto-pruned).
+
+Measured on this repo's own README (28 chunks, single file):
+
+| Run | Behavior | Time | Ollama calls |
+|---|---|---|---|
+| Cold sync | Embed + upsert | **~3.7 s** | 28 |
+| Unchanged rerun | All skip | **~0.3 s** | **0** |
+| One file modified | Skip N−1, re-embed 1 | proportional to the delta | 1 file's worth |
+
+### Output shape
+
+```json
+{
+  "project_id": "acme-api",
+  "force": false,
+  "scanned": 812,
+  "skipped": 806,
+  "added": 3,
+  "updated": 3,
+  "orphans": 1,
+  "orphan_files": ["/abs/path/legacy.md"],
+  "chunks_upserted": 47,
+  "chunks_deleted": 21,
+  "ms": 1840
+}
+```
+
+### Force re-embed
+
+Pass `force: true` to bypass the skip gate. Pre-existing files are still correctly classified as `updated` (not `added`) and their stale chunks are purged before re-insert — critical when a file shrinks.
+
+```
+sync_local_memory({ force: true })
+```
+
+Verified by [scripts/e2e-incremental-test.ts](scripts/e2e-incremental-test.ts), which walks five phases: cold, rerun, modify+add+delete, force, and row-shape integrity.
+
+---
+
 ## Getting started
 
 ### Prerequisites
@@ -129,12 +179,15 @@ CHUNK_OVERLAP=100
 
 ### 3. Apply the schema
 
+Migrations are cumulative and idempotent. Run them in order:
+
 ```bash
-npm run schema                              # applies 001_schema.sql
-npm run schema -- 002_multi_project.sql     # applies multi-project migration
+npm run schema                              # 001_schema.sql — base table + HNSW index + RPCs
+npm run schema -- 002_multi_project.sql     # adds project_id + per-project isolation
+npm run schema -- 003_file_hash.sql         # adds file_hash for incremental sync
 ```
 
-Or, if you prefer to paste SQL manually: open [Supabase SQL Editor](https://supabase.com/dashboard) and run [scripts/001_schema.sql](scripts/001_schema.sql) followed by [scripts/002_multi_project.sql](scripts/002_multi_project.sql).
+Or paste the SQL manually in [Supabase SQL Editor](https://supabase.com/dashboard): [scripts/001_schema.sql](scripts/001_schema.sql) → [scripts/002_multi_project.sql](scripts/002_multi_project.sql) → [scripts/003_file_hash.sql](scripts/003_file_hash.sql).
 
 ### 4. Build
 
@@ -209,7 +262,8 @@ create table memory_chunks (
   embedding    vector(768) not null,
   file_origin  text not null,
   chunk_index  int not null default 0,
-  content_hash text not null,
+  content_hash text not null,                  -- MD5 of the chunk text
+  file_hash    text,                           -- MD5 of the whole file at last sync (v0.3.0)
   metadata     jsonb not null default '{}'::jsonb,
   project_id   text not null default 'default',
   updated_at   timestamptz not null default now(),
@@ -218,9 +272,10 @@ create table memory_chunks (
 
 create index on memory_chunks using hnsw (embedding vector_cosine_ops);
 create index on memory_chunks (project_id);
+create index on memory_chunks (project_id, file_origin);   -- powers the hash-gate lookup
 ```
 
-The RPC `match_memory_chunks(query_embedding, p_project_id, match_count, min_similarity)` enforces the isolation filter in SQL. Full schema + RPC definitions in [scripts/001_schema.sql](scripts/001_schema.sql) and [scripts/002_multi_project.sql](scripts/002_multi_project.sql).
+The RPC `match_memory_chunks(query_embedding, p_project_id, match_count, min_similarity)` enforces the isolation filter in SQL. All chunks from the same file share one `file_hash`, so the incremental-sync skip check is a single `SELECT file_origin, file_hash WHERE project_id = ?`. Full schema + RPC definitions in [scripts/001_schema.sql](scripts/001_schema.sql), [scripts/002_multi_project.sql](scripts/002_multi_project.sql), and [scripts/003_file_hash.sql](scripts/003_file_hash.sql).
 
 ---
 
@@ -242,10 +297,12 @@ src/
 scripts/
 ├── 001_schema.sql
 ├── 002_multi_project.sql
+├── 003_file_hash.sql
 ├── apply-schema.ts
 ├── backup-and-remove.ts
 ├── e2e-test.ts
-└── e2e-isolation-test.ts
+├── e2e-isolation-test.ts
+└── e2e-incremental-test.ts
 ```
 
 ---
@@ -267,7 +324,8 @@ scripts/
 - **Embedding model is load-bearing.** `EMBED_DIM` must match the model's output. Swapping `nomic-embed-text` (768) for `mxbai-embed-large` (1024) means dropping and rebuilding the `embedding` column. Don't mix dimensions.
 - **Service-role key, no RLS.** The MCP server runs locally with no user context; it uses `sb_secret_*` which bypasses RLS. If you expose this server to untrusted callers, add RLS plus a `user_id` column.
 - **Chunking is heading-aware, not token-aware.** Sections split on `##` / `###`; long sections slide-window at `CHUNK_SIZE` with `CHUNK_OVERLAP`. Good enough for most prose; swap in a tokenizer-driven chunker if you're indexing code.
-- **Re-sync is idempotent but full.** `sync_local_memory` re-embeds every chunk on every call. Cheap on local Ollama, but if your corpus is large, hash-gate it.
+- **Sync is incremental by default.** Unchanged files are skipped via `file_hash` comparison; no embedding calls, no writes. Pass `force: true` to re-embed everything. Chunks are flushed in 100-row batches to minimize Supabase round-trips.
+- **Orphans are reported, not pruned.** Files removed from disk stay in the DB and show up in `orphan_files`. A dedicated `prune_memory` tool is deferred to a later release so deletions are never silent.
 
 ---
 
