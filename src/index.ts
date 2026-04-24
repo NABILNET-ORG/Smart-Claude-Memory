@@ -15,7 +15,7 @@ import { currentProjectId } from "./project.js";
 
 const server = new McpServer({
   name: "claude-memory-mcp",
-  version: "0.5.4",
+  version: "0.6.0",
 });
 
 // High-precision vision default — OCR-first, zero-guessing, explicit symbol inventory.
@@ -64,7 +64,7 @@ server.tool(
 
 server.tool(
   "search_memory",
-  "Semantic search over the current project's chunks (strictly isolated). Optional semantic re-ranking and intent-based conflict detection via check_rule_conflicts.",
+  "Semantic search over the current project's chunks (strictly isolated). Backlog-intent queries like 'Active Backlog', 'pending tasks', or 'what's next' short-circuit to the cloud_backlog table and return sorted active tasks instead of vector results. The response field 'mode' is 'backlog' or 'semantic' so callers can disambiguate.",
   {
     query: z.string(),
     limit: z.number().int().positive().max(20).optional(),
@@ -91,7 +91,7 @@ server.tool(
 
 server.tool(
   "manage_backlog",
-  "Atomic task backlog stored in Supabase (cloud_backlog). Actions: add, list, update, prune_done, session_end. session_end returns a 1-line resume prompt for the next session.",
+  "Atomic task backlog stored in Supabase (cloud_backlog). Actions: add, list, update, prune_done, session_end. session_end returns a Progress Report, prunes completed tasks, identifies the highest-priority remaining task, and emits a 1-line copy/paste resume prompt of the form: 'search_memory({ query: \"Active Backlog\", project_id: \"<id>\" }) -> Reviewing pending tasks. Next up: <title>.'",
   {
     action: z.enum(["add", "list", "update", "prune_done", "session_end"]),
     title: z.string().optional(),
