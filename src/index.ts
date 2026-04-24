@@ -15,7 +15,7 @@ import { currentProjectId } from "./project.js";
 
 const server = new McpServer({
   name: "claude-memory-mcp",
-  version: "0.6.0",
+  version: "0.6.1",
 });
 
 // High-precision vision default — OCR-first, zero-guessing, explicit symbol inventory.
@@ -64,7 +64,7 @@ server.tool(
 
 server.tool(
   "search_memory",
-  "Semantic search over the current project's chunks (strictly isolated). Backlog-intent queries like 'Active Backlog', 'pending tasks', or 'what's next' short-circuit to the cloud_backlog table and return sorted active tasks instead of vector results. The response field 'mode' is 'backlog' or 'semantic' so callers can disambiguate.",
+  "Semantic search over the current project's chunks (strictly isolated). Intent routing: 'archive'/'completed tasks'/'done tasks' → archive_backlog rows (mode:'archive'); 'Active Backlog'/'pending tasks'/'what's next' → active cloud_backlog rows (mode:'backlog'); everything else → vector search over memory_chunks (mode:'semantic'). Archived tasks are NEVER mixed into semantic results unless 'archive' is in the query.",
   {
     query: z.string(),
     limit: z.number().int().positive().max(20).optional(),
@@ -91,14 +91,15 @@ server.tool(
 
 server.tool(
   "manage_backlog",
-  "Atomic task backlog stored in Supabase (cloud_backlog). Actions: add, list, update, prune_done, session_end. session_end returns a Progress Report, prunes completed tasks, identifies the highest-priority remaining task, and emits a 1-line copy/paste resume prompt of the form: 'search_memory({ query: \"Active Backlog\", project_id: \"<id>\" }) -> Reviewing pending tasks. Next up: <title>.'",
+  "Atomic task backlog stored in Supabase. Done tasks are ARCHIVED (moved to archive_backlog) rather than deleted. Actions: add, list, update, prune_done (archive done rows), archive_list (view archived), session_end (Progress Report + archive + next-task + resume prompt). Resume prompt format: 'search_memory({ query: \"Active Backlog\", project_id: \"<id>\" }) -> Reviewing pending tasks. Next up: <title>.'",
   {
-    action: z.enum(["add", "list", "update", "prune_done", "session_end"]),
+    action: z.enum(["add", "list", "update", "prune_done", "archive_list", "session_end"]),
     title: z.string().optional(),
     id: z.number().int().positive().optional(),
     status: z.enum(["todo", "in_progress", "blocked", "done"]).optional(),
     priority: z.number().int().min(1).max(5).optional(),
     notes: z.string().optional(),
+    limit: z.number().int().positive().max(200).optional(),
     project_id: projectIdSchema,
   },
   async (args) => ({

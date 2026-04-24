@@ -2,7 +2,8 @@ import {
   addBacklog,
   listBacklog,
   updateBacklog,
-  pruneDoneBacklog,
+  archiveDoneBacklog,
+  listArchive,
   type BacklogRow,
   type BacklogStatus,
 } from "../supabase.js";
@@ -20,6 +21,7 @@ export type BacklogAction =
       notes?: string;
     }
   | { action: "prune_done"; project_id?: string }
+  | { action: "archive_list"; project_id?: string; limit?: number }
   | { action: "session_end"; project_id?: string };
 
 /** Lowest priority number wins (1 = highest). Ties broken by oldest-first. */
@@ -58,12 +60,24 @@ export async function manageBacklog(args: BacklogAction) {
     }
 
     case "prune_done": {
-      const removed = await pruneDoneBacklog(projectId);
-      return { action: "prune_done", project_id: projectId, pruned: removed };
+      // Archives rather than deletes. Row data is preserved in archive_backlog;
+      // the action name stays for backward compat with existing callers.
+      const archived = await archiveDoneBacklog(projectId);
+      return { action: "prune_done", project_id: projectId, archived };
+    }
+
+    case "archive_list": {
+      const rows = await listArchive(projectId, { limit: args.limit ?? 50 });
+      return {
+        action: "archive_list",
+        project_id: projectId,
+        count: rows.length,
+        archived_tasks: rows,
+      };
     }
 
     case "session_end": {
-      // 1. Snapshot all statuses BEFORE pruning so the Progress Report is complete.
+      // 1. Snapshot every bucket BEFORE archiving so the Progress Report is complete.
       const [todo, inProg, blocked, done] = await Promise.all([
         listBacklog(projectId, { status: "todo" }),
         listBacklog(projectId, { status: "in_progress" }),
@@ -71,24 +85,22 @@ export async function manageBacklog(args: BacklogAction) {
         listBacklog(projectId, { status: "done" }),
       ]);
 
-      // 2. Prune completed tasks (delete rows where status='done' for this project).
-      const pruned = await pruneDoneBacklog(projectId);
+      // 2. Archive (don't delete) completed tasks — single SQL transaction.
+      const archived = await archiveDoneBacklog(projectId);
 
-      // 3. Determine the highest-priority task the next session should tackle.
-      //    Look across todo, in_progress, and blocked so "what should I do next" is
-      //    actionable (a blocked P1 is more useful context than a fresh P5).
+      // 3. Pick the highest-priority remaining task across todo/in_progress/blocked.
       const next = pickNextTask([...todo, ...inProg, ...blocked]);
 
-      // 4. Format the 1-line copy/paste resume prompt per the agreed contract.
+      // 4. The agreed 1-line resume prompt.
       const nextTitle = next?.title ?? "backlog is empty — pick a new task";
       const resumePrompt =
         `search_memory({ query: "Active Backlog", project_id: "${projectId}" }) ` +
         `-> Reviewing pending tasks. Next up: ${nextTitle}.`;
 
-      // 5. Human-readable line so the user can glance at the tool output.
+      // 5. Human-readable summary.
       const humanSummary = [
         `Session ended.`,
-        `${done.length} task${done.length === 1 ? "" : "s"} completed and pruned.`,
+        `${done.length} task${done.length === 1 ? "" : "s"} archived.`,
         `Remaining: ${todo.length} todo · ${inProg.length} in-progress · ${blocked.length} blocked.`,
         next ? `Next up: [P${next.priority}] ${next.title}` : `Backlog is empty.`,
       ].join(" ");
@@ -106,7 +118,7 @@ export async function manageBacklog(args: BacklogAction) {
             blocked: blocked.length,
           },
         },
-        pruned,
+        archived,
         next_task: next
           ? {
               id: next.id,

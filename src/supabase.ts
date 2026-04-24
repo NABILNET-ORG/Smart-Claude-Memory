@@ -204,14 +204,48 @@ export async function updateBacklog(
   return data as BacklogRow;
 }
 
-export async function pruneDoneBacklog(projectId: string): Promise<number> {
-  const { count, error } = await supabase
-    .from("cloud_backlog")
-    .delete({ count: "exact" })
+export type ArchiveRow = {
+  id: number;
+  cloud_backlog_id: number | null;
+  project_id: string;
+  title: string;
+  status: BacklogStatus;
+  priority: number;
+  notes: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  archived_at: string;
+};
+
+/**
+ * Transactionally moves every `status='done'` row for a project from
+ * cloud_backlog into archive_backlog. The heavy lifting is the SQL function
+ * archive_done_backlog() — a CTE with DELETE ... RETURNING feeding INSERT
+ * runs as a single atomic statement. If the insert fails, the delete rolls
+ * back automatically; there is no window where rows can be lost or doubled.
+ */
+export async function archiveDoneBacklog(projectId: string): Promise<number> {
+  const { data, error } = await supabase.rpc("archive_done_backlog", {
+    p_project_id: projectId,
+  });
+  if (error) throw new Error(`archiveDoneBacklog failed: ${error.message}`);
+  return (data as number) ?? 0;
+}
+
+export async function listArchive(
+  projectId: string,
+  opts: { limit?: number } = {},
+): Promise<ArchiveRow[]> {
+  let q = supabase
+    .from("archive_backlog")
+    .select("*")
     .eq("project_id", projectId)
-    .eq("status", "done");
-  if (error) throw new Error(`pruneDoneBacklog failed: ${error.message}`);
-  return count ?? 0;
+    .order("archived_at", { ascending: false });
+  if (opts.limit) q = q.limit(opts.limit);
+  const { data, error } = await q;
+  if (error) throw new Error(`listArchive failed: ${error.message}`);
+  return (data ?? []) as ArchiveRow[];
 }
 
 // ─── frozen_features ──────────────────────────────────────────────────────
