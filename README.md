@@ -36,19 +36,9 @@ Memory is strictly **per-project**: when you're in project A, Claude cannot see 
 
 ---
 
-## Hybrid cloud-local architecture
+## System Architecture
 
-```
-┌────────────────────────┐       ┌──────────────────┐       ┌─────────────────────┐
-│  Claude Code (client)  │◀─────▶│  smart-claude-   │──────▶│  Ollama (localhost) │
-│                        │ stdio │   memory server  │ HTTP  │  nomic-embed-text   │
-└────────────────────────┘       │    (TypeScript)  │       │  768-dim vectors    │
-                                 │                  │       └─────────────────────┘
-                                 │                  │       ┌─────────────────────┐
-                                 │                  │──────▶│  Supabase + pgvector│
-                                 └──────────────────┘ HTTPS │  HNSW cosine index  │
-                                                            └─────────────────────┘
-```
+The system operates under the Sovereign Orchestrator pattern with Autonomous Self-Healing. The diagrams below are mirrored from [ARCHITECTURE.md](ARCHITECTURE.md), which remains the canonical source of truth.
 
 **Two independent planes by design:**
 
@@ -56,6 +46,76 @@ Memory is strictly **per-project**: when you're in project A, Claude cannot see 
 - **Cloud plane — Supabase.** Durable storage, indexable across devices, cheap. Only the vectors + the source text live here — and only the text you explicitly choose to sync.
 
 You get the privacy posture of local inference with the durability and cross-machine access of a managed Postgres.
+
+### Delegation Flow
+
+```mermaid
+flowchart TD
+    subgraph ORC["Orchestrator (Main Session) — strategic context only"]
+        U[User request]
+        D[delegate_task]
+        S[sync_artefacts]
+        R[Report 2-para synthesis to user]
+    end
+
+    subgraph WRK["Background Worker (Isolated context)"]
+        E[Edits / Bash / Research]
+        G[refactor_guard gate]
+        H{Gate OK?}
+        HL[Self-Healing Loop]
+        RB[refactor_guard rollback]
+        SY[Emit 2-para synthesis]
+    end
+
+    U --> D
+    D -->|canonical worker prompt| E
+    E --> G
+    G --> H
+    H -->|pass| SY
+    H -->|fail| HL
+    HL -->|healed| G
+    HL -->|exhausted| RB
+    RB --> SY
+    SY -->|only synthesis returns| S
+    S --> R
+```
+
+### Autonomous Self-Healing Loop
+
+```mermaid
+flowchart LR
+    G1[refactor_guard gate] -->|pass| DONE([Emit synthesis])
+    G1 -->|fail| AR[analyze_regression<br/>file + backups_to_compare]
+    AR --> CP[closest_prior backup<br/>smallest edit distance]
+    CP --> LF[Minimal local fix<br/>preserves feature intent]
+    LF --> G2[refactor_guard gate]
+    G2 -->|pass| DONE
+    G2 -->|fail and attempts lt max| NEXT[Change hypothesis]
+    NEXT --> AR
+    G2 -->|attempts equal max| RBK[refactor_guard rollback]
+    RBK --> DONE
+```
+
+### Multi-Stack Compiler Map
+
+```mermaid
+flowchart TB
+    P[Project root] --> D{Detect stack}
+    D -->|package.json + tsconfig.json| TS[tsc --noEmit]
+    D -->|package.json only| NODE[npm run build / lint]
+    D -->|pubspec.yaml| FL[flutter analyze / dart analyze]
+    D -->|Cargo.toml| RS[cargo check]
+    D -->|pyproject.toml| PY[mypy / ruff]
+    D -->|go.mod| GO[go vet / go build]
+    TS --> OUT[Exit code + summarized output]
+    NODE --> OUT
+    FL --> OUT
+    RS --> OUT
+    PY --> OUT
+    GO --> OUT
+```
+
+> See [ARCHITECTURE.md](ARCHITECTURE.md) for the full prose + §4 auto-generated file-tree + §5 version history.
 
 ---
 
@@ -405,7 +465,7 @@ MIT. See [LICENSE](LICENSE).
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-04-24T18:08:10.295Z for `claude-memory`._
+_Auto-synced at 2026-04-24T18:54:38.804Z for `claude-memory`._
 
 ```mermaid
 flowchart TD
