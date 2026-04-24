@@ -18,3 +18,11 @@ export function detectProjectId(cwd: string = process.cwd()): string {
 }
 
 export const currentProjectId = detectProjectId();
+
+// v1.1.1 display/slug decoupling — DB key stays "claude-memory" (preserves 1013 memory chunks);
+// user-facing renders show "smart-claude-memory" to match post-rebrand brand.
+// Remove this bridge once Supabase rows are migrated to the new slug (see v1.2.0).
+export function displayProjectName(projectId: string): string {
+  if (projectId === "claude-memory") return "smart-claude-memory";
+  return projectId;
+}

@@ -11,7 +11,7 @@ import {
   type BacklogRow,
   type BacklogStatus,
 } from "../supabase.js";
-import { currentProjectId, slugify } from "../project.js";
+import { currentProjectId, slugify, displayProjectName } from "../project.js";
 import { basename } from "node:path";
 
 export type BacklogAction =
@@ -290,7 +290,7 @@ async function injectMermaidIntoReadme(readmeText: string, projectId: string): P
     const block = [
       README_ARCH_HEADER,
       "",
-      `_Auto-synced at ${new Date().toISOString()} for \`${projectId}\`._`,
+      `_Auto-synced at ${new Date().toISOString()} for \`${displayProjectName(projectId)}\`._`,
       "",
       "```mermaid",
       mermaid,
