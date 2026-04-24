@@ -14,7 +14,12 @@ import {
 import { addFrozenPattern, writeFrozenPatternsCache } from "../supabase.js";
 import { currentProjectId } from "../project.js";
 
-const GATE_DIR = process.env.CLAUDE_MEMORY_GATE_DIR ?? join(homedir(), ".claude-memory");
+// TODO(v1.2.0): drop the legacy CLAUDE_MEMORY_GATE_DIR fallback after the Smart Claude Memory rebrand has settled.
+// The on-disk dir `~/.claude-memory` is intentionally preserved to keep existing backups discoverable.
+const GATE_DIR =
+  process.env.SMART_CLAUDE_MEMORY_GATE_DIR ??
+  process.env.CLAUDE_MEMORY_GATE_DIR ??
+  join(homedir(), ".claude-memory");
 const BACKUP_INDEX_PATH = join(GATE_DIR, "backup-index.json");
 
 type BackupRecord = { backup: string; tool: string; timestamp: string };
@@ -110,7 +115,7 @@ async function findLegacyBackups(brokenFile: string): Promise<
 // own Write calls.
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function isClaudeMemorySource(filePath: string): boolean {
+function isSmartClaudeMemorySource(filePath: string): boolean {
   try {
     const abs = resolve(filePath);
     // Normalize drive-letter casing on Windows so the startsWith check holds.
@@ -135,11 +140,11 @@ export async function confirmVerification(args: { success: boolean; notes?: stri
       | null = null;
 
     if (existing?.file) {
-      if (isClaudeMemorySource(existing.file)) {
+      if (isSmartClaudeMemorySource(existing.file)) {
         autoFreeze = {
           added: false,
           skipped_reason:
-            "System filter: file is inside the claude-memory package — not auto-freezing its own engine source.",
+            "System filter: file is inside the Smart Claude Memory package — not auto-freezing its own engine source.",
         };
       } else {
         const projectId = existing.project_id ?? currentProjectId;

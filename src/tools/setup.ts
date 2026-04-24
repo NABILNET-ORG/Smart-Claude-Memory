@@ -133,11 +133,11 @@ export async function initProject(args: {
     name: "mcp:registration",
     status: reg.registered ? "ok" : "missing",
     detail: reg.registered
-      ? `claude-memory MCP server registered in: ${reg.matches.join(", ")}`
-      : `claude-memory MCP server is not registered in any known settings file. Expected the path ${mcpEntryPoint} to appear in one of them.`,
+      ? `smart-claude-memory MCP server registered in: ${reg.matches.join(", ")}`
+      : `smart-claude-memory MCP server is not registered in any known settings file. Expected the path ${mcpEntryPoint} to appear in one of them.`,
     fix: reg.registered
       ? undefined
-      : `Add to ~/.claude.json under "mcpServers":\n  "claude-memory": { "type":"stdio", "command":"node", "args":["${mcpEntryPoint}"] }\nThen restart Claude Code.`,
+      : `Add to ~/.claude.json under "mcpServers":\n  "smart-claude-memory": { "type":"stdio", "command":"node", "args":["${mcpEntryPoint}"] }\nThen restart Claude Code.`,
   });
 
   // 5. Compiled dist present?
@@ -205,7 +205,7 @@ async function writeProjectArchitectureOnInit(
     const seed = [
       `# Project File Architecture`,
       "",
-      `> Auto-created by claude-memory init_project. The Mermaid block is `,
+      `> Auto-created by smart-claude-memory init_project. The Mermaid block is `,
       `> populated by manage_backlog({ action: "session_end" }).`,
       "",
       "## Tree",

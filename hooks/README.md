@@ -1,6 +1,6 @@
 # Hooks
 
-Distributable Claude Code hooks that pair well with `claude-memory`.
+Distributable Claude Code hooks that pair well with `smart-claude-memory`.
 
 ## `md-policy.py`
 
@@ -25,7 +25,7 @@ Enforces a **Zero-Local-MD policy** in any project: only a whitelisted set of `.
         "hooks": [
           {
             "type": "command",
-            "command": "python \"/abs/path/to/claude-memory/hooks/md-policy.py\""
+            "command": "python \"/abs/path/to/smart-claude-memory/hooks/md-policy.py\""
           }
         ]
       }

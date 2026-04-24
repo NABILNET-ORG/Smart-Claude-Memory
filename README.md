@@ -1,6 +1,6 @@
 <div align="center">
 
-# claude-memory
+# Smart Claude Memory
 
 **Hybrid cloud-local memory for Claude — semantic retrieval instead of context bloat.**
 
@@ -22,7 +22,7 @@ Claude sessions load `memory.md`, `rules.md`, `cloud.md`, and a dozen other cont
 
 ## What this does
 
-`claude-memory` is a **Model Context Protocol server** that replaces "read every .md at startup" with "search them on demand." It chunks your markdown notes, embeds them with a local Ollama model, stores them in Supabase (pgvector), and exposes **eleven tools** to Claude spanning memory, vision, backlog, hygiene, and system health. The elevator pitch:
+`smart-claude-memory` is a **Model Context Protocol server** that replaces "read every .md at startup" with "search them on demand." It chunks your markdown notes, embeds them with a local Ollama model, stores them in Supabase (pgvector), and exposes **eleven tools** to Claude spanning memory, vision, backlog, hygiene, and system health. The elevator pitch:
 
 | Tool | Purpose |
 |---|---|
@@ -40,8 +40,8 @@ Memory is strictly **per-project**: when you're in project A, Claude cannot see 
 
 ```
 ┌────────────────────────┐       ┌──────────────────┐       ┌─────────────────────┐
-│  Claude Code (client)  │◀─────▶│  claude-memory   │──────▶│  Ollama (localhost) │
-│                        │ stdio │   MCP server     │ HTTP  │  nomic-embed-text   │
+│  Claude Code (client)  │◀─────▶│  smart-claude-   │──────▶│  Ollama (localhost) │
+│                        │ stdio │   memory server  │ HTTP  │  nomic-embed-text   │
 └────────────────────────┘       │    (TypeScript)  │       │  768-dim vectors    │
                                  │                  │       └─────────────────────┘
                                  │                  │       ┌─────────────────────┐
@@ -113,9 +113,13 @@ search_memory({ query: "auth flow", project_id: "acme-api" })
 
 1. Archives completed tasks (atomic PL/pgSQL transaction into `archive_backlog`).
 2. Pulls the last 5 archived rows via `listArchive`.
-3. Replaces the `### 🚀 Recent Progress` section (or appends if absent). Format:
+3. Replaces the `### 🚀 Recent Progress
 
-```markdown
+* [DONE] v0.8.0 — Production engine (ensureSchema, init_project, keep-alive, arch sync) (archived at 2026-04-24).
+* [DONE] v0.9.0 — Ultra-Enforcer (frozen cache, auto-freeze, backups, NL triggers) (archived at 2026-04-24).
+* [DONE] v0.9.1 — Legacy backup sweep + recovery discovery (archived at 2026-04-24).
+* [DONE] v1.0.0 — God Mode (project detect, compiler gate, regression, binding session) (archived at 2026-04-24).
+* [DONE] v1.1.0 — Sovereign Orchestrator (delegation pattern + Autonomous Self-Healing + cross-platform spawn fix + ARCHITECTURE.md consolidation) (archived at 2026-04-24).
 ### 🚀 Recent Progress
 
 * [DONE] Fix login form validation (archived at 2026-04-24).
@@ -204,7 +208,7 @@ Verified by [scripts/e2e-incremental-test.ts](scripts/e2e-incremental-test.ts), 
 
 ```bash
 git clone https://github.com/NABILNET-ORG/Claude-Memory.git
-cd Claude-Memory
+cd Claude-Memory  # clone dir is preserved so existing Supabase project_id slug keeps working
 npm install
 ```
 
@@ -260,7 +264,7 @@ npm run build
 ```json
 {
   "mcpServers": {
-    "claude-memory": {
+    "smart-claude-memory": {
       "type": "stdio",
       "command": "node",
       "args": ["/abs/path/to/Claude-Memory/dist/index.js"],
@@ -272,7 +276,7 @@ npm run build
 
 **Project scope** (only this repo) — create `.mcp.json` in the target project's root with the same block.
 
-Restart Claude Code. Run `/mcp`. You should see `claude-memory` connected with three tools.
+Restart Claude Code. Run `/mcp`. You should see `smart-claude-memory` connected with three tools.
 
 ### 6. Index your notes
 
@@ -398,3 +402,106 @@ scripts/
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+### 🗺️ File Architecture
+
+_Auto-synced at 2026-04-24T18:08:10.295Z for `claude-memory`._
+
+```mermaid
+flowchart TD
+  n0["Claude-Memory/"]
+  n1["hooks/"]
+  n0 --> n1
+  n2["md-policy.py"]
+  n1 --> n2
+  n3["README.md"]
+  n1 --> n3
+  n4["scripts/"]
+  n0 --> n4
+  n5["001_schema.sql"]
+  n4 --> n5
+  n6["002_multi_project.sql"]
+  n4 --> n6
+  n7["003_file_hash.sql"]
+  n4 --> n7
+  n8["004_backlog_frozen.sql"]
+  n4 --> n8
+  n9["005_archive_backlog.sql"]
+  n4 --> n9
+  n10["apply-schema.ts"]
+  n4 --> n10
+  n11["backup-and-remove.ts"]
+  n4 --> n11
+  n12["e2e-incremental-test.ts"]
+  n4 --> n12
+  n13["e2e-isolation-test.ts"]
+  n4 --> n13
+  n14["e2e-test.ts"]
+  n4 --> n14
+  n15["purge-samia-rules.ts"]
+  n4 --> n15
+  n16["src/"]
+  n0 --> n16
+  n17["tools/"]
+  n16 --> n17
+  n18["backlog.ts"]
+  n17 --> n18
+  n19["conflict.ts"]
+  n17 --> n19
+  n20["health.ts"]
+  n17 --> n20
+  n21["hygiene.ts"]
+  n17 --> n21
+  n22["image.ts"]
+  n17 --> n22
+  n23["orchestrator.ts"]
+  n17 --> n23
+  n24["policy.ts"]
+  n17 --> n24
+  n25["refactor.ts"]
+  n17 --> n25
+  n26["search.ts"]
+  n17 --> n26
+  n27["setup.ts"]
+  n17 --> n27
+  n28["summarize.ts"]
+  n17 --> n28
+  n29["sync.ts"]
+  n17 --> n29
+  n30["update-rule.ts"]
+  n17 --> n30
+  n31["verification.ts"]
+  n17 --> n31
+  n32["chunker.ts"]
+  n16 --> n32
+  n33["config.ts"]
+  n16 --> n33
+  n34["index.ts"]
+  n16 --> n34
+  n35["ollama.ts"]
+  n16 --> n35
+  n36["project-detect.ts"]
+  n16 --> n36
+  n37["project.ts"]
+  n16 --> n37
+  n38["supabase.ts"]
+  n16 --> n38
+  n39["verification-gate.ts"]
+  n16 --> n39
+  n40[".env.example"]
+  n0 --> n40
+  n41[".gitignore"]
+  n0 --> n41
+  n42["ARCHITECTURE.md"]
+  n0 --> n42
+  n43["LICENSE"]
+  n0 --> n43
+  n44["package-lock.json"]
+  n0 --> n44
+  n45["package.json"]
+  n0 --> n45
+  n46["README.md"]
+  n0 --> n46
+  n47["tsconfig.json"]
+  n0 --> n47
+```

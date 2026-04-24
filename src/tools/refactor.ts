@@ -4,7 +4,12 @@ import { spawn } from "node:child_process";
 import { homedir } from "node:os";
 import { detectProjectType, type ProjectType } from "../project-detect.js";
 
-const GATE_DIR = process.env.CLAUDE_MEMORY_GATE_DIR ?? join(homedir(), ".claude-memory");
+// TODO(v1.2.0): drop the legacy CLAUDE_MEMORY_GATE_DIR fallback after the Smart Claude Memory rebrand has settled.
+// The on-disk dir `~/.claude-memory` is intentionally preserved to keep existing backups discoverable.
+const GATE_DIR =
+  process.env.SMART_CLAUDE_MEMORY_GATE_DIR ??
+  process.env.CLAUDE_MEMORY_GATE_DIR ??
+  join(homedir(), ".claude-memory");
 const BACKUP_INDEX_PATH = join(GATE_DIR, "backup-index.json");
 
 // ─── Import scanner (regex-based, heuristic) ─────────────────────────────
@@ -101,12 +106,15 @@ function runBin(
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return new Promise((resolveResult) => {
     const winBin = process.platform === "win32" && /^(npm|npx|yarn|pnpm)$/i.test(bin) ? `${bin}.cmd` : bin;
-    const child = spawn(winBin, args, { cwd });
+    // Windows: shell:true is required to launch .cmd/.bat shims; args are internal (no user input).
+    const child = process.platform === "win32"
+      ? spawn(winBin, args, { cwd, shell: true })
+      : spawn(winBin, args, { cwd });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => child.kill(), timeoutMs);
-    child.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
-    child.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+    child.stdout?.on("data", (d: Buffer) => { stdout += d.toString(); });
+    child.stderr?.on("data", (d: Buffer) => { stderr += d.toString(); });
     child.on("error", (e: Error) => {
       clearTimeout(timer);
       resolveResult({ code: null, stdout, stderr: stderr + String(e) });

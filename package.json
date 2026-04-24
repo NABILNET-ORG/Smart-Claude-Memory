@@ -1,10 +1,10 @@
 {
-  "name": "claude-memory-mcp",
-  "version": "1.0.0",
+  "name": "smart-claude-memory-mcp",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "bin": {
-    "claude-memory-mcp": "dist/index.js"
+    "smart-claude-memory-mcp": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",

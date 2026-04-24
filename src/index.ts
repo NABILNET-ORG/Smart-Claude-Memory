@@ -21,7 +21,7 @@ import { ensureSchema, startKeepAlive, writeFrozenPatternsCache } from "./supaba
 import { currentProjectId } from "./project.js";
 
 const server = new McpServer({
-  name: "claude-memory-mcp",
+  name: "smart-claude-memory-mcp",
   version: "1.0.0",
 });
 
@@ -32,11 +32,11 @@ const server = new McpServer({
 try {
   const report = await ensureSchema();
   if (!report.ok) {
-    console.error(`[claude-memory] ${report.message}`);
-    console.error(`[claude-memory] Fix: ${report.fix_command}`);
+    console.error(`[smart-claude-memory] ${report.message}`);
+    console.error(`[smart-claude-memory] Fix: ${report.fix_command}`);
   }
 } catch (e) {
-  console.error(`[claude-memory] ensureSchema failed: ${(e as Error).message}`);
+  console.error(`[smart-claude-memory] ensureSchema failed: ${(e as Error).message}`);
 }
 
 // Keep the Supabase HTTPS pool warm so the first call after idle doesn't
@@ -47,9 +47,9 @@ startKeepAlive();
 // hooks/md-policy.py can read it without hitting Supabase per tool call.
 try {
   const c = await writeFrozenPatternsCache();
-  if (!c.ok && c.warning) console.error(`[claude-memory] ${c.warning}`);
+  if (!c.ok && c.warning) console.error(`[smart-claude-memory] ${c.warning}`);
 } catch (e) {
-  console.error(`[claude-memory] frozen-pattern cache init failed: ${(e as Error).message}`);
+  console.error(`[smart-claude-memory] frozen-pattern cache init failed: ${(e as Error).message}`);
 }
 
 // Read-only legacy-backup summary — runs asynchronously so it never blocks
@@ -60,14 +60,14 @@ void (async () => {
     const summary = await legacyBackupSummary(process.cwd());
     if (summary.total > 0) {
       console.error(
-        `[claude-memory] Legacy backup scan: ${summary.total} candidate(s) — ` +
+        `[smart-claude-memory] Legacy backup scan: ${summary.total} candidate(s) — ` +
           `${summary.high} high-confidence, ${summary.medium} medium. ` +
           `Run sweep_legacy_backups to preview; pass confirm:true to move.`,
       );
       for (const ex of summary.top_examples) console.error(`  ${ex}`);
     }
   } catch (e) {
-    console.error(`[claude-memory] legacy backup scan failed: ${(e as Error).message}`);
+    console.error(`[smart-claude-memory] legacy backup scan failed: ${(e as Error).message}`);
   }
 })();
 
@@ -309,7 +309,7 @@ server.tool(
 
 server.tool(
   "init_project",
-  "Readiness report for a workspace: validates required .env vars, locates the md-policy.py hook, checks if the claude-memory MCP server is registered in Claude Code settings, and confirms dist/ is built. Returns overall='ready'|'partial'|'not_ready' with per-check fix instructions.",
+  "Readiness report for a workspace: validates required .env vars, locates the md-policy.py hook, checks if the Smart Claude Memory MCP server is registered in Claude Code settings, and confirms dist/ is built. Returns overall='ready'|'partial'|'not_ready' with per-check fix instructions.",
   {
     workspace: z.string().optional().describe("Absolute path. Defaults to the MCP server's cwd (typically the current Claude Code project)."),
   },
@@ -346,7 +346,7 @@ server.tool(
 
 server.tool(
   "delegate_task",
-  "Orchestrator pattern: emit a canonical worker sub-agent prompt for a task. Natural-language triggers: 'delegate this', 'spawn a worker', 'send to sub-agent', 'offload this task'. The returned 'prompt' field plugs into the Agent tool — every delegation carries the same contract: do the work → refactor_guard({action:'gate'}) → rollback on failure → return a 2-paragraph synthesis with strict no-raw-content caps. Use this when the Orchestrator is running the session and should keep its context clean by delegating edits/research/bash to workers.",
+  "Orchestrator pattern (v1.1.0 — Autonomous Self-Healing): emit a canonical worker sub-agent prompt for a task. Natural-language triggers: 'delegate this', 'spawn a worker', 'send to sub-agent', 'offload this task'. The returned 'prompt' field plugs into the Agent tool — every delegation carries the contract: do the work → refactor_guard({action:'gate'}) → if red, diagnose via analyze_regression against backups and fix locally (up to max_healing_attempts), re-gate → rollback only if healing exhausts → return a 2-paragraph synthesis with strict no-raw-content caps. Keeps the Orchestrator's context clean of failed-compile churn.",
   {
     title: z.string().min(1),
     instructions: z.string().min(1),
@@ -354,6 +354,8 @@ server.tool(
     workspace: z.string().optional(),
     run_gate: z.boolean().optional(),
     allow_rollback: z.boolean().optional(),
+    self_heal: z.boolean().optional(),
+    max_healing_attempts: z.number().int().positive().max(5).optional(),
     synthesis_word_limit: z.number().int().positive().max(1000).optional(),
   },
   async (args) => ({

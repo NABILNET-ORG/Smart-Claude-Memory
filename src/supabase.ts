@@ -110,7 +110,9 @@ async function ping(): Promise<void> {
  */
 export function startKeepAlive(intervalMs?: number): void {
   if (keepAlive.timer) return;
-  const envOverride = process.env.CLAUDE_MEMORY_KEEPALIVE_MS;
+  // TODO(v1.2.0): drop the legacy CLAUDE_MEMORY_KEEPALIVE_MS fallback after the Smart Claude Memory rebrand has settled.
+  const envOverride =
+    process.env.SMART_CLAUDE_MEMORY_KEEPALIVE_MS ?? process.env.CLAUDE_MEMORY_KEEPALIVE_MS;
   const resolved =
     intervalMs ?? (envOverride ? Number.parseInt(envOverride, 10) : 300_000);
   keepAlive.intervalMs = Number.isFinite(resolved) && resolved > 0 ? resolved : 300_000;
@@ -437,7 +439,12 @@ export async function listFrozenByProject(): Promise<Record<string, string[]>> {
 // Instead, the MCP server writes a snapshot of `frozen_features` to this
 // file on startup and after any mutation; the hook reads it in microseconds.
 
-const GATE_DIR = process.env.CLAUDE_MEMORY_GATE_DIR ?? join(homedir(), ".claude-memory");
+// TODO(v1.2.0): drop the legacy CLAUDE_MEMORY_GATE_DIR fallback after the Smart Claude Memory rebrand has settled.
+// The on-disk dir `~/.claude-memory` is intentionally preserved to keep existing backups discoverable.
+const GATE_DIR =
+  process.env.SMART_CLAUDE_MEMORY_GATE_DIR ??
+  process.env.CLAUDE_MEMORY_GATE_DIR ??
+  join(homedir(), ".claude-memory");
 export const FROZEN_CACHE_PATH = join(GATE_DIR, "frozen-patterns.json");
 
 export async function writeFrozenPatternsCache(): Promise<{

@@ -1,9 +1,15 @@
 import { stat, readFile } from "node:fs/promises";
+import * as path from "node:path";
 import { config } from "../config.js";
 import { supabase, getKeepAliveStatus, FROZEN_CACHE_PATH } from "../supabase.js";
 
+// v1.1.0 Sovereign Orchestrator defaults (mirrored from delegateTask/buildWorkerPrompt).
+const ORCHESTRATOR_VERSION = "1.1.0" as const;
+const SELF_HEAL_DEFAULT = true;
+const MAX_HEALING_ATTEMPTS_DEFAULT = 3;
+
 /**
- * Models claude-memory relies on at runtime. The check is prefix-based because
+ * Models Smart Claude Memory relies on at runtime. The check is prefix-based because
  * Ollama names models with a ":tag" suffix (e.g. "moondream:latest").
  */
 const REQUIRED_MODELS = ["moondream", "nomic-embed-text"] as const;
@@ -38,7 +44,52 @@ type HealthReport = {
     active: boolean;
     note: string;
   };
+  orchestrator: {
+    version: "1.1.0";
+    mode_active: boolean;
+    self_heal_default: boolean;
+    max_healing_attempts_default: number;
+    advisory_hook: "hard-block" | "advisory" | "unknown";
+    line_limit: number;
+  };
+  summary?: string;
 };
+
+async function detectAdvisoryHookMode(): Promise<"hard-block" | "advisory" | "unknown"> {
+  try {
+    // hooks/md-policy.py lives two levels up from dist/tools/ at runtime, or
+    // two levels up from src/tools/ at source time — resolve relative to cwd.
+    const hookPath = path.resolve(process.cwd(), "hooks", "md-policy.py");
+    const text = await readFile(hookPath, "utf8");
+    // Locate the check_orchestrator_advisory function body.
+    const fnMatch = text.match(/def check_orchestrator_advisory[\s\S]*?(?=\ndef |\Z)/);
+    if (!fnMatch) return "unknown";
+    const body = fnMatch[0];
+    if (/"decision"\s*:\s*"block"/.test(body)) return "hard-block";
+    if (/"decision"\s*:\s*"allow"/.test(body)) return "advisory";
+    return "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+function buildOrchestratorSnapshot(
+  advisoryHook: "hard-block" | "advisory" | "unknown",
+): HealthReport["orchestrator"] {
+  return {
+    version: ORCHESTRATOR_VERSION,
+    // TODO(v1.2.0): drop the legacy CLAUDE_MEMORY_* fallback after the Smart Claude Memory rebrand has settled.
+    mode_active:
+      (process.env.SMART_CLAUDE_MEMORY_ORCHESTRATOR_MODE ??
+        process.env.CLAUDE_MEMORY_ORCHESTRATOR_MODE) === "1",
+    self_heal_default: SELF_HEAL_DEFAULT,
+    max_healing_attempts_default: MAX_HEALING_ATTEMPTS_DEFAULT,
+    advisory_hook: advisoryHook,
+    line_limit: Number(
+      process.env.SMART_CLAUDE_MEMORY_LINE_LIMIT ?? process.env.CLAUDE_MEMORY_LINE_LIMIT ?? 750,
+    ),
+  };
+}
 
 async function readPolicyCache(): Promise<HealthReport["policy_enforcement"]> {
   const snapshot: HealthReport["policy_enforcement"] = {
@@ -128,10 +179,11 @@ async function checkOllama(): Promise<{ check: Check; present: string[]; missing
 }
 
 export async function checkSystemHealth(): Promise<HealthReport> {
-  const [supabaseCheck, ollamaResult, policy] = await Promise.all([
+  const [supabaseCheck, ollamaResult, policy, advisoryHook] = await Promise.all([
     checkSupabase(),
     checkOllama(),
     readPolicyCache(),
+    detectAdvisoryHookMode(),
   ]);
   const checks = { supabase: supabaseCheck, ollama: ollamaResult.check };
 
@@ -141,6 +193,14 @@ export async function checkSystemHealth(): Promise<HealthReport> {
       : Object.values(checks).every((c) => c.status === "ok")
         ? "healthy"
         : "degraded";
+
+  const orchestrator = buildOrchestratorSnapshot(advisoryHook);
+  const summary =
+    `Orchestrator: v${orchestrator.version} | ` +
+    `mode=${orchestrator.mode_active ? "active" : "inactive"} | ` +
+    `self_heal=${orchestrator.self_heal_default ? "on" : "off"} | ` +
+    `healing_attempts=${orchestrator.max_healing_attempts_default} | ` +
+    `hook=${orchestrator.advisory_hook}`;
 
   return {
     overall,
@@ -153,5 +213,7 @@ export async function checkSystemHealth(): Promise<HealthReport> {
     },
     keep_alive: getKeepAliveStatus(),
     policy_enforcement: policy,
+    orchestrator,
+    summary,
   };
 }

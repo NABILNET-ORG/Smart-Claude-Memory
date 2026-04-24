@@ -6,7 +6,12 @@ import { writeFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir, homedir } from "node:os";
 
-export const FLAG_DIR = process.env.CLAUDE_MEMORY_GATE_DIR ?? join(homedir(), ".claude-memory");
+// TODO(v1.2.0): drop the legacy CLAUDE_MEMORY_GATE_DIR fallback after the Smart Claude Memory rebrand has settled.
+// The on-disk dir `~/.claude-memory` is intentionally preserved to keep existing backups discoverable.
+export const FLAG_DIR =
+  process.env.SMART_CLAUDE_MEMORY_GATE_DIR ??
+  process.env.CLAUDE_MEMORY_GATE_DIR ??
+  join(homedir(), ".claude-memory");
 export const FLAG_PATH = join(FLAG_DIR, "verification-pending.json");
 
 export type PendingFlag = {

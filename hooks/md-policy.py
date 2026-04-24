@@ -11,12 +11,15 @@ Enforces four rules:
      Write/Edit/Bash until confirm_verification clears it.
 
 Environment variables:
-  CLAUDE_MD_POLICY_WORKSPACE       absolute path of the project root (required for MD rule)
-  CLAUDE_MD_POLICY_ALLOW_ROOT_MD   comma-separated allowlist (default: CLAUDE.md,MEMORY.md,README.md)
-  CLAUDE_MD_POLICY_TOKEN_LIMIT     soft token limit for CLAUDE.md/MEMORY.md (default 3000)
-  CLAUDE_MEMORY_GATE_DIR           where the verification flag lives (default: ~/.claude-memory)
-  CLAUDE_MEMORY_LINE_LIMIT         override the 750-line limit
-  CLAUDE_MEMORY_FROZEN_PATTERNS    comma-separated substrings that mark a file as frozen
+  CLAUDE_MD_POLICY_WORKSPACE             absolute path of the project root (required for MD rule)
+  CLAUDE_MD_POLICY_ALLOW_ROOT_MD         comma-separated allowlist (default: CLAUDE.md,MEMORY.md,README.md)
+  CLAUDE_MD_POLICY_TOKEN_LIMIT           soft token limit for CLAUDE.md/MEMORY.md (default 3000)
+  SMART_CLAUDE_MEMORY_GATE_DIR           where the verification flag lives (default: ~/.claude-memory)
+  SMART_CLAUDE_MEMORY_LINE_LIMIT         override the 750-line limit
+  SMART_CLAUDE_MEMORY_FROZEN_PATTERNS    comma-separated substrings that mark a file as frozen
+  SMART_CLAUDE_MEMORY_ORCHESTRATOR_MODE  hard-block direct Write/Edit/Bash in the Orchestrator session
+
+Legacy CLAUDE_MEMORY_* names are still honored as a one-time fallback; will be removed in v1.2.0.
 """
 from __future__ import annotations
 import json
@@ -26,7 +29,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-ALLOW_ROOT_DEFAULT = "CLAUDE.md,MEMORY.md,README.md"
+ALLOW_ROOT_DEFAULT = "CLAUDE.md,MEMORY.md,README.md,ARCHITECTURE.md"
 BYTES_PER_TOKEN = 4
 
 # Auto-generated files that bypass the 750-line hygiene check entirely.
@@ -64,8 +67,13 @@ def token_soft_limit() -> int:
 
 
 def line_hard_limit() -> int:
+    # TODO(v1.2.0): drop the legacy CLAUDE_MEMORY_LINE_LIMIT fallback.
+    raw = os.environ.get(
+        "SMART_CLAUDE_MEMORY_LINE_LIMIT",
+        os.environ.get("CLAUDE_MEMORY_LINE_LIMIT", "750"),
+    )
     try:
-        return int(os.environ.get("CLAUDE_MEMORY_LINE_LIMIT", "750"))
+        return int(raw)
     except ValueError:
         return 750
 
@@ -87,7 +95,11 @@ def _slugify(s: str) -> str:
 
 
 def frozen_patterns_env() -> list[str]:
-    raw = os.environ.get("CLAUDE_MEMORY_FROZEN_PATTERNS", "")
+    # TODO(v1.2.0): drop the legacy CLAUDE_MEMORY_FROZEN_PATTERNS fallback.
+    raw = os.environ.get(
+        "SMART_CLAUDE_MEMORY_FROZEN_PATTERNS",
+        os.environ.get("CLAUDE_MEMORY_FROZEN_PATTERNS", ""),
+    )
     return [p.strip() for p in raw.split(",") if p.strip()]
 
 
@@ -131,7 +143,12 @@ def frozen_patterns() -> list[str]:
 
 
 def gate_dir() -> Path:
-    raw = os.environ.get("CLAUDE_MEMORY_GATE_DIR", "")
+    # TODO(v1.2.0): drop the legacy CLAUDE_MEMORY_GATE_DIR fallback.
+    # The on-disk dir `~/.claude-memory` is intentionally preserved to keep existing backups discoverable.
+    raw = os.environ.get(
+        "SMART_CLAUDE_MEMORY_GATE_DIR",
+        os.environ.get("CLAUDE_MEMORY_GATE_DIR", ""),
+    )
     if raw:
         return Path(raw).expanduser()
     return Path.home() / ".claude-memory"
@@ -211,23 +228,31 @@ def _target_matches_frozen(target: Path) -> bool:
 # ─── checks ────────────────────────────────────────────────────────────────
 
 def check_orchestrator_advisory(tool_name: str) -> dict | None:
-    """Optional nudge for the Orchestrator pattern.
+    """Hard-block enforcement for the Orchestrator pattern (v1.1.0).
 
-    Enable with CLAUDE_MEMORY_ORCHESTRATOR_MODE=1. Emits a non-blocking
-    warning on direct Write/Edit/Bash calls, reminding the main agent to
-    delegate to a worker sub-agent instead. Advisory because any hard
-    block would also trip sub-agents (they share the same hook surface).
+    Enable with SMART_CLAUDE_MEMORY_ORCHESTRATOR_MODE=1. Hard-blocks direct
+    Write/Edit/Bash calls in the main session, forcing delegation to a
+    worker sub-agent via the delegate_task MCP tool. Sub-agents set
+    SMART_CLAUDE_MEMORY_ORCHESTRATOR_MODE=0 in their spawned env so this
+    hook does not trip them.
+
+    Legacy CLAUDE_MEMORY_ORCHESTRATOR_MODE is honored as a one-time fallback;
+    TODO(v1.2.0): drop the legacy name.
     """
-    if os.environ.get("CLAUDE_MEMORY_ORCHESTRATOR_MODE", "0") not in ("1", "true", "yes"):
+    mode = os.environ.get(
+        "SMART_CLAUDE_MEMORY_ORCHESTRATOR_MODE",
+        os.environ.get("CLAUDE_MEMORY_ORCHESTRATOR_MODE", "0"),
+    )
+    if mode not in ("1", "true", "yes"):
         return None
     if tool_name not in {"Write", "Edit", "Bash"}:
         return None
     return {
-        "decision": "allow",
-        "warning": (
-            "Orchestrator mode is ON. Consider delegating this "
-            f"{tool_name} to a worker sub-agent via the delegate_task MCP "
-            "tool instead of performing it in the main session. (Advisory only.)"
+        "decision": "block",
+        "reason": (
+            "Orchestrator mode is ON — direct "
+            f"{tool_name} in the main session is blocked. Delegate this work "
+            "to a worker sub-agent via the delegate_task MCP tool instead."
         ),
     }
 
@@ -381,8 +406,10 @@ def check_memory_file_size(target: Path, incoming: str) -> dict | None:
 # ─── orchestration ────────────────────────────────────────────────────────
 
 def decide(tool_name: str, tool_input: dict) -> dict:
-    # 0. Orchestrator-mode advisory (non-blocking). Opt-in via env var.
+    # 0. Orchestrator-mode hard-block (v1.1.0). Opt-in via env var.
     orch = check_orchestrator_advisory(tool_name)
+    if orch is not None and orch.get("decision") == "block":
+        return orch
 
     # 1. Verification gate trumps everything (applies to Write/Edit/Bash).
     gate = check_verification_gate(tool_name)
@@ -447,7 +474,6 @@ def decide(tool_name: str, tool_input: dict) -> dict:
                 backup_warning = f"Backup FAILED for {target.name}: {err} — proceed with caution."
 
     warnings = [w for w in (
-        (orch or {}).get("warning"),
         (size_warning or {}).get("warning"),
         backup_warning,
     ) if w]
