@@ -9,7 +9,7 @@ import { currentProjectId } from "./project.js";
 
 const server = new McpServer({
   name: "claude-memory-mcp",
-  version: "0.3.0",
+  version: "0.4.0",
 });
 
 const projectIdSchema = z
@@ -22,7 +22,7 @@ const projectIdSchema = z
 
 server.tool(
   "sync_local_memory",
-  "Scan configured folders (MEMORY_ROOTS) for .md files and upsert them to Supabase. Uses file-level MD5 hash-gating: unchanged files are skipped, changed files are re-embedded, new files are added. Returns counts for scanned / skipped / added / updated / orphans. Chunks are bulk-upserted in batches of 100.",
+  "Scan MEMORY_ROOTS for .md files, hash-gate, chunk, embed via Ollama, bulk-upsert to Supabase (100/batch). Supports incremental sync (skip unchanged), force re-embed, and optional auto_purge with a mandatory dry-run preview and an all-or-nothing verify-before-delete contract. CLAUDE.md, MEMORY.md, README.md, LICENSE* and CHANGELOG* are never deleted.",
   {
     roots: z
       .array(z.string())
@@ -33,6 +33,18 @@ server.tool(
       .boolean()
       .optional()
       .describe("Re-embed every file regardless of hash. Default false."),
+    auto_purge: z
+      .boolean()
+      .optional()
+      .describe(
+        "After sync: if true AND confirm is false (default), return a dry-run preview of which files would be deleted. If true AND confirm is true, verify every file's (project_id, file_origin, file_hash) in Supabase, write a backup ZIP, then delete. Default false.",
+      ),
+    confirm: z
+      .boolean()
+      .optional()
+      .describe(
+        "Required alongside auto_purge: true to actually delete. Safety belt — without it, auto_purge runs as a dry-run preview only. Default false.",
+      ),
   },
   async (args) => {
     const result = await syncLocalMemory(args);

@@ -79,6 +79,25 @@ export async function deleteChunksForFile(
   return count ?? 0;
 }
 
+/**
+ * Confirm a file is fully resident in Supabase before it's safe to delete locally.
+ * Returns the chunk count, or 0 if nothing matches (project_id, file_origin, file_hash).
+ */
+export async function verifyFileSynced(
+  projectId: string,
+  fileOrigin: string,
+  fileHash: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("memory_chunks")
+    .select("*", { count: "exact", head: true })
+    .eq("project_id", projectId)
+    .eq("file_origin", fileOrigin)
+    .eq("file_hash", fileHash);
+  if (error) throw new Error(`verifyFileSynced failed: ${error.message}`);
+  return count ?? 0;
+}
+
 export async function upsertChunks(
   projectId: string,
   rows: ChunkRow[],
