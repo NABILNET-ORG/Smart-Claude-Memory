@@ -1,7 +1,11 @@
-# Smart Claude Memory — System Architecture (v1.1.0)
+# Smart Claude Memory — System Architecture (v1.1.2)
 
-> **Stable baseline:** v1.1.0 — Sovereign Orchestrator with Autonomous Self-Healing.
+> **Stable baseline:** v1.1.2 — Master Schematic & Sovereign Baseline (Smart Claude Memory v1.1.0 Sovereign Orchestrator feature set, sealed with master schematic).
 > This document is the single source of truth for the system's structure and control flow. The marker-bounded Mermaid block in §4 is refreshed automatically by `sync_artefacts` after every worker success; the other diagrams are hand-maintained.
+
+![Smart Claude Memory v1.1.2 Schematic](images/Smart%20Claude%20Memory%20v.1.1.2.jpeg)
+
+*Master schematic — the definitive visual reference for the Smart Claude Memory v1.1.2 production baseline.*
 
 ---
 
@@ -123,94 +127,98 @@ flowchart TD
   n1 --> n2
   n3["README.md"]
   n1 --> n3
-  n4["scripts/"]
+  n4["images/"]
   n0 --> n4
-  n5["001_schema.sql"]
+  n5["Smart Claude Memory v.1.1.2.jpeg"]
   n4 --> n5
-  n6["002_multi_project.sql"]
-  n4 --> n6
-  n7["003_file_hash.sql"]
-  n4 --> n7
-  n8["004_backlog_frozen.sql"]
-  n4 --> n8
-  n9["005_archive_backlog.sql"]
-  n4 --> n9
-  n10["apply-schema.ts"]
-  n4 --> n10
-  n11["backup-and-remove.ts"]
-  n4 --> n11
-  n12["e2e-incremental-test.ts"]
-  n4 --> n12
-  n13["e2e-isolation-test.ts"]
-  n4 --> n13
-  n14["e2e-test.ts"]
-  n4 --> n14
-  n15["purge-samia-rules.ts"]
-  n4 --> n15
-  n16["src/"]
-  n0 --> n16
-  n17["tools/"]
-  n16 --> n17
-  n18["backlog.ts"]
-  n17 --> n18
-  n19["conflict.ts"]
-  n17 --> n19
-  n20["health.ts"]
-  n17 --> n20
-  n21["hygiene.ts"]
-  n17 --> n21
-  n22["image.ts"]
-  n17 --> n22
-  n23["orchestrator.ts"]
-  n17 --> n23
-  n24["policy.ts"]
-  n17 --> n24
-  n25["refactor.ts"]
-  n17 --> n25
-  n26["search.ts"]
-  n17 --> n26
-  n27["setup.ts"]
-  n17 --> n27
-  n28["summarize.ts"]
-  n17 --> n28
-  n29["sync.ts"]
-  n17 --> n29
-  n30["update-rule.ts"]
-  n17 --> n30
-  n31["verification.ts"]
-  n17 --> n31
-  n32["chunker.ts"]
-  n16 --> n32
-  n33["config.ts"]
-  n16 --> n33
-  n34["index.ts"]
-  n16 --> n34
-  n35["ollama.ts"]
-  n16 --> n35
-  n36["project-detect.ts"]
-  n16 --> n36
-  n37["project.ts"]
-  n16 --> n37
-  n38["supabase.ts"]
-  n16 --> n38
-  n39["verification-gate.ts"]
-  n16 --> n39
-  n40[".env.example"]
-  n0 --> n40
-  n41[".gitignore"]
-  n0 --> n41
-  n42["ARCHITECTURE.md"]
+  n6["scripts/"]
+  n0 --> n6
+  n7["001_schema.sql"]
+  n6 --> n7
+  n8["002_multi_project.sql"]
+  n6 --> n8
+  n9["003_file_hash.sql"]
+  n6 --> n9
+  n10["004_backlog_frozen.sql"]
+  n6 --> n10
+  n11["005_archive_backlog.sql"]
+  n6 --> n11
+  n12["apply-schema.ts"]
+  n6 --> n12
+  n13["backup-and-remove.ts"]
+  n6 --> n13
+  n14["e2e-incremental-test.ts"]
+  n6 --> n14
+  n15["e2e-isolation-test.ts"]
+  n6 --> n15
+  n16["e2e-test.ts"]
+  n6 --> n16
+  n17["purge-samia-rules.ts"]
+  n6 --> n17
+  n18["src/"]
+  n0 --> n18
+  n19["tools/"]
+  n18 --> n19
+  n20["backlog.ts"]
+  n19 --> n20
+  n21["conflict.ts"]
+  n19 --> n21
+  n22["health.ts"]
+  n19 --> n22
+  n23["hygiene.ts"]
+  n19 --> n23
+  n24["image.ts"]
+  n19 --> n24
+  n25["orchestrator.ts"]
+  n19 --> n25
+  n26["policy.ts"]
+  n19 --> n26
+  n27["refactor.ts"]
+  n19 --> n27
+  n28["search.ts"]
+  n19 --> n28
+  n29["setup.ts"]
+  n19 --> n29
+  n30["summarize.ts"]
+  n19 --> n30
+  n31["sync.ts"]
+  n19 --> n31
+  n32["update-rule.ts"]
+  n19 --> n32
+  n33["verification.ts"]
+  n19 --> n33
+  n34["chunker.ts"]
+  n18 --> n34
+  n35["config.ts"]
+  n18 --> n35
+  n36["index.ts"]
+  n18 --> n36
+  n37["ollama.ts"]
+  n18 --> n37
+  n38["project-detect.ts"]
+  n18 --> n38
+  n39["project.ts"]
+  n18 --> n39
+  n40["supabase.ts"]
+  n18 --> n40
+  n41["verification-gate.ts"]
+  n18 --> n41
+  n42[".env.example"]
   n0 --> n42
-  n43["LICENSE"]
+  n43[".gitignore"]
   n0 --> n43
-  n44["package-lock.json"]
+  n44["ARCHITECTURE.md"]
   n0 --> n44
-  n45["package.json"]
+  n45["LICENSE"]
   n0 --> n45
-  n46["README.md"]
+  n46["package-lock.json"]
   n0 --> n46
-  n47["tsconfig.json"]
+  n47["package.json"]
   n0 --> n47
+  n48["README.md"]
+  n0 --> n48
+  n49["tsconfig.json"]
+  n0 --> n49
 ```
 
 <!-- MEMORY:ARCH:END -->
@@ -226,3 +234,4 @@ flowchart TD
 | v0.9.1 | Legacy backup sweep + recovery discovery |
 | v1.0.0 | God Mode — project detect, compiler gate, regression, binding session |
 | **v1.1.0** | **Sovereign Orchestrator — delegation pattern + Autonomous Self-Healing + cross-platform spawn fix + ARCHITECTURE.md consolidation** |
+| **v1.1.2** | **Master Schematic & Sovereign Baseline — definitive visual identity + version-locked production release** |

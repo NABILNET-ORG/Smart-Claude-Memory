@@ -22,7 +22,7 @@ import { currentProjectId } from "./project.js";
 
 const server = new McpServer({
   name: "smart-claude-memory-mcp",
-  version: "1.0.0",
+  version: "1.1.2",
 });
 
 // Startup diagnostics (stderr — never stdout, which is reserved for JSON-RPC).
