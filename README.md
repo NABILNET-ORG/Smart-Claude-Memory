@@ -10,7 +10,7 @@
 [![pgvector](https://img.shields.io/badge/pgvector-HNSW-336791?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Ollama](https://img.shields.io/badge/Ollama-local%20embeddings-000)](https://ollama.com/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](#license)
-[![Version](https://img.shields.io/badge/version-0.3.0-green)](#)
+[![Version](https://img.shields.io/badge/version-0.7.0-green)](#)
 
 </div>
 
@@ -22,13 +22,15 @@ Claude sessions load `memory.md`, `rules.md`, `cloud.md`, and a dozen other cont
 
 ## What this does
 
-`claude-memory` is a **Model Context Protocol server** that replaces "read every .md at startup" with "search them on demand." It chunks your markdown notes, embeds them with a local Ollama model, stores them in Supabase (pgvector), and exposes three tools to Claude:
+`claude-memory` is a **Model Context Protocol server** that replaces "read every .md at startup" with "search them on demand." It chunks your markdown notes, embeds them with a local Ollama model, stores them in Supabase (pgvector), and exposes **eleven tools** to Claude spanning memory, vision, backlog, hygiene, and system health. The elevator pitch:
 
 | Tool | Purpose |
 |---|---|
 | `sync_local_memory` | Scan folders → **MD5 hash-gate** → chunk → embed → **bulk upsert**. Skips unchanged files. |
-| `search_memory` | Semantic search over the current project's chunks |
-| `update_rule` | Targeted single-chunk upsert without re-scanning |
+| `search_memory` | Semantic search + intent routing (archive / backlog / semantic) |
+| `manage_backlog` | Per-project task handover with persistent archive |
+
+See the [Toolbox](#toolbox) for the complete surface and [ARCHITECTURE.md](ARCHITECTURE.md) for the request-flow diagram.
 
 Memory is strictly **per-project**: when you're in project A, Claude cannot see project B's notes. See [Multi-project isolation](#multi-project-isolation).
 
@@ -79,6 +81,55 @@ Need to reach into another project on purpose? Pass `project_id` explicitly:
 ```
 search_memory({ query: "auth flow", project_id: "acme-api" })
 ```
+
+---
+
+## Toolbox
+
+| Tool | Category | Summary |
+|---|---|---|
+| `sync_local_memory` | Memory | Hash-gated incremental sync of `.md` files; bulk upsert in 100-chunk batches; `force` re-embed; `auto_purge` with dry-run + verify-before-delete |
+| `search_memory` | Memory | Intent routing — `archive` > `backlog` > `semantic`. Archive tasks never leak into vector results unless requested. |
+| `update_rule` | Memory | Upsert a single rule/chunk without re-syncing files |
+| `summarize_memory_file` | Memory | LLM-driven compression of `CLAUDE.md` / `MEMORY.md` toward a token target (default 3000) |
+| `manage_backlog` | Backlog | `add` / `list` / `update` / `prune_done` (archives) / `archive_list` / `session_end` with Progress Report + resume prompt |
+| `index_image` | Vision | Moondream caption → `nomic-embed-text` embed → upsert. Auto-converts WebP/GIF/BMP via ffmpeg. |
+| `check_code_hygiene` | Guardian | 750-line rule with auto-generated file exclusions; N-split refactor plan for oversized files |
+| `check_rule_conflicts` | Guardian | Opt-in LLM-based intent conflict detection between a proposed change and retrieved rules |
+| `raise_verification_gate` | Guardian | Arm the Hard Stop flag after a risky edit |
+| `confirm_verification` | Guardian | Clear or reassert the Hard Stop gate — Claude must call this after manual verification |
+| `check_system_health` | Ops | Supabase reachability (memory_chunks count) + Ollama reachability + required-model presence (moondream, nomic-embed-text) |
+
+**Companion hook:** [hooks/md-policy.py](hooks/md-policy.py) enforces Zero-Local-MD allowlist, 750-line ceiling, frozen-feature patterns, and the Manual Test Gate from the Claude Code `PreToolUse` layer. Without it the Guardian tools are advisory; with it they are binding.
+
+---
+
+## Living Documentation
+
+`manage_backlog({ action: "session_end" })` writes itself into the project's `README.md`. On every call, the server:
+
+1. Archives completed tasks (atomic PL/pgSQL transaction into `archive_backlog`).
+2. Pulls the last 5 archived rows via `listArchive`.
+3. Locates `README.md` in the current working directory.
+4. Either replaces the `### 🚀 Recent Progress` section (matched literally) or appends it to the end of the file.
+
+Format:
+
+```markdown
+### 🚀 Recent Progress
+
+* [DONE] Fix login form validation (archived at 2026-04-24).
+* [DONE] Add cache invalidation hook (archived at 2026-04-23).
+...
+```
+
+**Safety rails:**
+
+- If the MCP server's `cwd` slug doesn't match the `session_end` `project_id`, the sync is **skipped** — the tool does not write into the wrong repo's README.
+- If the file cannot be read or written, the failure is returned as a `warning` in the `readme_sync` field; the archive + resume-prompt logic still completes.
+- The hook allowlist always includes `README.md`, so this self-edit never trips the Zero-Local-MD policy.
+
+The net effect: every session leaves a visible, human-readable trail of what was shipped, without any manual documentation burden.
 
 ---
 

@@ -1,3 +1,5 @@
+import { readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import {
   addBacklog,
   listBacklog,
@@ -7,7 +9,8 @@ import {
   type BacklogRow,
   type BacklogStatus,
 } from "../supabase.js";
-import { currentProjectId } from "../project.js";
+import { currentProjectId, slugify } from "../project.js";
+import { basename } from "node:path";
 
 export type BacklogAction =
   | { action: "add"; title: string; priority?: number; notes?: string; project_id?: string }
@@ -30,6 +33,84 @@ function pickNextTask(rows: BacklogRow[]): BacklogRow | null {
   return [...rows].sort(
     (a, b) => a.priority - b.priority || Date.parse(a.created_at) - Date.parse(b.created_at),
   )[0];
+}
+
+const PROGRESS_HEADER = "### 🚀 Recent Progress";
+
+/**
+ * Self-documenting session handover: rewrite or append the "Recent Progress"
+ * section of the project's local README.md with the last 5 archived tasks.
+ * Never throws — failures are returned as a warning so session_end still
+ * completes the archive.
+ */
+async function updateLocalReadme(projectId: string): Promise<{
+  ok: boolean;
+  path?: string;
+  updated?: boolean;
+  warning?: string;
+}> {
+  const readmePath = resolve(process.cwd(), "README.md");
+  try {
+    // Safety: skip when the MCP server's cwd doesn't match the session_end
+    // project — we'd otherwise overwrite the wrong repo's README.
+    const cwdSlug = slugify(basename(process.cwd()) || "default");
+    if (cwdSlug !== projectId) {
+      return {
+        ok: true,
+        path: readmePath,
+        updated: false,
+        warning: `README sync skipped — cwd project '${cwdSlug}' does not match session_end project_id '${projectId}'.`,
+      };
+    }
+
+    const archived = await listArchive(projectId, { limit: 5 });
+    if (archived.length === 0) {
+      return {
+        ok: true,
+        path: readmePath,
+        updated: false,
+        warning: "No archived tasks yet; nothing to write.",
+      };
+    }
+
+    const bullets = archived
+      .map((t) => `* [DONE] ${t.title} (archived at ${t.archived_at.slice(0, 10)}).`)
+      .join("\n");
+    const newSection = `${PROGRESS_HEADER}\n\n${bullets}`;
+
+    let current = "";
+    try {
+      current = await readFile(readmePath, "utf8");
+    } catch {
+      // README may not exist yet; we'll create one.
+    }
+
+    let updated: string;
+    const start = current.indexOf(PROGRESS_HEADER);
+    if (start >= 0) {
+      // Find the next markdown heading at level 1-3 after our section, or EOF.
+      const tail = current.slice(start + PROGRESS_HEADER.length);
+      const nextHeading = tail.match(/\n#{1,3}\s+\S/);
+      const sectionEnd =
+        nextHeading && nextHeading.index !== undefined
+          ? start + PROGRESS_HEADER.length + nextHeading.index
+          : current.length;
+      updated = current.slice(0, start) + newSection + current.slice(sectionEnd);
+    } else if (current.trim()) {
+      updated = current.trimEnd() + "\n\n" + newSection + "\n";
+    } else {
+      updated = newSection + "\n";
+    }
+
+    await writeFile(readmePath, updated, "utf8");
+    return { ok: true, path: readmePath, updated: true };
+  } catch (e) {
+    return {
+      ok: false,
+      path: readmePath,
+      warning: `README sync failed: ${(e as Error).message}`,
+    };
+  }
 }
 
 export async function manageBacklog(args: BacklogAction) {
@@ -60,8 +141,6 @@ export async function manageBacklog(args: BacklogAction) {
     }
 
     case "prune_done": {
-      // Archives rather than deletes. Row data is preserved in archive_backlog;
-      // the action name stays for backward compat with existing callers.
       const archived = await archiveDoneBacklog(projectId);
       return { action: "prune_done", project_id: projectId, archived };
     }
@@ -77,7 +156,6 @@ export async function manageBacklog(args: BacklogAction) {
     }
 
     case "session_end": {
-      // 1. Snapshot every bucket BEFORE archiving so the Progress Report is complete.
       const [todo, inProg, blocked, done] = await Promise.all([
         listBacklog(projectId, { status: "todo" }),
         listBacklog(projectId, { status: "in_progress" }),
@@ -85,19 +163,17 @@ export async function manageBacklog(args: BacklogAction) {
         listBacklog(projectId, { status: "done" }),
       ]);
 
-      // 2. Archive (don't delete) completed tasks — single SQL transaction.
       const archived = await archiveDoneBacklog(projectId);
 
-      // 3. Pick the highest-priority remaining task across todo/in_progress/blocked.
-      const next = pickNextTask([...todo, ...inProg, ...blocked]);
+      // Living-Documentation sync. Never throws; worst case returns a warning.
+      const readmeSync = await updateLocalReadme(projectId);
 
-      // 4. The agreed 1-line resume prompt.
+      const next = pickNextTask([...todo, ...inProg, ...blocked]);
       const nextTitle = next?.title ?? "backlog is empty — pick a new task";
       const resumePrompt =
         `search_memory({ query: "Active Backlog", project_id: "${projectId}" }) ` +
         `-> Reviewing pending tasks. Next up: ${nextTitle}.`;
 
-      // 5. Human-readable summary.
       const humanSummary = [
         `Session ended.`,
         `${done.length} task${done.length === 1 ? "" : "s"} archived.`,
@@ -129,6 +205,7 @@ export async function manageBacklog(args: BacklogAction) {
             }
           : null,
         resume_prompt: resumePrompt,
+        readme_sync: readmeSync,
       };
     }
   }

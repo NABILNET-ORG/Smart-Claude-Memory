@@ -11,11 +11,12 @@ import { confirmVerification, raisePendingVerification } from "./tools/verificat
 import { checkRuleConflicts } from "./tools/conflict.js";
 import { summarizeMemoryFile } from "./tools/summarize.js";
 import { indexImage } from "./tools/image.js";
+import { checkSystemHealth } from "./tools/health.js";
 import { currentProjectId } from "./project.js";
 
 const server = new McpServer({
   name: "claude-memory-mcp",
-  version: "0.6.1",
+  version: "0.7.0",
 });
 
 // High-precision vision default — OCR-first, zero-guessing, explicit symbol inventory.
@@ -191,6 +192,15 @@ server.tool(
   },
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await indexImage(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "check_system_health",
+  "System diagnostics: Supabase reachability (memory_chunks count), Ollama reachability, and required-model presence (moondream + nomic-embed-text). Returns overall='healthy'|'degraded'|'down' with per-check latency.",
+  {},
+  async () => ({
+    content: [{ type: "text", text: JSON.stringify(await checkSystemHealth(), null, 2) }],
   }),
 );
 
