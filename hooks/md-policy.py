@@ -210,6 +210,28 @@ def _target_matches_frozen(target: Path) -> bool:
 
 # ─── checks ────────────────────────────────────────────────────────────────
 
+def check_orchestrator_advisory(tool_name: str) -> dict | None:
+    """Optional nudge for the Orchestrator pattern.
+
+    Enable with CLAUDE_MEMORY_ORCHESTRATOR_MODE=1. Emits a non-blocking
+    warning on direct Write/Edit/Bash calls, reminding the main agent to
+    delegate to a worker sub-agent instead. Advisory because any hard
+    block would also trip sub-agents (they share the same hook surface).
+    """
+    if os.environ.get("CLAUDE_MEMORY_ORCHESTRATOR_MODE", "0") not in ("1", "true", "yes"):
+        return None
+    if tool_name not in {"Write", "Edit", "Bash"}:
+        return None
+    return {
+        "decision": "allow",
+        "warning": (
+            "Orchestrator mode is ON. Consider delegating this "
+            f"{tool_name} to a worker sub-agent via the delegate_task MCP "
+            "tool instead of performing it in the main session. (Advisory only.)"
+        ),
+    }
+
+
 def check_verification_gate(tool_name: str) -> dict | None:
     """If a pending-verification flag exists, block all destructive tools."""
     if tool_name not in {"Write", "Edit", "Bash"}:
@@ -359,6 +381,9 @@ def check_memory_file_size(target: Path, incoming: str) -> dict | None:
 # ─── orchestration ────────────────────────────────────────────────────────
 
 def decide(tool_name: str, tool_input: dict) -> dict:
+    # 0. Orchestrator-mode advisory (non-blocking). Opt-in via env var.
+    orch = check_orchestrator_advisory(tool_name)
+
     # 1. Verification gate trumps everything (applies to Write/Edit/Bash).
     gate = check_verification_gate(tool_name)
     if gate is not None:
@@ -422,6 +447,7 @@ def decide(tool_name: str, tool_input: dict) -> dict:
                 backup_warning = f"Backup FAILED for {target.name}: {err} — proceed with caution."
 
     warnings = [w for w in (
+        (orch or {}).get("warning"),
         (size_warning or {}).get("warning"),
         backup_warning,
     ) if w]

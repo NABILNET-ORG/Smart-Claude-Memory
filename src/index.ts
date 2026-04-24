@@ -16,6 +16,7 @@ import { initProject, sweepLegacyBackups, legacyBackupSummary } from "./tools/se
 import { listFrozen, freezeFile, unfreezeFile } from "./tools/policy.js";
 import { refactorGuard } from "./tools/refactor.js";
 import { analyzeRegression } from "./tools/verification.js";
+import { delegateTask, syncArtefacts } from "./tools/orchestrator.js";
 import { ensureSchema, startKeepAlive, writeFrozenPatternsCache } from "./supabase.js";
 import { currentProjectId } from "./project.js";
 
@@ -340,6 +341,34 @@ server.tool(
   },
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await analyzeRegression(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "delegate_task",
+  "Orchestrator pattern: emit a canonical worker sub-agent prompt for a task. Natural-language triggers: 'delegate this', 'spawn a worker', 'send to sub-agent', 'offload this task'. The returned 'prompt' field plugs into the Agent tool — every delegation carries the same contract: do the work → refactor_guard({action:'gate'}) → rollback on failure → return a 2-paragraph synthesis with strict no-raw-content caps. Use this when the Orchestrator is running the session and should keep its context clean by delegating edits/research/bash to workers.",
+  {
+    title: z.string().min(1),
+    instructions: z.string().min(1),
+    target_files: z.array(z.string()).optional(),
+    workspace: z.string().optional(),
+    run_gate: z.boolean().optional(),
+    allow_rollback: z.boolean().optional(),
+    synthesis_word_limit: z.number().int().positive().max(1000).optional(),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await delegateTask(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "sync_artefacts",
+  "Refresh the project's README 'Recent Progress' + '🗺️ File Architecture' sections AND project_file_architecture.md — without the archive / resume-prompt side effects of session_end. Natural-language triggers: 'sync docs', 'refresh architecture', 'update the readme tree', 'after-worker sync'. Orchestrator calls this after a worker sub-agent reports success so the Mermaid diagram stays the source of truth for planning. Use manage_backlog({action:'session_end'}) instead at the actual end of a working session.",
+  {
+    project_id: projectIdSchema,
+  },
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await syncArtefacts(args), null, 2) }],
   }),
 );
 

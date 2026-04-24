@@ -134,7 +134,7 @@ function renderArchMermaid(root: ArchNode): string {
   return lines.join("\n");
 }
 
-async function updateProjectArchitecture(projectId: string): Promise<{
+export async function updateProjectArchitecture(projectId: string): Promise<{
   ok: boolean;
   path?: string;
   updated?: boolean;
@@ -202,7 +202,7 @@ async function updateProjectArchitecture(projectId: string): Promise<{
  * Never throws — failures are returned as a warning so session_end still
  * completes the archive.
  */
-async function updateLocalReadme(projectId: string): Promise<{
+export async function updateLocalReadme(projectId: string): Promise<{
   ok: boolean;
   path?: string;
   updated?: boolean;
