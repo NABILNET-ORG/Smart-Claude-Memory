@@ -228,3 +228,141 @@ export async function confirmVerification(args: { success: boolean; notes?: stri
 export async function raisePendingVerification(payload: PendingFlag) {
   await setPending(payload);
 }
+
+// ─── Regression tracer ────────────────────────────────────────────────────
+
+async function listBackupsForFile(file: string): Promise<BackupRecord[]> {
+  try {
+    const raw = await readFile(BACKUP_INDEX_PATH, "utf8");
+    const data = JSON.parse(raw) as { entries?: Record<string, BackupRecord> };
+    const abs = resolve(file);
+    const found =
+      data.entries?.[abs] ??
+      data.entries?.[file] ??
+      data.entries?.[abs.replace(/\\/g, "/")] ??
+      null;
+    // The index keeps only the LATEST per file. For history, rely on the
+    // timestamped subdirs produced by the hook under ~/.claude-memory/backups/.
+    const historical: BackupRecord[] = [];
+    if (found) historical.push(found);
+    // Walk backup root and collect anything matching the file's basename,
+    // newest first.
+    const { readdir } = await import("node:fs/promises");
+    const rootBase = join(GATE_DIR, "backups");
+    try {
+      const projects = await readdir(rootBase, { withFileTypes: true });
+      const bn = basename(abs).toLowerCase();
+      for (const p of projects) {
+        if (!p.isDirectory()) continue;
+        const projDir = join(rootBase, p.name);
+        const stamps = await readdir(projDir, { withFileTypes: true });
+        for (const ts of stamps) {
+          if (!ts.isDirectory()) continue;
+          const walk = async (d: string) => {
+            const entries = await readdir(d, { withFileTypes: true });
+            for (const e of entries) {
+              const full = join(d, e.name);
+              if (e.isDirectory()) await walk(full);
+              else if (e.name.toLowerCase() === bn) {
+                historical.push({ backup: full, tool: "history", timestamp: ts.name });
+              }
+            }
+          };
+          await walk(join(projDir, ts.name));
+        }
+      }
+    } catch {
+      // No history root yet.
+    }
+    // Dedupe by backup path; sort by timestamp desc (lexical works with ISO).
+    const seen = new Set<string>();
+    const unique = historical.filter((r) => !seen.has(r.backup) && seen.add(r.backup));
+    unique.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    return unique;
+  } catch {
+    return [];
+  }
+}
+
+function diffSummary(
+  currentLines: string[],
+  priorLines: string[],
+): { added: number; removed: number; sample_changes: string[] } {
+  const curSet = new Set(currentLines);
+  const priorSet = new Set(priorLines);
+  const added = currentLines.filter((l) => !priorSet.has(l));
+  const removed = priorLines.filter((l) => !curSet.has(l));
+  const sample: string[] = [];
+  for (const l of added.slice(0, 3)) sample.push(`+ ${l.slice(0, 120)}`);
+  for (const l of removed.slice(0, 3)) sample.push(`- ${l.slice(0, 120)}`);
+  return { added: added.length, removed: removed.length, sample_changes: sample };
+}
+
+export async function analyzeRegression(args: { file: string; backups_to_compare?: number }) {
+  const abs = resolve(args.file);
+  const n = Math.max(1, Math.min(args.backups_to_compare ?? 3, 10));
+
+  let currentText: string;
+  try {
+    currentText = await readFile(abs, "utf8");
+  } catch (e) {
+    return {
+      action: "analyze_regression",
+      file: abs,
+      error: `Cannot read current file: ${(e as Error).message}`,
+    };
+  }
+  const currentLines = currentText.split(/\r?\n/);
+
+  const history = (await listBackupsForFile(abs)).slice(0, n);
+  if (history.length === 0) {
+    return {
+      action: "analyze_regression",
+      file: abs,
+      current_lines: currentLines.length,
+      comparisons: [],
+      note: "No backups found for this file. Check ~/.claude-memory/backups/ or fall back to git.",
+    };
+  }
+
+  const comparisons: Array<{
+    backup: string;
+    tool: string;
+    timestamp: string;
+    prior_lines: number;
+    diff: ReturnType<typeof diffSummary>;
+  }> = [];
+  for (const rec of history) {
+    let priorText: string;
+    try {
+      priorText = await readFile(rec.backup, "utf8");
+    } catch {
+      continue;
+    }
+    const priorLines = priorText.split(/\r?\n/);
+    comparisons.push({
+      backup: rec.backup,
+      tool: rec.tool,
+      timestamp: rec.timestamp,
+      prior_lines: priorLines.length,
+      diff: diffSummary(currentLines, priorLines),
+    });
+  }
+
+  const likelyStablePrior = comparisons.reduce<typeof comparisons[number] | null>(
+    (best, c) => (!best || c.diff.added + c.diff.removed < best.diff.added + best.diff.removed ? c : best),
+    null,
+  );
+
+  return {
+    action: "analyze_regression",
+    file: abs,
+    current_lines: currentLines.length,
+    comparisons,
+    closest_prior: likelyStablePrior?.backup ?? null,
+    note:
+      comparisons.length === 0
+        ? "Backup files referenced in the index are missing on disk."
+        : `Compared current file against ${comparisons.length} prior snapshot(s). 'closest_prior' is the snapshot with the smallest edit distance — often the best restore candidate.`,
+  };
+}

@@ -76,12 +76,18 @@ async function settingsRegistration(workspace: string): Promise<{
   return { registered: matches.length > 0, matches };
 }
 
-export async function initProject(args: { workspace?: string } = {}): Promise<{
+export async function initProject(args: {
+  workspace?: string;
+  sweep_legacy?: "dry" | "commit" | "off";
+  arch?: boolean;
+} = {}): Promise<{
   action: "init_project";
   workspace: string;
   expected_mcp_entry: string;
   overall: "ready" | "partial" | "not_ready";
   checks: Check[];
+  architecture_synced: { path: string; written: boolean } | null;
+  legacy_sweep: unknown;
 }> {
   const ws = resolve(args.workspace ?? process.cwd());
   const checks: Check[] = [];
@@ -151,13 +157,72 @@ export async function initProject(args: { workspace?: string } = {}): Promise<{
       ? "partial"
       : "ready";
 
+  // Auto-artefacts: generate the architecture doc on every init so new
+  // projects get a diagram without having to run session_end first.
+  let architectureSynced: { path: string; written: boolean } | null = null;
+  if (args?.arch !== false) {
+    try {
+      architectureSynced = await writeProjectArchitectureOnInit(ws);
+    } catch (e) {
+      architectureSynced = { path: "", written: false };
+    }
+  }
+
+  // Optional: first-init legacy sweep. 'dry' (default) previews only; 'commit'
+  // moves HIGH-confidence matches; 'off' skips the scan entirely.
+  let legacySweep: unknown = null;
+  const sweepMode = args?.sweep_legacy ?? "dry";
+  if (sweepMode !== "off") {
+    legacySweep = await sweepLegacyBackups({
+      workspace: ws,
+      confirm: sweepMode === "commit",
+    });
+  }
+
   return {
     action: "init_project",
     workspace: ws,
     expected_mcp_entry: mcpEntryPoint,
     overall,
     checks,
+    architecture_synced: architectureSynced,
+    legacy_sweep: legacySweep,
   };
+}
+
+async function writeProjectArchitectureOnInit(
+  workspace: string,
+): Promise<{ path: string; written: boolean }> {
+  const docPath = resolve(workspace, "project_file_architecture.md");
+  // The backlog tool already owns the Mermaid renderer; calling a dedicated
+  // small helper here would duplicate logic. We simply touch the file with a
+  // pointer so session_end (which handles the real generation) knows to
+  // overwrite the mermaid block. If the file is already present we leave it.
+  try {
+    await stat(docPath);
+    return { path: docPath, written: false };
+  } catch {
+    const seed = [
+      `# Project File Architecture`,
+      "",
+      `> Auto-created by claude-memory init_project. The Mermaid block is `,
+      `> populated by manage_backlog({ action: "session_end" }).`,
+      "",
+      "## Tree",
+      "",
+      "```mermaid",
+      "flowchart TD",
+      '  n0["(run session_end to populate)"]',
+      "```",
+    ].join("\n");
+    try {
+      const { writeFile } = await import("node:fs/promises");
+      await writeFile(docPath, seed, "utf8");
+      return { path: docPath, written: true };
+    } catch {
+      return { path: docPath, written: false };
+    }
+  }
 }
 
 // ─── Legacy backup sweep ──────────────────────────────────────────────────
@@ -218,6 +283,12 @@ const PRODUCTION_QUALIFIER = new RegExp(
       "store", "registry", "router", "middleware",
       "config", "schema", "type", "types", "model", "models",
       "validator", "loader", "parser", "formatter", "serializer",
+      // Operational-script vocabulary (caught scripts/backup-and-remove.ts in v0.9.1)
+      "remove", "delete", "purge", "cleanup", "clean",
+      "sync", "runner", "worker", "job",
+      "init", "setup", "bootstrap", "install",
+      "cli", "script", "entry", "main", "index",
+      "archive", "archiver",
     ].join("|") +
     ")\\b",
   "i",

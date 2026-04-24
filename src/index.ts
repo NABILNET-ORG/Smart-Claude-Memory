@@ -14,12 +14,14 @@ import { indexImage } from "./tools/image.js";
 import { checkSystemHealth } from "./tools/health.js";
 import { initProject, sweepLegacyBackups, legacyBackupSummary } from "./tools/setup.js";
 import { listFrozen, freezeFile, unfreezeFile } from "./tools/policy.js";
+import { refactorGuard } from "./tools/refactor.js";
+import { analyzeRegression } from "./tools/verification.js";
 import { ensureSchema, startKeepAlive, writeFrozenPatternsCache } from "./supabase.js";
 import { currentProjectId } from "./project.js";
 
 const server = new McpServer({
   name: "claude-memory-mcp",
-  version: "0.9.1",
+  version: "1.0.0",
 });
 
 // Startup diagnostics (stderr — never stdout, which is reserved for JSON-RPC).
@@ -312,6 +314,32 @@ server.tool(
   },
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await initProject(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "refactor_guard",
+  "Multi-stack refactor safety net. Actions: plan (scan imports/exports/parts for TS/JS/Dart/Py via language-specific regex — heuristic, not a full parser); gate (run the project's compiler check — flutter analyze / tsc --noEmit / cargo check / go vet / py_compile — auto-selected from project type markers); rollback (restore a file from the hook-managed backup-index). Natural-language triggers: 'run the build check', 'does it still compile?', 'check for regressions', 'rollback that edit', 'restore from backup'. After any destructive refactor, run action:gate; if it fails, run action:rollback to restore.",
+  {
+    action: z.enum(["plan", "gate", "rollback"]),
+    paths: z.array(z.string()).optional(),
+    workspace: z.string().optional(),
+    file: z.string().optional(),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await refactorGuard(args as never), null, 2) }],
+  }),
+);
+
+server.tool(
+  "analyze_regression",
+  "Compare a broken file against its most recent N backups and surface the closest-matching prior snapshot. Natural-language triggers: 'what did I break?', 'diff against the last good version', 'find the regression', 'which backup should I restore?'. Returns an edit-distance summary per backup and identifies the smallest-delta candidate as 'closest_prior' — usually the right restore target.",
+  {
+    file: z.string(),
+    backups_to_compare: z.number().int().positive().max(10).optional(),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await analyzeRegression(args), null, 2) }],
   }),
 );
 
