@@ -465,7 +465,7 @@ MIT. See [LICENSE](LICENSE).
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-04-24T18:54:38.804Z for `claude-memory`._
+_Auto-synced at 2026-04-24T19:01:59.898Z for `claude-memory`._
 
 ```mermaid
 flowchart TD
