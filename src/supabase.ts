@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { homedir } from "node:os";
 import { config } from "./config.js";
+import { slugify as slugifyProject } from "./project.js";
 
 export const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_SECRET_KEY, {
   auth: { persistSession: false },
@@ -397,6 +401,84 @@ export async function addFrozenPattern(
       onConflict: "project_id,pattern",
     });
   if (error) throw new Error(`addFrozenPattern failed: ${error.message}`);
+}
+
+export async function removeFrozenPattern(
+  projectId: string,
+  pattern: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("frozen_features")
+    .delete({ count: "exact" })
+    .eq("project_id", projectId)
+    .eq("pattern", pattern);
+  if (error) throw new Error(`removeFrozenPattern failed: ${error.message}`);
+  return count ?? 0;
+}
+
+export async function listFrozenByProject(): Promise<Record<string, string[]>> {
+  const { data, error } = await supabase
+    .from("frozen_features")
+    .select("project_id, pattern");
+  if (error) throw new Error(`listFrozenByProject failed: ${error.message}`);
+  const out: Record<string, string[]> = {};
+  for (const row of data ?? []) {
+    const pid = row.project_id as string;
+    const pat = row.pattern as string;
+    (out[pid] ??= []).push(pat);
+  }
+  return out;
+}
+
+// ─── shared frozen-patterns cache for the PreToolUse hook ────────────────
+//
+// The md-policy.py hook runs as a fresh subprocess per tool call and cannot
+// hit Supabase directly without paying 1-2s of network latency per Write/Edit.
+// Instead, the MCP server writes a snapshot of `frozen_features` to this
+// file on startup and after any mutation; the hook reads it in microseconds.
+
+const GATE_DIR = process.env.CLAUDE_MEMORY_GATE_DIR ?? join(homedir(), ".claude-memory");
+export const FROZEN_CACHE_PATH = join(GATE_DIR, "frozen-patterns.json");
+
+export async function writeFrozenPatternsCache(): Promise<{
+  ok: boolean;
+  path: string;
+  project_count: number;
+  pattern_count: number;
+  warning?: string;
+}> {
+  try {
+    const raw = await listFrozenByProject();
+    // Normalize keys to the slug form the hook uses when looking up the cache
+    // (slugify(basename(CLAUDE_MD_POLICY_WORKSPACE))). Without this, a
+    // caller that passes a non-slug project_id to freeze_file would silently
+    // fail to block because the hook's lookup key wouldn't match.
+    const projects: Record<string, string[]> = {};
+    for (const [pid, patterns] of Object.entries(raw)) {
+      const key = slugifyProject(pid);
+      (projects[key] ??= []).push(...patterns);
+    }
+    const projectCount = Object.keys(projects).length;
+    const patternCount = Object.values(projects).reduce((n, arr) => n + arr.length, 0);
+    await mkdir(GATE_DIR, { recursive: true });
+    await writeFile(
+      FROZEN_CACHE_PATH,
+      JSON.stringify(
+        { updated_at: new Date().toISOString(), projects },
+        null,
+        2,
+      ),
+    );
+    return { ok: true, path: FROZEN_CACHE_PATH, project_count: projectCount, pattern_count: patternCount };
+  } catch (e) {
+    return {
+      ok: false,
+      path: FROZEN_CACHE_PATH,
+      project_count: 0,
+      pattern_count: 0,
+      warning: `writeFrozenPatternsCache failed: ${(e as Error).message}`,
+    };
+  }
 }
 
 export async function upsertRule(

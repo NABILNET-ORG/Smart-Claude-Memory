@@ -1,5 +1,6 @@
+import { stat, readFile } from "node:fs/promises";
 import { config } from "../config.js";
-import { supabase, getKeepAliveStatus } from "../supabase.js";
+import { supabase, getKeepAliveStatus, FROZEN_CACHE_PATH } from "../supabase.js";
 
 /**
  * Models claude-memory relies on at runtime. The check is prefix-based because
@@ -28,7 +29,51 @@ type HealthReport = {
     missing: string[];
   };
   keep_alive: ReturnType<typeof getKeepAliveStatus>;
+  policy_enforcement: {
+    cache_path: string;
+    cache_present: boolean;
+    cache_updated_at: string | null;
+    total_projects: number;
+    total_patterns: number;
+    active: boolean;
+    note: string;
+  };
 };
+
+async function readPolicyCache(): Promise<HealthReport["policy_enforcement"]> {
+  const snapshot: HealthReport["policy_enforcement"] = {
+    cache_path: FROZEN_CACHE_PATH,
+    cache_present: false,
+    cache_updated_at: null,
+    total_projects: 0,
+    total_patterns: 0,
+    active: false,
+    note: "",
+  };
+  try {
+    await stat(FROZEN_CACHE_PATH);
+    snapshot.cache_present = true;
+    const json = JSON.parse(await readFile(FROZEN_CACHE_PATH, "utf8")) as {
+      updated_at?: string;
+      projects?: Record<string, unknown[]>;
+    };
+    snapshot.cache_updated_at = json.updated_at ?? null;
+    const projects = json.projects ?? {};
+    snapshot.total_projects = Object.keys(projects).length;
+    snapshot.total_patterns = Object.values(projects).reduce(
+      (n, arr) => n + (Array.isArray(arr) ? arr.length : 0),
+      0,
+    );
+    snapshot.active = snapshot.total_patterns > 0;
+    snapshot.note = snapshot.active
+      ? `Policy enforcement is ACTIVE — ${snapshot.total_patterns} frozen pattern(s) across ${snapshot.total_projects} project(s). Hook will block Write on matches.`
+      : "Policy cache present but empty — no frozen patterns; all Writes pass through the frozen check.";
+  } catch {
+    snapshot.note =
+      "Policy cache not yet written. First server start with Supabase connectivity will create it.";
+  }
+  return snapshot;
+}
 
 async function checkSupabase(): Promise<Check> {
   const t0 = Date.now();
@@ -83,7 +128,11 @@ async function checkOllama(): Promise<{ check: Check; present: string[]; missing
 }
 
 export async function checkSystemHealth(): Promise<HealthReport> {
-  const [supabaseCheck, ollamaResult] = await Promise.all([checkSupabase(), checkOllama()]);
+  const [supabaseCheck, ollamaResult, policy] = await Promise.all([
+    checkSupabase(),
+    checkOllama(),
+    readPolicyCache(),
+  ]);
   const checks = { supabase: supabaseCheck, ollama: ollamaResult.check };
 
   const overall: HealthReport["overall"] =
@@ -103,5 +152,6 @@ export async function checkSystemHealth(): Promise<HealthReport> {
       missing: ollamaResult.missing,
     },
     keep_alive: getKeepAliveStatus(),
+    policy_enforcement: policy,
   };
 }
