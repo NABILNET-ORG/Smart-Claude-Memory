@@ -15,7 +15,7 @@ import { currentProjectId } from "./project.js";
 
 const server = new McpServer({
   name: "claude-memory-mcp",
-  version: "0.5.1",
+  version: "0.5.2",
 });
 
 const projectIdSchema = z
