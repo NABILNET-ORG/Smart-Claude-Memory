@@ -12,12 +12,32 @@ import { checkRuleConflicts } from "./tools/conflict.js";
 import { summarizeMemoryFile } from "./tools/summarize.js";
 import { indexImage } from "./tools/image.js";
 import { checkSystemHealth } from "./tools/health.js";
+import { initProject } from "./tools/setup.js";
+import { ensureSchema, startKeepAlive } from "./supabase.js";
 import { currentProjectId } from "./project.js";
 
 const server = new McpServer({
   name: "claude-memory-mcp",
-  version: "0.7.0",
+  version: "0.8.0",
 });
+
+// Startup diagnostics (stderr — never stdout, which is reserved for JSON-RPC).
+// Missing schema is reported loudly with the exact fix command but does not
+// block the server from starting: tools that don't touch the missing tables
+// (e.g. check_system_health, init_project) still work.
+try {
+  const report = await ensureSchema();
+  if (!report.ok) {
+    console.error(`[claude-memory] ${report.message}`);
+    console.error(`[claude-memory] Fix: ${report.fix_command}`);
+  }
+} catch (e) {
+  console.error(`[claude-memory] ensureSchema failed: ${(e as Error).message}`);
+}
+
+// Keep the Supabase HTTPS pool warm so the first call after idle doesn't
+// pay 1-2s of cold-start.
+startKeepAlive();
 
 // High-precision vision default — OCR-first, zero-guessing, explicit symbol inventory.
 // Callers can override per-call via the caption_prompt arg.
@@ -197,10 +217,21 @@ server.tool(
 
 server.tool(
   "check_system_health",
-  "System diagnostics: Supabase reachability (memory_chunks count), Ollama reachability, and required-model presence (moondream + nomic-embed-text). Returns overall='healthy'|'degraded'|'down' with per-check latency.",
+  "System diagnostics: Supabase reachability (memory_chunks count), Ollama reachability, required-model presence (moondream + nomic-embed-text), and keep-alive status (interval, last ping latency, last ping result). Returns overall='healthy'|'degraded'|'down'.",
   {},
   async () => ({
     content: [{ type: "text", text: JSON.stringify(await checkSystemHealth(), null, 2) }],
+  }),
+);
+
+server.tool(
+  "init_project",
+  "Readiness report for a workspace: validates required .env vars, locates the md-policy.py hook, checks if the claude-memory MCP server is registered in Claude Code settings, and confirms dist/ is built. Returns overall='ready'|'partial'|'not_ready' with per-check fix instructions.",
+  {
+    workspace: z.string().optional().describe("Absolute path. Defaults to the MCP server's cwd (typically the current Claude Code project)."),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await initProject(args), null, 2) }],
   }),
 );
 

@@ -1,5 +1,5 @@
 import { config } from "../config.js";
-import { supabase } from "../supabase.js";
+import { supabase, getKeepAliveStatus } from "../supabase.js";
 
 /**
  * Models claude-memory relies on at runtime. The check is prefix-based because
@@ -27,6 +27,7 @@ type HealthReport = {
     present: string[];
     missing: string[];
   };
+  keep_alive: ReturnType<typeof getKeepAliveStatus>;
 };
 
 async function checkSupabase(): Promise<Check> {
@@ -101,5 +102,6 @@ export async function checkSystemHealth(): Promise<HealthReport> {
       present: ollamaResult.present,
       missing: ollamaResult.missing,
     },
+    keep_alive: getKeepAliveStatus(),
   };
 }

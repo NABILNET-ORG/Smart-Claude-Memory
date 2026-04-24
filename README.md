@@ -10,7 +10,7 @@
 [![pgvector](https://img.shields.io/badge/pgvector-HNSW-336791?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Ollama](https://img.shields.io/badge/Ollama-local%20embeddings-000)](https://ollama.com/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](#license)
-[![Version](https://img.shields.io/badge/version-0.7.0-green)](#)
+[![Version](https://img.shields.io/badge/version-0.8.0-green)](#)
 
 </div>
 
@@ -98,7 +98,8 @@ search_memory({ query: "auth flow", project_id: "acme-api" })
 | `check_rule_conflicts` | Guardian | Opt-in LLM-based intent conflict detection between a proposed change and retrieved rules |
 | `raise_verification_gate` | Guardian | Arm the Hard Stop flag after a risky edit |
 | `confirm_verification` | Guardian | Clear or reassert the Hard Stop gate — Claude must call this after manual verification |
-| `check_system_health` | Ops | Supabase reachability (memory_chunks count) + Ollama reachability + required-model presence (moondream, nomic-embed-text) |
+| `check_system_health` | Ops | Supabase reachability (memory_chunks count) + Ollama reachability + required-model presence (moondream, nomic-embed-text) + background keep-alive state |
+| `init_project` | Ops | Readiness report for a workspace: required env vars, md-policy.py hook, MCP registration in settings, compiled dist. Returns `ready` / `partial` / `not_ready` with fix instructions per check. |
 
 **Companion hook:** [hooks/md-policy.py](hooks/md-policy.py) enforces Zero-Local-MD allowlist, 750-line ceiling, frozen-feature patterns, and the Manual Test Gate from the Claude Code `PreToolUse` layer. Without it the Guardian tools are advisory; with it they are binding.
 
@@ -106,14 +107,13 @@ search_memory({ query: "auth flow", project_id: "acme-api" })
 
 ## Living Documentation
 
-`manage_backlog({ action: "session_end" })` writes itself into the project's `README.md`. On every call, the server:
+`manage_backlog({ action: "session_end" })` writes **two** artefacts into the project on every call, in parallel, so the repo self-documents without manual effort:
+
+### 1. README progress log → `README.md`
 
 1. Archives completed tasks (atomic PL/pgSQL transaction into `archive_backlog`).
 2. Pulls the last 5 archived rows via `listArchive`.
-3. Locates `README.md` in the current working directory.
-4. Either replaces the `### 🚀 Recent Progress` section (matched literally) or appends it to the end of the file.
-
-Format:
+3. Replaces the `### 🚀 Recent Progress` section (or appends if absent). Format:
 
 ```markdown
 ### 🚀 Recent Progress
@@ -123,13 +123,20 @@ Format:
 ...
 ```
 
-**Safety rails:**
+### 2. Architecture map → `project_file_architecture.md`
 
-- If the MCP server's `cwd` slug doesn't match the `session_end` `project_id`, the sync is **skipped** — the tool does not write into the wrong repo's README.
-- If the file cannot be read or written, the failure is returned as a `warning` in the `readme_sync` field; the archive + resume-prompt logic still completes.
-- The hook allowlist always includes `README.md`, so this self-edit never trips the Zero-Local-MD policy.
+1. Walks the project tree (cwd), ignoring `node_modules`, `.git`, `dist`, `build`, `backups`, and friends.
+2. Caps depth at 3 and children per folder at 25; overflows show as `… (N more)`.
+3. Renders a Mermaid `flowchart TD` — GitHub renders it natively in the doc.
+4. Replaces only the `mermaid` fenced block; any human prose in the file is left intact. Creates the file with a professional header on first run.
 
-The net effect: every session leaves a visible, human-readable trail of what was shipped, without any manual documentation burden.
+### Safety rails (shared)
+
+- If the MCP server's `cwd` slug doesn't match the `session_end` `project_id`, **both syncs are skipped** with an explicit warning — neither artefact is written into the wrong repo.
+- Failures surface as `warning` fields in `readme_sync` / `architecture_sync`; the archive + resume-prompt logic always completes.
+- Hook allowlist includes `README.md`; `project_file_architecture.md` is not on it — make sure your Zero-Local-MD allowlist covers it too (`CLAUDE_MD_POLICY_ALLOW_ROOT_MD="CLAUDE.md,MEMORY.md,README.md,project_file_architecture.md"`).
+
+Net effect: every session leaves a timestamped handover note and a current file-tree diagram in the repo.
 
 ---
 

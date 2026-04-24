@@ -6,6 +6,133 @@ export const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_SECRET
   auth: { persistSession: false },
 });
 
+// ─── schema presence + keep-alive ────────────────────────────────────────
+
+const REQUIRED_TABLES = [
+  "memory_chunks",
+  "cloud_backlog",
+  "archive_backlog",
+  "frozen_features",
+] as const;
+
+const MIGRATION_COMMAND_SEQUENCE =
+  "npm run schema && " +
+  "npm run schema -- 002_multi_project.sql && " +
+  "npm run schema -- 003_file_hash.sql && " +
+  "npm run schema -- 004_backlog_frozen.sql && " +
+  "npm run schema -- 005_archive_backlog.sql";
+
+export type SchemaReport = {
+  ok: boolean;
+  missing: string[];
+  present: string[];
+  message?: string;
+  fix_command?: string;
+};
+
+/**
+ * Checks that every required table is reachable via PostgREST. Missing tables
+ * surface as Postgres code 42P01. Never throws — the caller decides what to do
+ * when the schema is incomplete (we log+continue from index.ts).
+ */
+export async function ensureSchema(): Promise<SchemaReport> {
+  const missing: string[] = [];
+  const present: string[] = [];
+  for (const table of REQUIRED_TABLES) {
+    const { error } = await supabase.from(table).select("*", { count: "exact", head: true });
+    if (!error) {
+      present.push(table);
+      continue;
+    }
+    if (error.code === "42P01" || /does not exist|could not find/i.test(error.message)) {
+      missing.push(table);
+    } else {
+      // Some other error (auth, network). Report it as missing with context so
+      // the operator can see it, but don't classify as non-existent.
+      missing.push(`${table} (check failed: ${error.message})`);
+    }
+  }
+  if (missing.length === 0) return { ok: true, missing: [], present };
+  return {
+    ok: false,
+    missing,
+    present,
+    message: `Critical Missing Schema — the following tables are unreachable or missing: ${missing.join(", ")}.`,
+    fix_command: MIGRATION_COMMAND_SEQUENCE,
+  };
+}
+
+type KeepAliveSnapshot = {
+  enabled: boolean;
+  interval_ms: number;
+  last_ping_at: string | null;
+  last_ping_latency_ms: number | null;
+  last_ping_ok: boolean | null;
+};
+
+const keepAlive: {
+  enabled: boolean;
+  intervalMs: number;
+  lastPingAt: string | null;
+  lastPingLatencyMs: number | null;
+  lastPingOk: boolean | null;
+  timer: NodeJS.Timeout | null;
+} = {
+  enabled: false,
+  intervalMs: 300_000,
+  lastPingAt: null,
+  lastPingLatencyMs: null,
+  lastPingOk: null,
+  timer: null,
+};
+
+async function ping(): Promise<void> {
+  const t0 = Date.now();
+  try {
+    await supabase.from("memory_chunks").select("*", { count: "exact", head: true });
+    keepAlive.lastPingOk = true;
+  } catch {
+    keepAlive.lastPingOk = false;
+  }
+  keepAlive.lastPingAt = new Date().toISOString();
+  keepAlive.lastPingLatencyMs = Date.now() - t0;
+}
+
+/**
+ * Start a background HEAD ping against memory_chunks to keep the Supabase
+ * HTTPS pool warm. Without this, the first request after ~5 min idle pays
+ * 1–2 s of TLS/DNS reconnect cost. Idempotent; .unref()-ed so it never
+ * prevents process exit.
+ */
+export function startKeepAlive(intervalMs?: number): void {
+  if (keepAlive.timer) return;
+  const envOverride = process.env.CLAUDE_MEMORY_KEEPALIVE_MS;
+  const resolved =
+    intervalMs ?? (envOverride ? Number.parseInt(envOverride, 10) : 300_000);
+  keepAlive.intervalMs = Number.isFinite(resolved) && resolved > 0 ? resolved : 300_000;
+  keepAlive.enabled = true;
+  // Fire once immediately to warm the pool.
+  void ping();
+  keepAlive.timer = setInterval(() => void ping(), keepAlive.intervalMs);
+  keepAlive.timer.unref();
+}
+
+export function stopKeepAlive(): void {
+  if (keepAlive.timer) clearInterval(keepAlive.timer);
+  keepAlive.timer = null;
+  keepAlive.enabled = false;
+}
+
+export function getKeepAliveStatus(): KeepAliveSnapshot {
+  return {
+    enabled: keepAlive.enabled,
+    interval_ms: keepAlive.intervalMs,
+    last_ping_at: keepAlive.lastPingAt,
+    last_ping_latency_ms: keepAlive.lastPingLatencyMs,
+    last_ping_ok: keepAlive.lastPingOk,
+  };
+}
+
 export type Chunk = {
   content: string;
   file_origin: string;
