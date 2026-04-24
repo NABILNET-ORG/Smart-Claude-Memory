@@ -12,14 +12,14 @@ import { checkRuleConflicts } from "./tools/conflict.js";
 import { summarizeMemoryFile } from "./tools/summarize.js";
 import { indexImage } from "./tools/image.js";
 import { checkSystemHealth } from "./tools/health.js";
-import { initProject } from "./tools/setup.js";
+import { initProject, sweepLegacyBackups, legacyBackupSummary } from "./tools/setup.js";
 import { listFrozen, freezeFile, unfreezeFile } from "./tools/policy.js";
 import { ensureSchema, startKeepAlive, writeFrozenPatternsCache } from "./supabase.js";
 import { currentProjectId } from "./project.js";
 
 const server = new McpServer({
   name: "claude-memory-mcp",
-  version: "0.9.0",
+  version: "0.9.1",
 });
 
 // Startup diagnostics (stderr — never stdout, which is reserved for JSON-RPC).
@@ -48,6 +48,25 @@ try {
 } catch (e) {
   console.error(`[claude-memory] frozen-pattern cache init failed: ${(e as Error).message}`);
 }
+
+// Read-only legacy-backup summary — runs asynchronously so it never blocks
+// startup. Logs count + examples on stderr; actual moves require the
+// sweep_legacy_backups tool with confirm:true.
+void (async () => {
+  try {
+    const summary = await legacyBackupSummary(process.cwd());
+    if (summary.total > 0) {
+      console.error(
+        `[claude-memory] Legacy backup scan: ${summary.total} candidate(s) — ` +
+          `${summary.high} high-confidence, ${summary.medium} medium. ` +
+          `Run sweep_legacy_backups to preview; pass confirm:true to move.`,
+      );
+      for (const ex of summary.top_examples) console.error(`  ${ex}`);
+    }
+  } catch (e) {
+    console.error(`[claude-memory] legacy backup scan failed: ${(e as Error).message}`);
+  }
+})();
 
 // High-precision vision default — OCR-first, zero-guessing, explicit symbol inventory.
 // Callers can override per-call via the caption_prompt arg.
@@ -268,6 +287,20 @@ server.tool(
   },
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await unfreezeFile(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "sweep_legacy_backups",
+  "One-time migration/cleanup that consolidates scattered 'backup' files into the project's backups/ folder. Natural-language triggers: 'organize backups', 'consolidate backup files', 'clean up backup clutter', 'migrate legacy backups'. Dry-run by default; set confirm:true to move. Only HIGH-confidence matches are moved unless aggressive:true (MEDIUM matches like backup-service.ts may be production code — opt-in required). Recognizes: *.bak / *.backup / *.old extensions, _backup or -backup suffixes, backup- or old_backup_ prefixes, and backup_<timestamp> filenames.",
+  {
+    workspace: z.string().optional().describe("Absolute path. Defaults to the MCP server's cwd."),
+    confirm: z.boolean().optional().describe("Required to actually move files. Default false → dry-run preview."),
+    aggressive: z.boolean().optional().describe("Also move MEDIUM-confidence matches (filenames containing 'backup' without strict pattern). Default false."),
+    dest: z.string().optional().describe("Destination directory. Defaults to <workspace>/backups/legacy-sweep-<timestamp>."),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await sweepLegacyBackups(args), null, 2) }],
   }),
 );
 

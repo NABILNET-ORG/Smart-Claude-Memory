@@ -10,7 +10,7 @@
 [![pgvector](https://img.shields.io/badge/pgvector-HNSW-336791?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Ollama](https://img.shields.io/badge/Ollama-local%20embeddings-000)](https://ollama.com/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](#license)
-[![Version](https://img.shields.io/badge/version-0.9.0-green)](#)
+[![Version](https://img.shields.io/badge/version-0.9.1-green)](#)
 
 </div>
 
