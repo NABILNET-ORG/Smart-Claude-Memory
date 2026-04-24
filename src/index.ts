@@ -5,11 +5,17 @@ import { z } from "zod";
 import { syncLocalMemory } from "./tools/sync.js";
 import { searchMemory } from "./tools/search.js";
 import { updateRule } from "./tools/update-rule.js";
+import { manageBacklog } from "./tools/backlog.js";
+import { checkCodeHygiene } from "./tools/hygiene.js";
+import { confirmVerification, raisePendingVerification } from "./tools/verification.js";
+import { checkRuleConflicts } from "./tools/conflict.js";
+import { summarizeMemoryFile } from "./tools/summarize.js";
+import { indexImage } from "./tools/image.js";
 import { currentProjectId } from "./project.js";
 
 const server = new McpServer({
   name: "claude-memory-mcp",
-  version: "0.4.0",
+  version: "0.5.0",
 });
 
 const projectIdSchema = z
@@ -20,73 +26,150 @@ const projectIdSchema = z
       `Memory is strictly isolated per project_id.`,
   );
 
+// ─── existing tools ───────────────────────────────────────────────────────
+
 server.tool(
   "sync_local_memory",
-  "Scan MEMORY_ROOTS for .md files, hash-gate, chunk, embed via Ollama, bulk-upsert to Supabase (100/batch). Supports incremental sync (skip unchanged), force re-embed, and optional auto_purge with a mandatory dry-run preview and an all-or-nothing verify-before-delete contract. CLAUDE.md, MEMORY.md, README.md, LICENSE* and CHANGELOG* are never deleted.",
+  "Scan MEMORY_ROOTS for .md files, hash-gate, chunk, embed via Ollama, bulk-upsert to Supabase (100/batch). Supports incremental sync, force re-embed, and auto_purge with a mandatory dry-run preview and all-or-nothing verify-before-delete. Protected: CLAUDE.md, MEMORY.md, README.md, LICENSE*, CHANGELOG*.",
   {
-    roots: z
-      .array(z.string())
-      .optional()
-      .describe("Override MEMORY_ROOTS from .env with an explicit list of folders."),
+    roots: z.array(z.string()).optional(),
     project_id: projectIdSchema,
-    force: z
-      .boolean()
-      .optional()
-      .describe("Re-embed every file regardless of hash. Default false."),
-    auto_purge: z
-      .boolean()
-      .optional()
-      .describe(
-        "After sync: if true AND confirm is false (default), return a dry-run preview of which files would be deleted. If true AND confirm is true, verify every file's (project_id, file_origin, file_hash) in Supabase, write a backup ZIP, then delete. Default false.",
-      ),
-    confirm: z
-      .boolean()
-      .optional()
-      .describe(
-        "Required alongside auto_purge: true to actually delete. Safety belt — without it, auto_purge runs as a dry-run preview only. Default false.",
-      ),
+    force: z.boolean().optional(),
+    auto_purge: z.boolean().optional(),
+    confirm: z.boolean().optional(),
   },
-  async (args) => {
-    const result = await syncLocalMemory(args);
-    return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-    };
-  },
+  async (args) => ({ content: [{ type: "text", text: JSON.stringify(await syncLocalMemory(args), null, 2) }] }),
 );
 
 server.tool(
   "search_memory",
-  "Semantic search over memory chunks belonging to the current project ONLY. Other projects' memory is never returned.",
+  "Semantic search over the current project's chunks (strictly isolated). Optional semantic re-ranking and intent-based conflict detection via check_rule_conflicts.",
   {
-    query: z.string().describe("Natural language query"),
+    query: z.string(),
     limit: z.number().int().positive().max(20).optional(),
     min_similarity: z.number().min(0).max(1).optional(),
     project_id: projectIdSchema,
   },
-  async (args) => {
-    const result = await searchMemory(args);
-    return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-    };
-  },
+  async (args) => ({ content: [{ type: "text", text: JSON.stringify(await searchMemory(args), null, 2) }] }),
 );
 
 server.tool(
   "update_rule",
-  "Upsert a single rule/chunk in the current project's namespace without re-syncing files.",
+  "Upsert a single rule/chunk into the current project's namespace.",
   {
-    file_origin: z.string().describe("Logical source identifier, e.g. 'rules.md' or a full path."),
+    file_origin: z.string(),
     chunk_index: z.number().int().nonnegative(),
     content: z.string().min(1),
     metadata: z.record(z.string(), z.unknown()).optional(),
     project_id: projectIdSchema,
   },
+  async (args) => ({ content: [{ type: "text", text: JSON.stringify(await updateRule(args), null, 2) }] }),
+);
+
+// ─── v0.5.0 tools ─────────────────────────────────────────────────────────
+
+server.tool(
+  "manage_backlog",
+  "Atomic task backlog stored in Supabase (cloud_backlog). Actions: add, list, update, prune_done, session_end. session_end returns a 1-line resume prompt for the next session.",
+  {
+    action: z.enum(["add", "list", "update", "prune_done", "session_end"]),
+    title: z.string().optional(),
+    id: z.number().int().positive().optional(),
+    status: z.enum(["todo", "in_progress", "blocked", "done"]).optional(),
+    priority: z.number().int().min(1).max(5).optional(),
+    notes: z.string().optional(),
+    project_id: projectIdSchema,
+  },
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await manageBacklog(args as never), null, 2) }],
+  }),
+);
+
+server.tool(
+  "check_code_hygiene",
+  "Report line counts against the 750-line hard limit. Files already over the limit are flagged 'grandfathered' (edits allowed with warning); the md-policy.py hook blocks brand-new writes that push a file past the limit.",
+  {
+    paths: z.array(z.string()).min(1),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await checkCodeHygiene(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "confirm_verification",
+  "Clear or re-assert the Hard Stop / Manual Test Gate. Call with success:true after manually validating the most recent code change. The gate is enforced by the md-policy.py hook — without the hook installed, the gate is advisory only.",
+  {
+    success: z.boolean(),
+    notes: z.string().optional(),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await confirmVerification(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "raise_verification_gate",
+  "Manually raise the verification gate (typically after a risky edit or a tool called that the user must confirm).",
+  {
+    tool: z.string(),
+    file: z.string(),
+    reason: z.string().optional(),
+  },
   async (args) => {
-    const result = await updateRule(args);
+    await raisePendingVerification({
+      tool: args.tool,
+      file: args.file,
+      reason: args.reason,
+      created_at: new Date().toISOString(),
+    });
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify({ raised: true, ...args }, null, 2) }],
     };
   },
+);
+
+server.tool(
+  "check_rule_conflicts",
+  "Intent-based rule conflict detection. Retrieves top-K chunks for a proposed change, re-ranks with an LLM, then runs pairwise (change vs rule) conflict analysis on the top 3. Opt-in; latency is 1–3s per call.",
+  {
+    proposed_change: z.string().min(1),
+    project_id: projectIdSchema,
+    top_k: z.number().int().positive().max(10).optional(),
+    rerank: z.boolean().optional(),
+    llm_model: z.string().optional(),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await checkRuleConflicts(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "summarize_memory_file",
+  "LLM-driven compression of CLAUDE.md or MEMORY.md toward a token target (default 3000). Preserves every actionable rule; drops verbosity. Supports dry_run to preview.",
+  {
+    file_path: z.string(),
+    target_tokens: z.number().int().positive().optional(),
+    dry_run: z.boolean().optional(),
+    llm_model: z.string().optional(),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await summarizeMemoryFile(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "index_image",
+  "Caption an image with a local vision model (default: moondream) then embed the caption via nomic-embed-text and upsert into cloud memory. Subsequent search_memory calls can retrieve the image semantically.",
+  {
+    image_path: z.string(),
+    caption_prompt: z.string().optional(),
+    project_id: projectIdSchema,
+    vision_model: z.string().optional(),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await indexImage(args), null, 2) }],
+  }),
 );
 
 const transport = new StdioServerTransport();

@@ -140,6 +140,104 @@ export async function searchChunks(
   return (data ?? []) as MatchRow[];
 }
 
+// ─── cloud_backlog ────────────────────────────────────────────────────────
+
+export type BacklogStatus = "todo" | "in_progress" | "blocked" | "done";
+
+export type BacklogRow = {
+  id: number;
+  project_id: string;
+  title: string;
+  status: BacklogStatus;
+  priority: number;
+  notes: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export async function addBacklog(
+  projectId: string,
+  title: string,
+  opts: { priority?: number; notes?: string; metadata?: Record<string, unknown> } = {},
+): Promise<BacklogRow> {
+  const { data, error } = await supabase
+    .from("cloud_backlog")
+    .insert({
+      project_id: projectId,
+      title,
+      priority: opts.priority ?? 3,
+      notes: opts.notes ?? null,
+      metadata: opts.metadata ?? {},
+    })
+    .select()
+    .single();
+  if (error) throw new Error(`addBacklog failed: ${error.message}`);
+  return data as BacklogRow;
+}
+
+export async function listBacklog(
+  projectId: string,
+  opts: { status?: BacklogStatus | BacklogStatus[] } = {},
+): Promise<BacklogRow[]> {
+  let q = supabase.from("cloud_backlog").select("*").eq("project_id", projectId);
+  if (opts.status) {
+    const arr = Array.isArray(opts.status) ? opts.status : [opts.status];
+    q = q.in("status", arr);
+  }
+  const { data, error } = await q.order("priority", { ascending: true }).order("created_at", { ascending: true });
+  if (error) throw new Error(`listBacklog failed: ${error.message}`);
+  return (data ?? []) as BacklogRow[];
+}
+
+export async function updateBacklog(
+  id: number,
+  patch: Partial<Pick<BacklogRow, "title" | "status" | "priority" | "notes" | "metadata">>,
+): Promise<BacklogRow> {
+  const { data, error } = await supabase
+    .from("cloud_backlog")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw new Error(`updateBacklog failed: ${error.message}`);
+  return data as BacklogRow;
+}
+
+export async function pruneDoneBacklog(projectId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("cloud_backlog")
+    .delete({ count: "exact" })
+    .eq("project_id", projectId)
+    .eq("status", "done");
+  if (error) throw new Error(`pruneDoneBacklog failed: ${error.message}`);
+  return count ?? 0;
+}
+
+// ─── frozen_features ──────────────────────────────────────────────────────
+
+export async function listFrozenPatterns(projectId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("frozen_features")
+    .select("pattern")
+    .eq("project_id", projectId);
+  if (error) throw new Error(`listFrozenPatterns failed: ${error.message}`);
+  return (data ?? []).map((r) => r.pattern as string);
+}
+
+export async function addFrozenPattern(
+  projectId: string,
+  pattern: string,
+  reason?: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("frozen_features")
+    .upsert({ project_id: projectId, pattern, reason: reason ?? null }, {
+      onConflict: "project_id,pattern",
+    });
+  if (error) throw new Error(`addFrozenPattern failed: ${error.message}`);
+}
+
 export async function upsertRule(
   projectId: string,
   fileOrigin: string,
