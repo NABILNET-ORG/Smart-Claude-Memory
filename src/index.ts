@@ -15,8 +15,29 @@ import { currentProjectId } from "./project.js";
 
 const server = new McpServer({
   name: "claude-memory-mcp",
-  version: "0.5.2",
+  version: "0.5.4",
 });
+
+// High-precision vision default — OCR-first, zero-guessing, explicit symbol inventory.
+// Callers can override per-call via the caption_prompt arg.
+const DEFAULT_VISION_PROMPT = [
+  "Analyze this image under STRICT rules:",
+  "",
+  "1. OCR — Transcribe ALL text verbatim. Prioritize Arabic calligraphy, Arabic handwriting, and English labels. Quote each transcription in double quotes and preserve the original script (do not translate).",
+  "2. Zero-Guessing — If a symbol, glyph, or object is ambiguous, describe its shape, color, and position INSTEAD of naming it. Examples: say 'bright orb with radiating rays' not 'crystal ball'; say 'eight-pointed star' not 'compass rose'. Never invent content. Never infer intent.",
+  "3. Symbol Inventory — List every mystical or technical symbol as an individual bullet (moon, star, zodiac sign, eye, triangle, hand, etc.). Mark uncertain items as 'unknown: <shape/color description>'.",
+  "",
+  "Return exactly this structure (Markdown):",
+  "",
+  "TEXT (OCR):",
+  "- \"<verbatim transcription>\" (script: arabic|english|mixed|other)",
+  "",
+  "SYMBOLS:",
+  "- <symbol name or 'unknown: <shape>'>: <location> / <color>",
+  "",
+  "SCENE:",
+  "- <≤ 2 sentences, factual only>",
+].join("\n");
 
 const projectIdSchema = z
   .string()
@@ -160,10 +181,10 @@ server.tool(
 
 server.tool(
   "index_image",
-  "Caption an image with a local vision model (default: moondream) then embed the caption via nomic-embed-text and upsert into cloud memory. Subsequent search_memory calls can retrieve the image semantically.",
+  "Caption an image with a local vision model (default: moondream) then embed the caption via nomic-embed-text and upsert into cloud memory. Non-PNG/JPEG inputs (WebP, GIF, BMP) are auto-converted to PNG via ffmpeg. Default prompt enforces OCR-first transcription, zero-guessing for ambiguous symbols, and an explicit symbol inventory.",
   {
     image_path: z.string(),
-    caption_prompt: z.string().optional(),
+    caption_prompt: z.string().optional().default(DEFAULT_VISION_PROMPT),
     project_id: projectIdSchema,
     vision_model: z.string().optional(),
   },

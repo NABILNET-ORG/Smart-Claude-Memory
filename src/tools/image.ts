@@ -30,10 +30,11 @@ async function detectFormat(path: string): Promise<string> {
 }
 
 /**
- * Convert any raster image to PNG via ffmpeg. Returns the path of a temp PNG
- * the caller is responsible for deleting.
+ * Convert any raster image to PNG via ffmpeg. Returns both the output PNG
+ * path AND the unique mkdtemp directory so the caller can wipe the whole
+ * directory in one recursive rm — no orphaned temp dirs.
  */
-async function convertToPng(src: string): Promise<string> {
+async function convertToPng(src: string): Promise<{ path: string; tempDir: string }> {
   const dir = await mkdtemp(join(tmpdir(), "claude-mem-img-"));
   const dest = join(dir, `${basename(src, extname(src))}.png`);
   try {
@@ -43,14 +44,13 @@ async function convertToPng(src: string): Promise<string> {
       { stdio: "pipe" },
     );
   } catch (e) {
-    // cleanup on failure
     await rm(dir, { recursive: true, force: true }).catch(() => {});
     throw new Error(
       `ffmpeg conversion of ${basename(src)} → png failed: ${(e as Error).message}. ` +
         "Install ffmpeg and ensure it's on PATH, or pass a PNG/JPEG directly.",
     );
   }
-  return dest;
+  return { path: dest, tempDir: dir };
 }
 
 export async function indexImage(args: {
@@ -66,13 +66,14 @@ export async function indexImage(args: {
 
   const fmt = await detectFormat(abs);
   let toCaption = abs;
-  let tempToClean: string | null = null;
+  let tempDirToClean: string | null = null;
   let convertedFrom: string | null = null;
 
   if (!NATIVE_IMAGE_EXTS.has(fmt)) {
     convertedFrom = fmt;
-    toCaption = await convertToPng(abs);
-    tempToClean = toCaption;
+    const converted = await convertToPng(abs);
+    toCaption = converted.path;
+    tempDirToClean = converted.tempDir;
   }
 
   try {
@@ -112,11 +113,10 @@ export async function indexImage(args: {
       caption_preview: caption.slice(0, 300),
     };
   } finally {
-    if (tempToClean) {
-      await rm(tempToClean, { force: true }).catch(() => {});
-      // also drop the tmp dir
-      const parent = tempToClean.substring(0, tempToClean.lastIndexOf(join(".", "x").slice(0, 1)));
-      void parent;
+    // Total Surgical Wipe — delete the unique mkdtemp directory recursively,
+    // which also removes the PNG inside. No orphaned temp artefacts.
+    if (tempDirToClean) {
+      await rm(tempDirToClean, { recursive: true, force: true }).catch(() => {});
     }
   }
 }

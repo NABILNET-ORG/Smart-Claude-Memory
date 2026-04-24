@@ -1,6 +1,6 @@
 {
   "name": "claude-memory-mcp",
-  "version": "0.5.2",
+  "version": "0.5.4",
   "private": true,
   "type": "module",
   "bin": {
