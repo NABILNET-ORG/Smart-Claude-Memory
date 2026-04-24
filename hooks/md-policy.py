@@ -27,6 +27,17 @@ from pathlib import Path
 ALLOW_ROOT_DEFAULT = "CLAUDE.md,MEMORY.md,README.md"
 BYTES_PER_TOKEN = 4
 
+# Auto-generated files that bypass the 750-line hygiene check entirely.
+EXCLUDE_EXACT_BASENAMES = {"types.ts"}
+EXCLUDE_SUFFIXES = (".arb", ".l10n.dart", ".g.dart", ".freezed.dart")
+
+
+def is_excluded(path: Path) -> bool:
+    name = path.name.lower()
+    if path.name in EXCLUDE_EXACT_BASENAMES:
+        return True
+    return any(name.endswith(suf) for suf in EXCLUDE_SUFFIXES)
+
 
 def env_path(name: str) -> Path | None:
     raw = os.environ.get(name, "")
@@ -126,51 +137,61 @@ def check_md_policy(target: Path) -> dict | None:
     return None
 
 
-def check_line_limit(target: Path, incoming_text: str, tool_name: str) -> dict | None:
+def check_line_limit(target: Path, tool_input: dict, tool_name: str) -> dict | None:
+    if is_excluded(target):
+        return None  # auto-generated files bypass hygiene entirely
+
     limit = line_hard_limit()
-    # Current size on disk (0 if new file)
     current_lines = 0
     if target.exists():
         try:
             current_lines = target.read_text("utf8").count("\n") + 1
         except OSError:
             current_lines = 0
-    new_lines = incoming_text.count("\n") + 1 if incoming_text else 0
 
-    # Grandfathered: already-oversized file → warn, don't block
+    # Project the new line count.
+    if tool_name == "Write":
+        incoming = tool_input.get("content", "") or ""
+        projected = incoming.count("\n") + 1 if incoming else 0
+    else:  # Edit
+        old_string = tool_input.get("old_string", "") or ""
+        new_string = tool_input.get("new_string", "") or ""
+        replace_all = bool(tool_input.get("replace_all", False))
+        old_nl = old_string.count("\n")
+        new_nl = new_string.count("\n")
+        if replace_all and old_string and target.exists():
+            try:
+                text = target.read_text("utf8")
+                occurrences = text.count(old_string)
+            except OSError:
+                occurrences = 1
+            projected = current_lines + (new_nl - old_nl) * occurrences
+        else:
+            projected = current_lines + (new_nl - old_nl)
+
+    # Grandfather rule — file was already oversized; edits allowed, with warning.
     if current_lines > limit:
-        # Write would reset size entirely; allow but warn.
-        if tool_name == "Write":
-            projected = new_lines
-            if projected > limit:
-                return {
-                    "decision": "allow",
-                    "warning": (
-                        f"Grandfathered file: `{target.name}` is {current_lines} lines "
-                        f"(over the {limit}-line hard limit). Your Write will produce "
-                        f"{projected} lines — still over. Consider splitting."
-                    ),
-                }
         return {
             "decision": "allow",
             "warning": (
-                f"Grandfathered file: `{target.name}` is already {current_lines} lines "
-                f"(over the {limit}-line limit). Edit is permitted but please avoid "
-                "adding more bulk; prefer extracting sections into new modules."
+                f"Grandfathered file: `{target.name}` is {current_lines} lines "
+                f"(over the {limit}-line limit). Edit permitted, but please prioritize "
+                f"splitting — run check_code_hygiene({{paths:['{target.as_posix()}']}}) "
+                "for an automatic refactor plan."
             ),
         }
 
-    # Not grandfathered: block if this operation pushes it past the limit.
-    if tool_name == "Write" and new_lines > limit:
+    # Ceiling rule — was under the limit; this operation must not cross it.
+    if projected > limit:
         return {
             "decision": "block",
             "reason": (
-                f"750-line rule: the proposed Write produces {new_lines} lines for "
-                f"`{target.name}`, exceeding the {limit}-line limit. Split into smaller modules."
+                f"block_and_refactor: `{target.name}` was {current_lines} lines (≤ {limit}); "
+                f"this {tool_name} would take it to ~{projected} lines, crossing the hard limit. "
+                f"Split the file first — run check_code_hygiene({{paths:['{target.as_posix()}']}}) "
+                "for a split plan, then apply the refactor before re-attempting this edit."
             ),
         }
-    # For Edit we can't reliably predict new line count without applying the diff; approximate
-    # by checking the delta of new_string vs old_string if both are present.
     return None
 
 
@@ -240,9 +261,15 @@ def decide(tool_name: str, tool_input: dict) -> dict:
     if r is not None:
         return r
 
-    # 4. 750-line rule (only meaningful for source files; skip binaries and images)
-    if target.suffix.lower() in {".ts", ".tsx", ".js", ".jsx", ".py", ".sql", ".md", ".json", ".yaml", ".yml", ".toml"}:
-        r = check_line_limit(target, incoming, tool_name)
+    # 4. 750-line rule (source files only; bypassed for binaries, images, and
+    #    auto-generated files matching is_excluded()).
+    if target.suffix.lower() in {
+        ".ts", ".tsx", ".js", ".jsx",
+        ".py", ".sql", ".md",
+        ".json", ".yaml", ".yml", ".toml",
+        ".dart",
+    }:
+        r = check_line_limit(target, tool_input, tool_name)
         if r is not None:
             return r
 
