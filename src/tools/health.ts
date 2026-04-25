@@ -2,9 +2,12 @@ import { stat, readFile } from "node:fs/promises";
 import * as path from "node:path";
 import { config } from "../config.js";
 import { supabase, getKeepAliveStatus, FROZEN_CACHE_PATH } from "../supabase.js";
+import { VERSION } from "../version.js";
 
-// v1.1.0 Sovereign Orchestrator defaults (mirrored from delegateTask/buildWorkerPrompt).
-const ORCHESTRATOR_VERSION = "1.1.0" as const;
+// Sovereign Orchestrator defaults (mirrored from delegateTask/buildWorkerPrompt).
+// Version is sourced from package.json via src/version.ts so health reports
+// can never drift from the actual server version.
+const ORCHESTRATOR_VERSION = VERSION;
 const SELF_HEAL_DEFAULT = true;
 const MAX_HEALING_ATTEMPTS_DEFAULT = 3;
 
@@ -45,7 +48,7 @@ type HealthReport = {
     note: string;
   };
   orchestrator: {
-    version: "1.1.0";
+    version: string;
     mode_active: boolean;
     self_heal_default: boolean;
     max_healing_attempts_default: number;

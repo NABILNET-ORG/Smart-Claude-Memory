@@ -1,8 +1,15 @@
 import { stat, readFile, mkdir, rename, copyFile, rm } from "node:fs/promises";
-import { resolve, dirname, basename, relative, join } from "node:path";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+} from "node:fs";
+import { resolve, dirname, basename, relative, join, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { glob } from "glob";
+import { loadFrozenCache } from "./frozen-cache.js";
+import { currentProjectId, slugify } from "../project.js";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const mcpEntryPoint = resolve(packageRoot, "dist", "index.js").replace(/\\/g, "/");
@@ -76,6 +83,118 @@ async function settingsRegistration(workspace: string): Promise<{
   return { registered: matches.length > 0, matches };
 }
 
+// ─── v1.1.3: hydration scout for .claude/rules/*.md ─────────────────────
+// Detect un-hydrated policy rule files containing a `## Frozen Patterns`
+// section that have NOT yet been registered in the per-project frozen cache.
+// Detection only — never mutates the cache (consent-not-write).
+
+export type HydrateRecommendation = {
+  id: "hydrate_policies";
+  tool: "batch_freeze_patterns";
+  candidates: Array<{ file: string; section_found: true }>;
+  suggested_first_call: { from_rule_file: string; dry_run: true };
+};
+
+/**
+ * Normalize a path for symmetric comparison between cache `entry.source`
+ * values and freshly-discovered rule file paths.
+ *
+ * Rules:
+ *   1. Absolute paths become workspace-relative; relatives are left alone.
+ *   2. All backslashes → forward slashes.
+ *   3. Strip any leading "./".
+ *   4. On Windows, lowercase for case-insensitive comparison; otherwise
+ *      preserve case (Linux is case-sensitive at the filesystem layer).
+ */
+function normalizeSource(p: string, workspace: string): string {
+  let out = p;
+  if (isAbsolute(out)) {
+    out = relative(workspace, out);
+  }
+  out = out.replace(/\\/g, "/");
+  if (out.startsWith("./")) out = out.slice(2);
+  if (process.platform === "win32") out = out.toLowerCase();
+  return out;
+}
+
+async function detectHydrateRecommendations(
+  workspace: string,
+): Promise<HydrateRecommendation[]> {
+  // Step A — fast-path exit when the rules dir is missing.
+  const rulesDir = join(workspace, ".claude", "rules");
+  if (!existsSync(rulesDir)) return [];
+
+  // Step B — bounded scan of immediate-child .md files.
+  // `encoding: "utf8"` pins the Dirent generic to `string`; the no-encoding
+  // overload resolves to `Dirent<NonSharedBuffer>` under newer @types/node.
+  let entries: import("node:fs").Dirent<string>[];
+  try {
+    entries = readdirSync(rulesDir, { withFileTypes: true, encoding: "utf8" });
+  } catch {
+    return [];
+  }
+
+  const sectionPositive: string[] = []; // absolute paths that have the header
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    if (!entry.name.toLowerCase().endsWith(".md")) continue;
+    const abs = join(rulesDir, entry.name);
+    let body: string;
+    try {
+      body = readFileSync(abs, "utf8");
+    } catch {
+      continue;
+    }
+    const head = body.split(/\r?\n/).slice(0, 200);
+    const hit = head.some((line) => line.trimEnd() === "## Frozen Patterns");
+    if (!hit) continue;
+    sectionPositive.push(abs);
+  }
+
+  if (sectionPositive.length === 0) return [];
+
+  // Step C — provenance suppression. Build a set of normalized cache
+  // sources for the *current* project bucket and drop already-hydrated
+  // candidates.
+  const hydrated = new Set<string>();
+  try {
+    const cache = await loadFrozenCache();
+    const key = slugify(currentProjectId);
+    const bucket = cache.projects[key] ?? [];
+    for (const e of bucket) {
+      if (!e.source || e.source === "legacy") continue;
+      hydrated.add(normalizeSource(e.source, workspace));
+    }
+  } catch {
+    // Best-effort accessory: if we can't read the cache, fall through
+    // and include every candidate. The user can re-run later.
+  }
+
+  const actionable: string[] = [];
+  for (const abs of sectionPositive) {
+    const norm = normalizeSource(abs, workspace);
+    if (hydrated.has(norm)) continue;
+    actionable.push(norm);
+  }
+
+  if (actionable.length === 0) return [];
+
+  // Determinism: sort alphabetically before picking the first call.
+  actionable.sort((a, b) => a.localeCompare(b));
+
+  return [
+    {
+      id: "hydrate_policies",
+      tool: "batch_freeze_patterns",
+      candidates: actionable.map((file) => ({ file, section_found: true as const })),
+      suggested_first_call: {
+        from_rule_file: actionable[0]!,
+        dry_run: true as const,
+      },
+    },
+  ];
+}
+
 export async function initProject(args: {
   workspace?: string;
   sweep_legacy?: "dry" | "commit" | "off";
@@ -88,6 +207,7 @@ export async function initProject(args: {
   checks: Check[];
   architecture_synced: { path: string; written: boolean } | null;
   legacy_sweep: unknown;
+  recommendations?: HydrateRecommendation[];
 }> {
   const ws = resolve(args.workspace ?? process.cwd());
   const checks: Check[] = [];
@@ -179,7 +299,26 @@ export async function initProject(args: {
     });
   }
 
-  return {
+  // v1.1.3: smart-scout for un-hydrated policy rule files. Best-effort —
+  // any failure inside the detector is swallowed and we simply omit the
+  // `recommendations` key (init_project's primary job is unaffected).
+  let recommendations: HydrateRecommendation[] = [];
+  try {
+    recommendations = await detectHydrateRecommendations(ws);
+  } catch {
+    recommendations = [];
+  }
+
+  const result: {
+    action: "init_project";
+    workspace: string;
+    expected_mcp_entry: string;
+    overall: "ready" | "partial" | "not_ready";
+    checks: Check[];
+    architecture_synced: { path: string; written: boolean } | null;
+    legacy_sweep: unknown;
+    recommendations?: HydrateRecommendation[];
+  } = {
     action: "init_project",
     workspace: ws,
     expected_mcp_entry: mcpEntryPoint,
@@ -188,6 +327,10 @@ export async function initProject(args: {
     architecture_synced: architectureSynced,
     legacy_sweep: legacySweep,
   };
+  if (recommendations.length > 0) {
+    result.recommendations = recommendations;
+  }
+  return result;
 }
 
 async function writeProjectArchitectureOnInit(

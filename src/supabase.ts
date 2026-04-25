@@ -1,8 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { homedir } from "node:os";
 import { config } from "./config.js";
 import { slugify as slugifyProject } from "./project.js";
 
@@ -438,14 +435,21 @@ export async function listFrozenByProject(): Promise<Record<string, string[]>> {
 // hit Supabase directly without paying 1-2s of network latency per Write/Edit.
 // Instead, the MCP server writes a snapshot of `frozen_features` to this
 // file on startup and after any mutation; the hook reads it in microseconds.
+//
+// v1.1.3 schema migration: per-project entries are now
+//   { pattern, source, added_at }
+// instead of bare strings. The shared loader/writer in `tools/frozen-cache.ts`
+// handles legacy strings transparently; this module only has to project the
+// Supabase rows into that shape.
 
-// TODO(v1.2.0): drop the legacy CLAUDE_MEMORY_GATE_DIR fallback after the Smart Claude Memory rebrand has settled.
-// The on-disk dir `~/.claude-memory` is intentionally preserved to keep existing backups discoverable.
-const GATE_DIR =
-  process.env.SMART_CLAUDE_MEMORY_GATE_DIR ??
-  process.env.CLAUDE_MEMORY_GATE_DIR ??
-  join(homedir(), ".claude-memory");
-export const FROZEN_CACHE_PATH = join(GATE_DIR, "frozen-patterns.json");
+import {
+  loadFrozenCache,
+  writeFrozenCache,
+  FROZEN_CACHE_PATH,
+  type FrozenEntry,
+} from "./tools/frozen-cache.js";
+
+export { FROZEN_CACHE_PATH };
 
 export async function writeFrozenPatternsCache(): Promise<{
   ok: boolean;
@@ -456,27 +460,48 @@ export async function writeFrozenPatternsCache(): Promise<{
 }> {
   try {
     const raw = await listFrozenByProject();
+
+    // Read the existing on-disk cache so we can preserve `source` and
+    // `added_at` for entries that were already there ("first writer wins").
+    // Anything new (i.e. present in Supabase but not yet on disk) gets
+    // freshly minted provenance with source="supabase".
+    const existing = await loadFrozenCache();
+    const existingByProject = new Map<string, Map<string, FrozenEntry>>();
+    for (const [pid, entries] of Object.entries(existing.projects)) {
+      const m = new Map<string, FrozenEntry>();
+      for (const e of entries) m.set(e.pattern, e);
+      existingByProject.set(pid, m);
+    }
+
     // Normalize keys to the slug form the hook uses when looking up the cache
     // (slugify(basename(CLAUDE_MD_POLICY_WORKSPACE))). Without this, a
     // caller that passes a non-slug project_id to freeze_file would silently
     // fail to block because the hook's lookup key wouldn't match.
-    const projects: Record<string, string[]> = {};
+    const projects: Record<string, FrozenEntry[]> = {};
+    const now = Date.now();
     for (const [pid, patterns] of Object.entries(raw)) {
       const key = slugifyProject(pid);
-      (projects[key] ??= []).push(...patterns);
+      const bucket = (projects[key] ??= []);
+      const seen = new Set(bucket.map((e) => e.pattern));
+      const priorMap = existingByProject.get(key);
+      for (const pattern of patterns) {
+        if (seen.has(pattern)) continue;
+        const prior = priorMap?.get(pattern);
+        if (prior) {
+          bucket.push(prior);
+        } else {
+          bucket.push({ pattern, source: "supabase", added_at: now });
+        }
+        seen.add(pattern);
+      }
     }
     const projectCount = Object.keys(projects).length;
-    const patternCount = Object.values(projects).reduce((n, arr) => n + arr.length, 0);
-    await mkdir(GATE_DIR, { recursive: true });
-    await writeFile(
-      FROZEN_CACHE_PATH,
-      JSON.stringify(
-        { updated_at: new Date().toISOString(), projects },
-        null,
-        2,
-      ),
-    );
-    return { ok: true, path: FROZEN_CACHE_PATH, project_count: projectCount, pattern_count: patternCount };
+    const pattern_count = Object.values(projects).reduce((n, arr) => n + arr.length, 0);
+    const path = await writeFrozenCache({
+      updated_at: new Date().toISOString(),
+      projects,
+    });
+    return { ok: true, path, project_count: projectCount, pattern_count };
   } catch (e) {
     return {
       ok: false,

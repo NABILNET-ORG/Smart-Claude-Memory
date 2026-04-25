@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { currentProjectId } from "../project.js";
 import { updateLocalReadme, updateProjectArchitecture } from "./backlog.js";
+import { VERSION } from "../version.js";
 
 // ─── delegate_task: canonical sub-agent prompt builder (v1.1.0) ──────────
 //
@@ -149,7 +150,7 @@ export async function delegateTask(args: DelegateArgs) {
   const maxHealingAttempts = Math.max(1, Math.min(args.max_healing_attempts ?? 3, 5));
   return {
     action: "delegate_task",
-    version: "1.1.0",
+    version: VERSION,
     title: args.title,
     description_for_agent_tool: description,
     workspace: args.workspace ? resolve(args.workspace) : process.cwd(),

@@ -1,11 +1,11 @@
-# Smart Claude Memory — System Architecture (v1.1.2)
+# Smart Claude Memory — System Architecture (v1.1.3)
 
-> **Stable baseline:** v1.1.2 — Master Schematic & Sovereign Baseline (Smart Claude Memory v1.1.0 Sovereign Orchestrator feature set, sealed with master schematic).
+> **Stable baseline:** v1.1.3 — Seamless Onboarding & Version SSOT (Smart Claude Memory v1.1.0 Sovereign Orchestrator feature set, sealed with master schematic).
 > This document is the single source of truth for the system's structure and control flow. The marker-bounded Mermaid block in §4 is refreshed automatically by `sync_artefacts` after every worker success; the other diagrams are hand-maintained.
 
-![Smart Claude Memory v1.1.2 Schematic](images/Smart%20Claude%20Memory%20v.1.1.2.jpeg)
+![Smart Claude Memory v1.1.3 Schematic](images/Smart%20Claude%20Memory%20v.1.1.2.jpeg)
 
-*Master schematic — the definitive visual reference for the Smart Claude Memory v1.1.2 production baseline.*
+*Master schematic — the definitive visual reference for the Smart Claude Memory v1.1.3 production baseline.*
 
 ---
 
@@ -161,64 +161,70 @@ flowchart TD
   n18 --> n19
   n20["backlog.ts"]
   n19 --> n20
-  n21["conflict.ts"]
+  n21["batch-freeze-patterns.ts"]
   n19 --> n21
-  n22["health.ts"]
+  n22["conflict.ts"]
   n19 --> n22
-  n23["hygiene.ts"]
+  n23["frozen-cache.ts"]
   n19 --> n23
-  n24["image.ts"]
+  n24["health.ts"]
   n19 --> n24
-  n25["orchestrator.ts"]
+  n25["hygiene.ts"]
   n19 --> n25
-  n26["policy.ts"]
+  n26["image.ts"]
   n19 --> n26
-  n27["refactor.ts"]
+  n27["orchestrator.ts"]
   n19 --> n27
-  n28["search.ts"]
+  n28["policy.ts"]
   n19 --> n28
-  n29["setup.ts"]
+  n29["refactor.ts"]
   n19 --> n29
-  n30["summarize.ts"]
+  n30["search.ts"]
   n19 --> n30
-  n31["sync.ts"]
+  n31["setup.ts"]
   n19 --> n31
-  n32["update-rule.ts"]
+  n32["summarize.ts"]
   n19 --> n32
-  n33["verification.ts"]
+  n33["sync.ts"]
   n19 --> n33
-  n34["chunker.ts"]
-  n18 --> n34
-  n35["config.ts"]
-  n18 --> n35
-  n36["index.ts"]
+  n34["update-rule.ts"]
+  n19 --> n34
+  n35["verification.ts"]
+  n19 --> n35
+  n36["chunker.ts"]
   n18 --> n36
-  n37["ollama.ts"]
+  n37["config.ts"]
   n18 --> n37
-  n38["project-detect.ts"]
+  n38["index.ts"]
   n18 --> n38
-  n39["project.ts"]
+  n39["ollama.ts"]
   n18 --> n39
-  n40["supabase.ts"]
+  n40["project-detect.ts"]
   n18 --> n40
-  n41["verification-gate.ts"]
+  n41["project.ts"]
   n18 --> n41
-  n42[".env.example"]
-  n0 --> n42
-  n43[".gitignore"]
-  n0 --> n43
-  n44["ARCHITECTURE.md"]
-  n0 --> n44
-  n45["LICENSE"]
+  n42["supabase.ts"]
+  n18 --> n42
+  n43["verification-gate.ts"]
+  n18 --> n43
+  n44["version.ts"]
+  n18 --> n44
+  n45[".env.example"]
   n0 --> n45
-  n46["package-lock.json"]
+  n46[".gitignore"]
   n0 --> n46
-  n47["package.json"]
+  n47["ARCHITECTURE.md"]
   n0 --> n47
-  n48["README.md"]
+  n48["LICENSE"]
   n0 --> n48
-  n49["tsconfig.json"]
+  n49["package-lock.json"]
   n0 --> n49
+  n50["package.json"]
+  n0 --> n50
+  n51["README.md"]
+  n0 --> n51
+  n52["tsconfig.json"]
+  n0 --> n52
 ```
 
 <!-- MEMORY:ARCH:END -->
@@ -235,3 +241,4 @@ flowchart TD
 | v1.0.0 | God Mode — project detect, compiler gate, regression, binding session |
 | **v1.1.0** | **Sovereign Orchestrator — delegation pattern + Autonomous Self-Healing + cross-platform spawn fix + ARCHITECTURE.md consolidation** |
 | **v1.1.2** | **Master Schematic & Sovereign Baseline — definitive visual identity + version-locked production release** |
+| **v1.1.3** | **Seamless Onboarding & Version SSOT — dynamic version SSOT, batch policy hydration, smart-scout init_project** |

@@ -14,15 +14,17 @@ import { indexImage } from "./tools/image.js";
 import { checkSystemHealth } from "./tools/health.js";
 import { initProject, sweepLegacyBackups, legacyBackupSummary } from "./tools/setup.js";
 import { listFrozen, freezeFile, unfreezeFile } from "./tools/policy.js";
+import { batchFreezePatterns } from "./tools/batch-freeze-patterns.js";
 import { refactorGuard } from "./tools/refactor.js";
 import { analyzeRegression } from "./tools/verification.js";
 import { delegateTask, syncArtefacts } from "./tools/orchestrator.js";
 import { ensureSchema, startKeepAlive, writeFrozenPatternsCache } from "./supabase.js";
 import { currentProjectId } from "./project.js";
+import { VERSION } from "./version.js";
 
 const server = new McpServer({
   name: "smart-claude-memory-mcp",
-  version: "1.1.2",
+  version: VERSION,
 });
 
 // Startup diagnostics (stderr — never stdout, which is reserved for JSON-RPC).
@@ -290,6 +292,22 @@ server.tool(
   },
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await unfreezeFile(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "batch_freeze_patterns",
+  "Hydrate frozen-patterns.json from explicit globs and/or a markdown rule-file in a single call. Natural-language triggers: 'batch freeze', 'hydrate frozen patterns', 'freeze from rules file', 'onboard policies', 'bulk freeze patterns'. Pass `paths` for inline globs/paths, `from_rule_file` to extract patterns from a markdown section (default '## Frozen Patterns'), or both. Each cache entry stores { pattern, source, added_at } — patterns are not eagerly expanded; the same dedup key (trimmed pattern string) is used as freeze_file. First writer wins. Set `dry_run:true` to preview the new patterns without touching disk.",
+  {
+    paths: z.array(z.string().min(1)).optional().describe("Explicit globs or paths to freeze. Stored as-given (no eager expansion)."),
+    from_rule_file: z.string().optional().describe("Markdown file to extract patterns from. Reads under the `section` heading until the next markdown heading."),
+    section: z.string().optional().describe("Markdown heading that begins the pattern list. Default: '## Frozen Patterns'. Comparison is exact-string after rstrip."),
+    dry_run: z.boolean().optional().describe("Default false. When true, returns prospective patterns + counts without writing to disk or Supabase."),
+    source_tag: z.string().optional().describe("Override the `source` field stored on each new entry. Defaults to the rule-file path or 'inline' for `paths`."),
+    project_id: projectIdSchema,
+  },
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await batchFreezePatterns(args), null, 2) }],
   }),
 );
 
