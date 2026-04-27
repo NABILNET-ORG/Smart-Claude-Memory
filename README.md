@@ -360,6 +360,21 @@ npx tsx scripts/backup-and-remove.ts --confirm-delete       # zip + delete
 
 ---
 
+## ⚡ The Golden Startup Prompt
+
+To ensure a seamless, context-efficient, and secure session in any project using this plugin, copy and paste the following prompt as your very first interaction with the agent.
+
+```text
+SYSTEM INITIALIZATION:
+I am using the `smart-claude-memory` plugin. Follow these standards:
+1. **Check Readiness:** Run `init_project` to verify the workspace and health.
+2. **Sync State:** Run `sync_local_memory()` to ensure the vector database is up to date with my local notes.
+3. **Operate via Tools:** From now on, do NOT read large `.md` files directly. Use `search_memory()` for context retrieval and respect the `md-policy.py` hook for all writes.
+4. Format Consistency: Ensure the headers and formatting match the existing README.md style. Once updated, run sync_artefacts to keep everything in parallel.
+```
+
+---
+
 ## How `project_id` is derived
 
 [src/project.ts](src/project.ts):
@@ -472,7 +487,7 @@ MIT. See [LICENSE](LICENSE).
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-04-27T06:29:20.955Z for `smart-claude-memory`._
+_Auto-synced at 2026-04-27T07:52:16.710Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
