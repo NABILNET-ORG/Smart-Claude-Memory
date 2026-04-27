@@ -371,6 +371,7 @@ I am using the `smart-claude-memory` plugin. Follow these standards:
 2. **Sync State:** Run `sync_local_memory()` to ensure the vector database is up to date with my local notes.
 3. **Operate via Tools:** From now on, do NOT read large `.md` files directly. Use `search_memory()` for context retrieval and respect the `md-policy.py` hook for all writes.
 4. Format Consistency: Ensure the headers and formatting match the existing README.md style. Once updated, run sync_artefacts to keep everything in parallel.
+5. **MANDATORY DELEGATION:** Any read-heavy investigation touching > 3 files OR resulting in > 100 lines of raw output (Grep / Read / Logcat) MUST be delegated via `delegate_task` to a worker. Never flood the main context. Request only the 2-paragraph synthesis.
 ```
 
 ---
@@ -487,7 +488,7 @@ MIT. See [LICENSE](LICENSE).
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-04-27T07:52:16.710Z for `smart-claude-memory`._
+_Auto-synced at 2026-04-27T11:31:11.170Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
