@@ -396,6 +396,21 @@ export async function manageBacklog(args: BacklogAction) {
         `search_memory({ query: "Active Backlog", project_id: "${projectId}" }) ` +
         `-> Reviewing pending tasks. Next up: ${nextTitle}.`;
 
+      // v1.1.4 Architecture Guard / Automatic Session Handoff:
+      // Build a copy-paste-ready Markdown block the agent posts verbatim as
+      // its final message. Keep the body minimal (3 lines) so it survives a
+      // copy through any terminal. Triple-backticks inside the JSON string
+      // are emitted as-is; the agent's renderer interprets them when posted.
+      const nextSessionCommandMarkdown = [
+        "## 🚀 NEXT SESSION START COMMAND (Copy-Paste)",
+        "",
+        "```text",
+        "init_project()",
+        `search_memory({ query: "Active Backlog", project_id: "${projectId}", k: 10 })`,
+        "# Then read docs/NEXT-SESSION-PROMPT.md for the full session boot prompt.",
+        "```",
+      ].join("\n");
+
       const humanSummary = [
         `Session ended.`,
         `${done.length} task${done.length === 1 ? "" : "s"} archived.`,
@@ -427,6 +442,7 @@ export async function manageBacklog(args: BacklogAction) {
             }
           : null,
         resume_prompt: resumePrompt,
+        next_session_command_markdown: nextSessionCommandMarkdown,
         readme_sync: readmeSync,
         architecture_sync: architectureSync,
         memory_summary: memorySummary,
