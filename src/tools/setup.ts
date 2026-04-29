@@ -195,6 +195,98 @@ async function detectHydrateRecommendations(
   ];
 }
 
+// ─── Architecture Guard: Core 3 audit ──────────────────────────────────
+// CLAUDE.md, README.md, ARCHITECTURE.md are treated as the project's
+// three architectural sources of truth. init_project must surface their
+// existence and rough sync state so the agent can delegate an audit
+// before doing anything else.
+
+export type Core3Name = "CLAUDE.md" | "README.md" | "ARCHITECTURE.md";
+
+export type Core3File = {
+  name: Core3Name;
+  exists: boolean;
+  mtime_iso: string | null;
+  size_bytes: number;
+};
+
+export type Core3Audit = {
+  files: Core3File[];
+  in_sync: boolean;
+  reason: string;
+  required_action: "none" | "delegate_audit";
+  directive: string;
+};
+
+const CORE3_NAMES: readonly Core3Name[] = ["CLAUDE.md", "README.md", "ARCHITECTURE.md"];
+// mtime drift heuristic: if one of the Core 3 was edited >30 days after the
+// others, assume someone updated one without propagating to the rest.
+const CORE3_MTIME_DRIFT_DAYS = 30;
+
+async function auditCore3(workspace: string): Promise<Core3Audit> {
+  const files: Core3File[] = [];
+  for (const name of CORE3_NAMES) {
+    const p = resolve(workspace, name);
+    try {
+      const s = await stat(p);
+      files.push({
+        name,
+        exists: true,
+        mtime_iso: s.mtime.toISOString(),
+        size_bytes: s.size,
+      });
+    } catch {
+      files.push({ name, exists: false, mtime_iso: null, size_bytes: 0 });
+    }
+  }
+
+  const missing = files.filter((f) => !f.exists).map((f) => f.name);
+  if (missing.length > 0) {
+    return {
+      files,
+      in_sync: false,
+      reason: `Missing Core 3 file(s): ${missing.join(", ")}`,
+      required_action: "delegate_audit",
+      directive:
+        `STOP. The Architecture Guard requires CLAUDE.md, README.md, and ARCHITECTURE.md ` +
+        `to all exist at the project root. Missing: ${missing.join(", ")}. ` +
+        `Before any other work, call delegate_task with: ` +
+        `"Audit and reconcile the Core 3 (CLAUDE.md, README.md, ARCHITECTURE.md). ` +
+        `Read the existing files and the codebase, then propose content for the missing ` +
+        `${missing.length === 1 ? "file" : "files"}: ${missing.join(", ")}. ` +
+        `Return a 2-paragraph synthesis only — do not write the files yourself."`,
+    };
+  }
+
+  const mtimes = files.map((f) => Date.parse(f.mtime_iso!));
+  const driftMs = Math.max(...mtimes) - Math.min(...mtimes);
+  const driftDays = driftMs / (1000 * 60 * 60 * 24);
+  if (driftDays > CORE3_MTIME_DRIFT_DAYS) {
+    return {
+      files,
+      in_sync: false,
+      reason: `Core 3 mtime spread = ${driftDays.toFixed(1)} days (>${CORE3_MTIME_DRIFT_DAYS}d threshold)`,
+      required_action: "delegate_audit",
+      directive:
+        `Core 3 audit recommended. CLAUDE.md, README.md, and ARCHITECTURE.md have a ` +
+        `${driftDays.toFixed(1)}-day mtime spread, which suggests one was updated without ` +
+        `propagating the change to the others. Before any other work, call delegate_task with: ` +
+        `"Audit the Core 3 (CLAUDE.md, README.md, ARCHITECTURE.md) for cross-file consistency. ` +
+        `Flag any architectural claims, file paths, schema descriptions, or tool inventories ` +
+        `that appear in one file but contradict or are absent from the others. Return a ` +
+        `2-paragraph synthesis only."`,
+    };
+  }
+
+  return {
+    files,
+    in_sync: true,
+    reason: `All three present; mtime spread ${driftDays.toFixed(1)} days (≤${CORE3_MTIME_DRIFT_DAYS}d)`,
+    required_action: "none",
+    directive: "Core 3 in sync — proceed with normal work.",
+  };
+}
+
 export async function initProject(args: {
   workspace?: string;
   sweep_legacy?: "dry" | "commit" | "off";
@@ -207,6 +299,8 @@ export async function initProject(args: {
   checks: Check[];
   architecture_synced: { path: string; written: boolean } | null;
   legacy_sweep: unknown;
+  core3: Core3Audit;
+  directives: string[];
   recommendations?: HydrateRecommendation[];
 }> {
   const ws = resolve(args.workspace ?? process.cwd());
@@ -269,6 +363,22 @@ export async function initProject(args: {
     fix: distOk ? undefined : `Run: npm install && npm run build`,
   });
 
+  // 6. Architecture Guard — Core 3 audit (CLAUDE.md, README.md, ARCHITECTURE.md).
+  // The audit is read-only; the agent reacts to `core3.required_action` and to
+  // the `directives` array on the result envelope.
+  const core3 = await auditCore3(ws);
+  const core3Status: CheckStatus = core3.files.some((f) => !f.exists)
+    ? "missing"
+    : core3.in_sync
+      ? "ok"
+      : "warn";
+  checks.push({
+    name: "core3:audit",
+    status: core3Status,
+    detail: core3.reason,
+    fix: core3.required_action === "delegate_audit" ? core3.directive : undefined,
+  });
+
   const anyMissing = checks.some((c) => c.status === "missing");
   const anyWarn = checks.some((c) => c.status === "warn");
   const overall: "ready" | "partial" | "not_ready" = anyMissing
@@ -309,6 +419,14 @@ export async function initProject(args: {
     recommendations = [];
   }
 
+  // Top-level imperatives the agent MUST act on before doing anything else.
+  // Today only the Core 3 audit emits one; future Architecture Guard checks
+  // can append to this array.
+  const directives: string[] = [];
+  if (core3.required_action === "delegate_audit") {
+    directives.push(core3.directive);
+  }
+
   const result: {
     action: "init_project";
     workspace: string;
@@ -317,6 +435,8 @@ export async function initProject(args: {
     checks: Check[];
     architecture_synced: { path: string; written: boolean } | null;
     legacy_sweep: unknown;
+    core3: Core3Audit;
+    directives: string[];
     recommendations?: HydrateRecommendation[];
   } = {
     action: "init_project",
@@ -326,6 +446,8 @@ export async function initProject(args: {
     checks,
     architecture_synced: architectureSynced,
     legacy_sweep: legacySweep,
+    core3,
+    directives,
   };
   if (recommendations.length > 0) {
     result.recommendations = recommendations;

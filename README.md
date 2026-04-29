@@ -180,11 +180,11 @@ search_memory({ query: "auth flow", project_id: "acme-api" })
 2. Pulls the last 5 archived rows via `listArchive`.
 3. Replaces the `### 🚀 Recent Progress
 
+* [DONE] [v1.1.3] Version SSOT — health.ts + orchestrator.ts read version from package.json (or unified constants), eliminating drift in check_system_health (archived at 2026-04-27).
+* [DONE] [v1.1.3] Batch Policy Hydration — new MCP tool (batch_freeze / hydrate_policies) accepting array of paths or scanning .claude/rules/ to populate frozen-patterns.json in one call (archived at 2026-04-27).
+* [DONE] [v1.1.3] Seamless init_project — detect new workspace, auto-offer batch hydration when rule files are present in .claude/rules/ (archived at 2026-04-27).
 * [DONE] v1.1.2 — Master Schematic & Sovereign Baseline (archived at 2026-04-24).
 * [DONE] v0.8.0 — Production engine (ensureSchema, init_project, keep-alive, arch sync) (archived at 2026-04-24).
-* [DONE] v0.9.0 — Ultra-Enforcer (frozen cache, auto-freeze, backups, NL triggers) (archived at 2026-04-24).
-* [DONE] v0.9.1 — Legacy backup sweep + recovery discovery (archived at 2026-04-24).
-* [DONE] v1.0.0 — God Mode (project detect, compiler gate, regression, binding session) (archived at 2026-04-24).
 ### 🚀 Recent Progress
 
 * [DONE] Fix login form validation (archived at 2026-04-24).
@@ -372,6 +372,9 @@ I am using the `smart-claude-memory` plugin. Follow these standards:
 3. **Operate via Tools:** From now on, do NOT read large `.md` files directly. Use `search_memory()` for context retrieval and respect the `md-policy.py` hook for all writes.
 4. Format Consistency: Ensure the headers and formatting match the existing README.md style. Once updated, run sync_artefacts to keep everything in parallel.
 5. **MANDATORY DELEGATION:** Any read-heavy investigation touching > 3 files OR resulting in > 100 lines of raw output (Grep / Read / Logcat) MUST be delegated via `delegate_task` to a worker. Never flood the main context. Request only the 2-paragraph synthesis.
+6. **Initial Sync (Core 3 Audit):** `init_project` (Rule 1) returns a `core3` block reporting on `CLAUDE.md`, `README.md`, and `ARCHITECTURE.md` — the project's three architectural sources of truth. If any is missing, or if `core3.in_sync` is `false`, immediately `delegate_task` a Core-3 audit BEFORE any other work. Request a 2-paragraph synthesis with the proposed reconciliation. The Architecture Guard treats these three files as load-bearing; nothing else proceeds until they agree.
+7. **Modular Diagramming:** Mermaid diagrams in `ARCHITECTURE.md` and `README.md` MUST be split into small per-section blocks — one block per `##` subsystem, ≤ ~40 nodes each. GitHub silently fails to render oversized Mermaid graphs; a single monolithic flowchart will appear blank in the rendered view. Never emit one mega-graph. When `manage_backlog({ action: "session_end" })` regenerates the diagram, it produces one block per logical section, not one giant tree.
+8. **Session-End Lock & Handoff:** Before ending the session, call `manage_backlog({ action: "session_end" })` to flush the backlog, regenerate the per-section Mermaid diagrams, and run `sync_artefacts` to push state to the cloud. The response includes a `next_session_command_markdown` field — **POST THAT MARKDOWN BLOCK VERBATIM as your final message to chat.** It is a copy-paste-ready boot command (`init_project` + `search_memory` for the Active Backlog + pointer to `docs/NEXT-SESSION-PROMPT.md`) that the user pastes into the next session. This locks a coherent baseline so the next session opens with the Core 3, the diagrams, and the cloud memory all aligned.
 ```
 
 ---
@@ -488,7 +491,7 @@ MIT. See [LICENSE](LICENSE).
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-04-27T11:31:11.170Z for `smart-claude-memory`._
+_Auto-synced at 2026-04-27T13:07:31.501Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
