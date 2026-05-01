@@ -42,6 +42,13 @@ I am using the `smart-claude-memory` plugin. Follow these standards:
    in the reserved `project_id: 'GLOBAL'` vault and surfaces in
    dual-scope search for every future project. Project-local context
    stays under the project slug.
+10. Sovereign Vetting: the GLOBAL vault is a high-signal environment.
+    Every global save must pass the "Cross-Project Test": if the
+    current project were deleted tomorrow, would this memory still be
+    a gold-standard reference for others? If no, keep it local. When
+    `is_global: true`, you MUST also include `metadata.global_rationale`
+    — a one- or two-sentence justification of the universal truth.
+    Saves that fail the test pollute the vault and are forbidden.
 
 First actions for THIS session:
 - init_project()

@@ -157,7 +157,7 @@ server.tool(
 
 server.tool(
   "save_memory",
-  "Persist a single typed memory into the current project's namespace. Categorize the memory via metadata.type: DECISION (architectural choices + rationale), PATTERN (code standards / Rule 5–8 enforcement), ERROR (bug post-mortems + fixes), LOG (general session progress). Always provide metadata.type unless the memory is genuinely uncategorizable. Optional metadata.status / metadata.context_id and any additional pass-through keys are stored verbatim and become filterable via search_memory's metadata_filter (GIN-indexed JSONB containment). Set metadata.is_global=true ONLY for universal patterns / lessons-learned that should be visible to every project. The row is then stored under project_id='GLOBAL' (the row's project_id is overridden regardless of any explicit project_id arg) and surfaces in dual-scope search across all projects. The is_global flag is preserved inside the persisted metadata jsonb for audit/traceability.",
+  "Persist a single typed memory into the current project's namespace. Categorize the memory via metadata.type: DECISION (architectural choices + rationale), PATTERN (code standards / Rule 5–8 enforcement), ERROR (bug post-mortems + fixes), LOG (general session progress). Always provide metadata.type unless the memory is genuinely uncategorizable. Optional metadata.status / metadata.context_id and any additional pass-through keys are stored verbatim and become filterable via search_memory's metadata_filter (GIN-indexed JSONB containment). Set metadata.is_global=true ONLY for universal Arch-Patterns that apply to ALL projects (e.g., universal architectural decisions, multi-project bug fixes); NEVER for project-specific logic. When is_global=true, you MUST also set metadata.global_rationale (one- or two-sentence justification of the universal truth) — this is the Sovereign Vetting gate. Apply the Cross-Project Test: if the current project were deleted tomorrow, would this memory still be a gold-standard reference for others? If no, keep it local. Global rows are stored under project_id='GLOBAL' (override regardless of explicit project_id arg) and surface in dual-scope search across all projects. The is_global flag and global_rationale are preserved inside the persisted metadata jsonb for audit/traceability.",
   {
     content: z.string().min(1),
     project_id: projectIdSchema,
@@ -177,13 +177,19 @@ server.tool(
           .boolean()
           .optional()
           .describe(
-            "When true, route this row to the reserved project_id='GLOBAL' (universal scope). The flag is also kept inside the persisted metadata jsonb. Use ONLY for universal patterns / lessons-learned.",
+            "If true, the memory is saved to the GLOBAL vault. STRICT RULE: Only use this for Arch-Patterns that apply to ALL projects (e.g., universal architectural decisions, multi-project bug fixes). NEVER use for project-specific logic. When true, you MUST include a 'global_rationale' field in the metadata explaining why this is a universal truth. Cross-Project Test: if the current project were deleted tomorrow, would this memory still be a gold-standard reference for others? If no, keep it local.",
+          ),
+        global_rationale: z
+          .string()
+          .optional()
+          .describe(
+            "REQUIRED when is_global=true. One- or two-sentence justification of why this memory is a universal truth — not project-specific. Persisted in metadata jsonb for audit.",
           ),
       })
       .catchall(z.unknown())
       .optional()
       .describe(
-        "Sovereign Taxonomy: type ∈ {DECISION, PATTERN, ERROR, LOG}. Set is_global:true to route to the GLOBAL Knowledge Vault. Pass-through keys are preserved.",
+        "Sovereign Taxonomy: type ∈ {DECISION, PATTERN, ERROR, LOG}. Set is_global:true ONLY for universal Arch-Patterns that apply to ALL projects, and you MUST also supply metadata.global_rationale explaining the universal truth (Sovereign Vetting). Pass-through keys are preserved.",
       ),
   },
   async (args) => ({ content: [{ type: "text", text: JSON.stringify(await saveMemory(args), null, 2) }] }),

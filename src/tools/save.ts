@@ -31,9 +31,17 @@ export type SaveMemoryMetadata = {
   context_id?: string;
   /** When true, the row is stored under project_id='GLOBAL' (universal scope). */
   is_global?: boolean;
+  /** REQUIRED when is_global=true. ≥10 chars. Rejected at runtime by the Sovereign Vetting gate. */
+  global_rationale?: string;
   // Pass-through extras are explicitly allowed; the JSONB column has no schema.
   [k: string]: unknown;
 };
+
+/** Minimum characters for a valid global_rationale. Trim-based; whitespace doesn't count. */
+const SOVEREIGN_RATIONALE_MIN_CHARS = 10;
+
+const SOVEREIGN_VETTING_ERROR =
+  'SOVEREIGN VETTING FAILED: Saving to GLOBAL requires a "global_rationale" field in metadata. Apply the Cross-Project Test: Why is this memory a universal truth? Provide a rationale and retry.';
 
 export async function saveMemory(args: {
   content: string;
@@ -49,6 +57,19 @@ export async function saveMemory(args: {
 }> {
   const metadata: SaveMemoryMetadata = { ...(args.metadata ?? {}) };
   const isGlobal = metadata.is_global === true;
+
+  // ── Sovereign Vetting Gate (Rule 10) ────────────────────────────────────
+  // Hard runtime check: is_global=true MUST be paired with a non-trivial
+  // global_rationale. The schema-level describe() is advisory; this gate is
+  // the physical rejection that prevents pollution of the GLOBAL Vault.
+  if (isGlobal) {
+    const rationale = metadata.global_rationale;
+    const trimmed =
+      typeof rationale === "string" ? rationale.trim() : "";
+    if (trimmed.length < SOVEREIGN_RATIONALE_MIN_CHARS) {
+      throw new Error(SOVEREIGN_VETTING_ERROR);
+    }
+  }
 
   // GLOBAL routing: if the caller flagged the memory as universal, override
   // the row's project_id to the reserved 'GLOBAL' bucket regardless of the

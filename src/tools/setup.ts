@@ -302,7 +302,7 @@ const CAPABILITIES_HINTS: readonly string[] = [
   "Before non-trivial edits: search_memory({ query: '<topic>', metadata_filter: { type: 'PATTERN' } })",
   "After architectural choice: save_memory({ content, metadata: { type: 'DECISION' } })",
   "After bug fix: save_memory({ content, metadata: { type: 'ERROR', status: 'fixed' } })",
-  "For universal patterns: save_memory({ content, metadata: { type: 'PATTERN', is_global: true } })",
+  "For universal patterns (MUST pass Sovereign Vetting + Cross-Project Test): save_memory({ content, metadata: { type: 'PATTERN', is_global: true, global_rationale: '<why this is a universal truth>' } })",
 ] as const;
 
 export async function initProject(args: {

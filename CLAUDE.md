@@ -47,6 +47,33 @@ These are enforced by `hooks/md-policy.py` (PreToolUse gate on Write/Edit/Bash) 
 
 ---
 
+## Memory Management
+
+**Sovereign Taxonomy.** Every `save_memory` call should set `metadata.type` to one of `DECISION`, `PATTERN`, `ERROR`, `LOG`. Saves without a type are tolerated but lose the GIN-indexed pre-filter and become harder to retrieve.
+
+**Sovereign Vetting (Rule 10) — runtime-enforced.** Setting `metadata.is_global: true` routes the row to `project_id='GLOBAL'`. The server REJECTS any global save whose `metadata.global_rationale` is missing, non-string, or under 10 trimmed characters with the error `SOVEREIGN VETTING FAILED: ...`. There is no soft path — provide a real rationale or keep the memory local.
+
+**Cross-Project Test.** A memory qualifies as `is_global` only if: *with the current project deleted tomorrow, would this entry still be a gold-standard reference for other projects?* If no, keep it local. Project-specific implementation choices, ticket-driven fixes, and "how this repo wires X" notes all fail the test by default.
+
+**Proactive Sovereign Scout (active behavior).** The agent is not a passive storage handler — it actively scouts for global candidates. **Whenever a session produces a major architectural decision, a branding change, or a universal bug fix, the agent MUST evaluate the work against the Cross-Project Test before closing the task or session.** If the work passes, the agent proposes promotion in this exact form before saving:
+
+> "This looks like a Global Candidate. Should I save it to the GLOBAL vault? If so, I suggest this rationale: *[one- or two-sentence rationale tied to the universal truth]*."
+
+The agent never writes to GLOBAL silently — promotion always waits on user confirmation. Project-local saves continue to flow through `save_memory` without prompting.
+
+**Triggers (non-exhaustive) that warrant a Scout proposal.**
+- Cross-cutting architectural choices (delegation patterns, vetting gates, taxonomy definitions).
+- Branding, naming, or product-identity decisions that should propagate across repos.
+- Bug fixes whose root cause is a class of error any project could hit (race conditions, hash-gate misuse, schema/dimension drift).
+- New universal rules added to `CLAUDE.md`, `README.md`, or the Golden Startup Prompt.
+
+**Anti-triggers (keep local).**
+- Repo-specific file paths, version strings, or migration scripts.
+- One-off configuration tweaks.
+- Session progress notes (`LOG`) and per-feature `DECISION` rows tied to this codebase.
+
+---
+
 ## Where to Find Things
 
 | What | Where |
