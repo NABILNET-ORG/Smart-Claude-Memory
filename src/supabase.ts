@@ -259,13 +259,26 @@ export async function searchChunks(
   queryEmbedding: number[],
   matchCount = 5,
   minSimilarity = 0.0,
+  metadataFilter?: Record<string, unknown> | null,
+  includeGlobal = true,
 ): Promise<MatchRow[]> {
-  const { data, error } = await supabase.rpc("match_memory_chunks", {
+  // Migration 008 adds a 6-arg signature: `p_include_global boolean default true`.
+  // When true (default), the SQL WHERE clause dual-scopes across the caller's
+  // project_id AND the reserved 'GLOBAL' bucket. The GIN(jsonb_path_ops) index
+  // on memory_chunks.metadata still narrows the candidate set BEFORE pgvector
+  // ranks — project_id (plus the opt-in 'GLOBAL' fan-out) remains the
+  // structural tenancy guard.
+  const payload: Record<string, unknown> = {
     query_embedding: queryEmbedding,
     p_project_id: projectId,
     match_count: matchCount,
     min_similarity: minSimilarity,
-  });
+    p_include_global: includeGlobal,
+  };
+  if (metadataFilter && Object.keys(metadataFilter).length > 0) {
+    payload.p_metadata_filter = metadataFilter;
+  }
+  const { data, error } = await supabase.rpc("match_memory_chunks", payload);
   if (error) throw new Error(`Supabase search failed: ${error.message}`);
   return (data ?? []) as MatchRow[];
 }

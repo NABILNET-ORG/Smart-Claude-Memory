@@ -5,6 +5,7 @@ import { z } from "zod";
 import { syncLocalMemory } from "./tools/sync.js";
 import { searchMemory } from "./tools/search.js";
 import { updateRule } from "./tools/update-rule.js";
+import { saveMemory } from "./tools/save.js";
 import { manageBacklog } from "./tools/backlog.js";
 import { checkCodeHygiene } from "./tools/hygiene.js";
 import { confirmVerification, raisePendingVerification } from "./tools/verification.js";
@@ -119,12 +120,24 @@ server.tool(
 
 server.tool(
   "search_memory",
-  "Semantic search over the current project's chunks (strictly isolated). Intent routing: 'archive'/'completed tasks'/'done tasks' → archive_backlog rows (mode:'archive'); 'Active Backlog'/'pending tasks'/'what's next' → active cloud_backlog rows (mode:'backlog'); everything else → vector search over memory_chunks (mode:'semantic'). Archived tasks are NEVER mixed into semantic results unless 'archive' is in the query.",
+  "Dual-scope semantic search over the current project's chunks AND the reserved 'GLOBAL' Knowledge Vault. Intent routing: 'archive'/'completed tasks'/'done tasks' → archive_backlog rows (mode:'archive'); 'Active Backlog'/'pending tasks'/'what's next' → active cloud_backlog rows (mode:'backlog'); everything else → vector search over memory_chunks (mode:'semantic'). Default behavior dual-scopes the search across the current project_id and the reserved 'GLOBAL' scope; pass `include_global: false` to restrict to the current project only. Archived tasks are NEVER mixed into semantic results unless 'archive' is in the query. Optional metadata_filter (JSONB containment, e.g. {\"type\":\"DECISION\"}) is applied via the GIN(jsonb_path_ops) index BEFORE vector ranking; project_id (plus the opt-in 'GLOBAL' fan-out) remains the structural tenancy guard.",
   {
     query: z.string(),
     limit: z.number().int().positive().max(20).optional(),
     min_similarity: z.number().min(0).max(1).optional(),
     project_id: projectIdSchema,
+    metadata_filter: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe(
+        "JSONB containment filter against memory_chunks.metadata. Common shape: {type:'DECISION'|'PATTERN'|'ERROR'|'LOG'} or {type:'ERROR', status:'fixed'}. Matches Postgres `@>`.",
+      ),
+    include_global: z
+      .boolean()
+      .optional()
+      .describe(
+        "Default true. When true, the search dual-scopes across the current project_id AND the reserved 'GLOBAL' bucket (universal patterns / lessons-learned visible to every project). Pass false to restrict to project_id only.",
+      ),
   },
   async (args) => ({ content: [{ type: "text", text: JSON.stringify(await searchMemory(args), null, 2) }] }),
 );
@@ -140,6 +153,40 @@ server.tool(
     project_id: projectIdSchema,
   },
   async (args) => ({ content: [{ type: "text", text: JSON.stringify(await updateRule(args), null, 2) }] }),
+);
+
+server.tool(
+  "save_memory",
+  "Persist a single typed memory into the current project's namespace. Categorize the memory via metadata.type: DECISION (architectural choices + rationale), PATTERN (code standards / Rule 5–8 enforcement), ERROR (bug post-mortems + fixes), LOG (general session progress). Always provide metadata.type unless the memory is genuinely uncategorizable. Optional metadata.status / metadata.context_id and any additional pass-through keys are stored verbatim and become filterable via search_memory's metadata_filter (GIN-indexed JSONB containment). Set metadata.is_global=true ONLY for universal patterns / lessons-learned that should be visible to every project. The row is then stored under project_id='GLOBAL' (the row's project_id is overridden regardless of any explicit project_id arg) and surfaces in dual-scope search across all projects. The is_global flag is preserved inside the persisted metadata jsonb for audit/traceability.",
+  {
+    content: z.string().min(1),
+    project_id: projectIdSchema,
+    file_origin: z
+      .string()
+      .optional()
+      .describe(
+        "Source key for upsert dedup. Defaults to 'inline:<sha256(content).slice(0,12)>' so callers can omit it for one-off saves.",
+      ),
+    chunk_index: z.number().int().nonnegative().optional(),
+    metadata: z
+      .object({
+        type: z.enum(["DECISION", "PATTERN", "ERROR", "LOG"]).optional(),
+        status: z.string().optional(),
+        context_id: z.string().optional(),
+        is_global: z
+          .boolean()
+          .optional()
+          .describe(
+            "When true, route this row to the reserved project_id='GLOBAL' (universal scope). The flag is also kept inside the persisted metadata jsonb. Use ONLY for universal patterns / lessons-learned.",
+          ),
+      })
+      .catchall(z.unknown())
+      .optional()
+      .describe(
+        "Sovereign Taxonomy: type ∈ {DECISION, PATTERN, ERROR, LOG}. Set is_global:true to route to the GLOBAL Knowledge Vault. Pass-through keys are preserved.",
+      ),
+  },
+  async (args) => ({ content: [{ type: "text", text: JSON.stringify(await saveMemory(args), null, 2) }] }),
 );
 
 // ─── v0.5.0 tools ─────────────────────────────────────────────────────────

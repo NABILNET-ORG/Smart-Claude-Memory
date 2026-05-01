@@ -1,4 +1,4 @@
-# CLAUDE.md — Smart Claude Memory MCP (v1.1.4)
+# CLAUDE.md — Smart Claude Memory MCP (v2.0.0-rc1)
 
 An MCP server that gives Claude persistent, project-scoped memory via Supabase vector storage and Ollama embeddings. This file is the agent-facing operating manual; see `README.md` for operator setup and the Golden Startup Prompt, and `ARCHITECTURE.md` for internal architecture.
 

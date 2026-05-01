@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { glob } from "glob";
 import { loadFrozenCache } from "./frozen-cache.js";
 import { currentProjectId, slugify } from "../project.js";
+import { GLOBAL_PROJECT_ID } from "./save.js";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const mcpEntryPoint = resolve(packageRoot, "dist", "index.js").replace(/\\/g, "/");
@@ -287,6 +288,23 @@ async function auditCore3(workspace: string): Promise<Core3Audit> {
   };
 }
 
+export type Capabilities = {
+  protocol: "smart-claude-memory/v2.0.0-rc1";
+  project_id: string;
+  global_scope: { available: true; project_id: typeof GLOBAL_PROJECT_ID };
+  taxonomy: ["DECISION", "PATTERN", "ERROR", "LOG"];
+  context_gathering_hints: string[];
+  delegate_task_threshold: string;
+};
+
+const CAPABILITIES_HINTS: readonly string[] = [
+  "On boot: search_memory({ query: 'Active Backlog' })",
+  "Before non-trivial edits: search_memory({ query: '<topic>', metadata_filter: { type: 'PATTERN' } })",
+  "After architectural choice: save_memory({ content, metadata: { type: 'DECISION' } })",
+  "After bug fix: save_memory({ content, metadata: { type: 'ERROR', status: 'fixed' } })",
+  "For universal patterns: save_memory({ content, metadata: { type: 'PATTERN', is_global: true } })",
+] as const;
+
 export async function initProject(args: {
   workspace?: string;
   sweep_legacy?: "dry" | "commit" | "off";
@@ -301,6 +319,7 @@ export async function initProject(args: {
   legacy_sweep: unknown;
   core3: Core3Audit;
   directives: string[];
+  capabilities: Capabilities;
   recommendations?: HydrateRecommendation[];
 }> {
   const ws = resolve(args.workspace ?? process.cwd());
@@ -427,6 +446,18 @@ export async function initProject(args: {
     directives.push(core3.directive);
   }
 
+  // v2.0.0-rc1 Capabilities Header — surfaces the protocol contract the agent should
+  // adhere to during the session: dual-scope search, GLOBAL Knowledge Vault,
+  // Sovereign Taxonomy, and the delegation threshold from CLAUDE.md.
+  const capabilities: Capabilities = {
+    protocol: "smart-claude-memory/v2.0.0-rc1",
+    project_id: slugify(currentProjectId),
+    global_scope: { available: true, project_id: GLOBAL_PROJECT_ID },
+    taxonomy: ["DECISION", "PATTERN", "ERROR", "LOG"],
+    context_gathering_hints: [...CAPABILITIES_HINTS],
+    delegate_task_threshold: ">3 files OR >100 lines raw output",
+  };
+
   const result: {
     action: "init_project";
     workspace: string;
@@ -437,6 +468,7 @@ export async function initProject(args: {
     legacy_sweep: unknown;
     core3: Core3Audit;
     directives: string[];
+    capabilities: Capabilities;
     recommendations?: HydrateRecommendation[];
   } = {
     action: "init_project",
@@ -448,6 +480,7 @@ export async function initProject(args: {
     legacy_sweep: legacySweep,
     core3,
     directives,
+    capabilities,
   };
   if (recommendations.length > 0) {
     result.recommendations = recommendations;

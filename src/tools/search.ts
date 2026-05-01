@@ -41,9 +41,14 @@ export async function searchMemory(args: {
   limit?: number;
   min_similarity?: number;
   project_id?: string;
+  metadata_filter?: Record<string, unknown>;
+  include_global?: boolean;
 }) {
   const projectId = args.project_id ?? currentProjectId;
   const limit = args.limit ?? 5;
+  // Default behavior: dual-scope across the current project AND the reserved
+  // 'GLOBAL' bucket. Pass include_global:false to restrict to project_id only.
+  const includeGlobal = args.include_global ?? true;
 
   // Precedence: archive > backlog > semantic. Archive beats backlog because
   // 'archive' is the more specific signal — without it we'd route generic
@@ -109,12 +114,25 @@ export async function searchMemory(args: {
   // Default semantic path. Archived backlog rows are NEVER mixed into
   // semantic results — they live in a different table and only surface via
   // the archive-intent fast path above.
+  //
+  // `metadata_filter` (when present) flows through to match_memory_chunks's
+  // `p_metadata_filter` arg — the GIN(jsonb_path_ops) index narrows the
+  // candidate set BEFORE pgvector ranks. Project-id filtering is structural
+  // at the SQL level (first WHERE predicate) and is never relaxed.
   const [queryVec] = await embed([args.query]);
-  const results = await searchChunks(projectId, queryVec, limit, args.min_similarity ?? 0.0);
+  const results = await searchChunks(
+    projectId,
+    queryVec,
+    limit,
+    args.min_similarity ?? 0.0,
+    args.metadata_filter ?? null,
+    includeGlobal,
+  );
   return {
     project_id: projectId,
     query: args.query,
     mode: "semantic" as const,
+    include_global: includeGlobal,
     count: results.length,
     results,
   };
