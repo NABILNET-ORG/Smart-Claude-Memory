@@ -216,7 +216,7 @@ flowchart TD
   n0 --> n8
   n9["GPT SMC v2.0-rc1.png"]
   n8 --> n9
-  n10["Smart Claude Memory v.1.1.2.jpeg"]
+  n10["SCM-v2-Master-Schematic.png"]
   n8 --> n10
   n11["scripts/"]
   n0 --> n11

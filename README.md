@@ -504,7 +504,7 @@ For inquiries, integrations, or sovereign-grade Claude Code tooling, visit [nabi
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-05-01T13:25:14.861Z for `smart-claude-memory`._
+_Auto-synced at 2026-05-01T13:59:54.275Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
@@ -527,7 +527,7 @@ flowchart TD
   n0 --> n8
   n9["GPT SMC v2.0-rc1.png"]
   n8 --> n9
-  n10["Smart Claude Memory v.1.1.2.jpeg"]
+  n10["SCM-v2-Master-Schematic.png"]
   n8 --> n10
   n11["scripts/"]
   n0 --> n11
