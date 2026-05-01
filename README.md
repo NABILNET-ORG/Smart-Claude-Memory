@@ -493,7 +493,7 @@ MIT. See [LICENSE](LICENSE).
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-04-30T14:03:57.771Z for `smart-claude-memory`._
+_Auto-synced at 2026-05-01T08:20:40.072Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
