@@ -15,9 +15,11 @@ I am using the `smart-claude-memory` plugin. Follow these standards:
 3. Operate via Tools: do NOT read large `.md` files directly — use
    `search_memory()` for context retrieval, and respect `md-policy.py`
    for all writes.
-4. Format Consistency: keep new content aligned with the existing README
-   style. After updates, run `sync_artefacts` to keep cloud + local in
-   parallel.
+4. Typed Retrieval (v2): write memories with `save_memory` and a
+   `metadata.type` from the Sovereign Taxonomy — DECISION, PATTERN,
+   ERROR, or LOG. Read with `search_memory({ metadata_filter: ... })`
+   so the GIN index pre-filters before vector similarity. After
+   content updates, run `sync_artefacts` to keep cloud + local aligned.
 5. MANDATORY DELEGATION: any read-heavy investigation touching > 3 files
    OR > 100 lines of raw output (Grep / Read / logs) MUST go through
    `delegate_task`. Request only the 2-paragraph synthesis.
@@ -34,6 +36,12 @@ I am using the `smart-claude-memory` plugin. Follow these standards:
    the `next_session_command_markdown` block from that response verbatim
    into chat as your final message — that is the user's copy-paste
    command for the next session.
+9. Universal Patterns → GLOBAL (v2.0.0-rc1): patterns / lessons-learned /
+   decisions that are universal (apply across projects, not just this
+   one) MUST be saved with `metadata.is_global: true` so the row lands
+   in the reserved `project_id: 'GLOBAL'` vault and surfaces in
+   dual-scope search for every future project. Project-local context
+   stays under the project slug.
 
 First actions for THIS session:
 - init_project()

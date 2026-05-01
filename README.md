@@ -14,7 +14,7 @@
 [![pgvector](https://img.shields.io/badge/pgvector-HNSW-336791?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Ollama](https://img.shields.io/badge/Ollama-local%20embeddings-000)](https://ollama.com/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](#license)
-[![Version](https://img.shields.io/badge/version-1.1.3-green)](#)
+[![Version](https://img.shields.io/badge/version-2.0.0--rc1-green)](#)
 
 </div>
 
@@ -26,7 +26,7 @@ Claude sessions load `memory.md`, `rules.md`, `cloud.md`, and a dozen other cont
 
 ## What this does
 
-`smart-claude-memory` is a **Model Context Protocol server** that replaces "read every .md at startup" with "search them on demand." It chunks your markdown notes, embeds them with a local Ollama model, stores them in Supabase (pgvector), and exposes **twelve tools** to Claude spanning memory, vision, backlog, hygiene, and system health. The elevator pitch:
+`smart-claude-memory` is a **Model Context Protocol server** that replaces "read every .md at startup" with "search them on demand." It chunks your markdown notes, embeds them with a local Ollama model, stores them in Supabase (pgvector), and exposes **thirteen tools** to Claude spanning memory, vision, backlog, hygiene, and system health. The elevator pitch:
 
 | Tool | Purpose |
 |---|---|
@@ -153,8 +153,9 @@ search_memory({ query: "auth flow", project_id: "acme-api" })
 | Tool | Category | Summary |
 |---|---|---|
 | `sync_local_memory` | Memory | Hash-gated incremental sync of `.md` files; bulk upsert in 100-chunk batches; `force` re-embed; `auto_purge` with dry-run + verify-before-delete |
-| `search_memory` | Memory | Intent routing — `archive` > `backlog` > `semantic`. Archive tasks never leak into vector results unless requested. |
-| `update_rule` | Memory | Upsert a single rule/chunk without re-syncing files |
+| `search_memory` | Memory | Intent routing — `archive` > `backlog` > `semantic`. Optional `metadata_filter` (e.g. `{ "type": "DECISION" }`) narrows via the GIN index before vector similarity. **Dual-scope by default (v2.0.0-rc1):** searches across the current project AND the reserved `'GLOBAL'` vault; pass `include_global: false` to restrict to the current project. Archive tasks never leak into vector results unless requested. |
+| `save_memory` | Memory | Save a typed memory chunk — embed via Ollama, upsert with `metadata.type` from the Sovereign Taxonomy (`DECISION` / `PATTERN` / `ERROR` / `LOG`). v2 canonical write path. **v2.0.0-rc1:** set `metadata.is_global: true` to route the row to the reserved `project_id: 'GLOBAL'` vault for cross-project visibility. |
+| `update_rule` | Memory | Low-level positional upsert of a single rule/chunk without re-syncing files (legacy; prefer `save_memory` for new writes) |
 | `summarize_memory_file` | Memory | LLM-driven compression of `CLAUDE.md` / `MEMORY.md` toward a token target (default 3000) |
 | `manage_backlog` | Backlog | `add` / `list` / `update` / `prune_done` (archives) / `archive_list` / `session_end` with Progress Report + resume prompt |
 | `index_image` | Vision | Moondream caption → `nomic-embed-text` embed → upsert. Auto-converts WebP/GIF/BMP via ffmpeg. |
@@ -370,11 +371,12 @@ I am using the `smart-claude-memory` plugin. Follow these standards:
 1. **Check Readiness:** Run `init_project` to verify the workspace and health.
 2. **Sync State:** Run `sync_local_memory()` to ensure the vector database is up to date with my local notes.
 3. **Operate via Tools:** From now on, do NOT read large `.md` files directly. Use `search_memory()` for context retrieval and respect the `md-policy.py` hook for all writes.
-4. Format Consistency: Ensure the headers and formatting match the existing README.md style. Once updated, run sync_artefacts to keep everything in parallel.
+4. **Typed Retrieval (v2):** When saving memories use `save_memory` with `metadata.type` from the Sovereign Taxonomy — `DECISION` (architectural choices + rationale), `PATTERN` (code standards + Rule 5–8 enforcement), `ERROR` (bug post-mortems + fixes), or `LOG` (general session progress). When retrieving, narrow `search_memory` with `metadata_filter` (e.g. `{ "type": "DECISION" }`) so the GIN index pre-filters before vector similarity. After updates, run `sync_artefacts` to keep cloud + local aligned.
 5. **MANDATORY DELEGATION:** Any read-heavy investigation touching > 3 files OR resulting in > 100 lines of raw output (Grep / Read / Logcat) MUST be delegated via `delegate_task` to a worker. Never flood the main context. Request only the 2-paragraph synthesis.
 6. **Initial Sync (Core 3 Audit):** `init_project` (Rule 1) returns a `core3` block reporting on `CLAUDE.md`, `README.md`, and `ARCHITECTURE.md` — the project's three architectural sources of truth. If any is missing, or if `core3.in_sync` is `false`, immediately `delegate_task` a Core-3 audit BEFORE any other work. Request a 2-paragraph synthesis with the proposed reconciliation. The Architecture Guard treats these three files as load-bearing; nothing else proceeds until they agree.
 7. **Modular Diagramming:** Mermaid diagrams in `ARCHITECTURE.md` and `README.md` MUST be split into small per-section blocks — one block per `##` subsystem, ≤ ~40 nodes each. GitHub silently fails to render oversized Mermaid graphs; a single monolithic flowchart will appear blank in the rendered view. Never emit one mega-graph. When `manage_backlog({ action: "session_end" })` regenerates the diagram, it produces one block per logical section, not one giant tree.
 8. **Session-End Lock & Handoff:** Before ending the session, call `manage_backlog({ action: "session_end" })` to flush the backlog, regenerate the per-section Mermaid diagrams, and run `sync_artefacts` to push state to the cloud. The response includes a `next_session_command_markdown` field — **POST THAT MARKDOWN BLOCK VERBATIM as your final message to chat.** It is a copy-paste-ready boot command (`init_project` + `search_memory` for the Active Backlog + pointer to `docs/NEXT-SESSION-PROMPT.md`) that the user pastes into the next session. This locks a coherent baseline so the next session opens with the Core 3, the diagrams, and the cloud memory all aligned.
+9. **Universal Patterns → GLOBAL (v2.0.0-rc1):** Any pattern, lesson-learned, or architectural decision deemed **universal** — applicable across projects, not just this one — MUST be saved with `metadata.is_global: true`. The row is stored under the reserved `project_id: 'GLOBAL'` and surfaces in dual-scope search across every project. Use this to **immunize future projects against known errors** (a bug fixed once never has to be re-discovered). Inverse: do NOT promote project-local context to GLOBAL — the vault loses signal if it becomes a dumping ground.
 ```
 
 ---
@@ -491,113 +493,145 @@ MIT. See [LICENSE](LICENSE).
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-04-27T13:07:31.501Z for `smart-claude-memory`._
+_Auto-synced at 2026-05-01T12:40:53.117Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
   n0["Claude-Memory/"]
-  n1["hooks/"]
+  n1[".claude/"]
   n0 --> n1
-  n2["md-policy.py"]
-  n1 --> n2
-  n3["README.md"]
-  n1 --> n3
-  n4["images/"]
-  n0 --> n4
-  n5["Smart Claude Memory v.1.1.2.jpeg"]
-  n4 --> n5
-  n6["scripts/"]
-  n0 --> n6
-  n7["001_schema.sql"]
-  n6 --> n7
-  n8["002_multi_project.sql"]
-  n6 --> n8
-  n9["003_file_hash.sql"]
-  n6 --> n9
-  n10["004_backlog_frozen.sql"]
-  n6 --> n10
-  n11["005_archive_backlog.sql"]
-  n6 --> n11
-  n12["apply-schema.ts"]
-  n6 --> n12
-  n13["backup-and-remove.ts"]
-  n6 --> n13
-  n14["e2e-incremental-test.ts"]
-  n6 --> n14
-  n15["e2e-isolation-test.ts"]
-  n6 --> n15
-  n16["e2e-test.ts"]
-  n6 --> n16
-  n17["purge-samia-rules.ts"]
-  n6 --> n17
-  n18["src/"]
-  n0 --> n18
-  n19["tools/"]
-  n18 --> n19
-  n20["backlog.ts"]
-  n19 --> n20
-  n21["batch-freeze-patterns.ts"]
-  n19 --> n21
-  n22["conflict.ts"]
-  n19 --> n22
-  n23["frozen-cache.ts"]
-  n19 --> n23
-  n24["health.ts"]
-  n19 --> n24
-  n25["hygiene.ts"]
-  n19 --> n25
-  n26["image.ts"]
-  n19 --> n26
-  n27["orchestrator.ts"]
-  n19 --> n27
-  n28["policy.ts"]
-  n19 --> n28
-  n29["refactor.ts"]
-  n19 --> n29
-  n30["search.ts"]
-  n19 --> n30
-  n31["setup.ts"]
-  n19 --> n31
-  n32["summarize.ts"]
-  n19 --> n32
-  n33["sync.ts"]
-  n19 --> n33
-  n34["update-rule.ts"]
-  n19 --> n34
-  n35["verification.ts"]
-  n19 --> n35
-  n36["chunker.ts"]
-  n18 --> n36
-  n37["config.ts"]
-  n18 --> n37
-  n38["index.ts"]
-  n18 --> n38
-  n39["ollama.ts"]
-  n18 --> n39
-  n40["project-detect.ts"]
-  n18 --> n40
-  n41["project.ts"]
-  n18 --> n41
-  n42["supabase.ts"]
-  n18 --> n42
-  n43["verification-gate.ts"]
-  n18 --> n43
-  n44["version.ts"]
-  n18 --> n44
-  n45[".env.example"]
-  n0 --> n45
-  n46[".gitignore"]
-  n0 --> n46
-  n47["ARCHITECTURE.md"]
-  n0 --> n47
-  n48["LICENSE"]
-  n0 --> n48
-  n49["package-lock.json"]
-  n0 --> n49
-  n50["package.json"]
-  n0 --> n50
-  n51["README.md"]
-  n0 --> n51
-  n52["tsconfig.json"]
-  n0 --> n52
+  n2["docs/"]
+  n0 --> n2
+  n3["IDE-INTEGRATION.md"]
+  n2 --> n3
+  n4["NEXT-SESSION-PROMPT.md"]
+  n2 --> n4
+  n5["hooks/"]
+  n0 --> n5
+  n6["md-policy.py"]
+  n5 --> n6
+  n7["README.md"]
+  n5 --> n7
+  n8["images/"]
+  n0 --> n8
+  n9["Smart Claude Memory v.1.1.2.jpeg"]
+  n8 --> n9
+  n10["scripts/"]
+  n0 --> n10
+  n11["001_schema.sql"]
+  n10 --> n11
+  n12["002_multi_project.sql"]
+  n10 --> n12
+  n13["003_file_hash.sql"]
+  n10 --> n13
+  n14["004_backlog_frozen.sql"]
+  n10 --> n14
+  n15["005_archive_backlog.sql"]
+  n10 --> n15
+  n16["006_security_hardening.sql"]
+  n10 --> n16
+  n17["006_smoke.sql"]
+  n10 --> n17
+  n18["006_verify.sql"]
+  n10 --> n18
+  n19["007_metadata_typed_retrieval.sql"]
+  n10 --> n19
+  n20["008_global_scope.sql"]
+  n10 --> n20
+  n21["009_fix_rpc_dual_scope.sql"]
+  n10 --> n21
+  n22["apply-schema.ts"]
+  n10 --> n22
+  n23["backup-and-remove.ts"]
+  n10 --> n23
+  n24["e2e-incremental-test.ts"]
+  n10 --> n24
+  n25["e2e-isolation-test.ts"]
+  n10 --> n25
+  n26["e2e-test.ts"]
+  n10 --> n26
+  n27["purge-samia-rules.ts"]
+  n10 --> n27
+  n28["smoke-008.ts"]
+  n10 --> n28
+  n29["verify-007.ts"]
+  n10 --> n29
+  n30["verify-008.ts"]
+  n10 --> n30
+  n31["src/"]
+  n0 --> n31
+  n32["tools/"]
+  n31 --> n32
+  n33["backlog.ts"]
+  n32 --> n33
+  n34["batch-freeze-patterns.ts"]
+  n32 --> n34
+  n35["conflict.ts"]
+  n32 --> n35
+  n36["frozen-cache.ts"]
+  n32 --> n36
+  n37["health.ts"]
+  n32 --> n37
+  n38["hygiene.ts"]
+  n32 --> n38
+  n39["image.ts"]
+  n32 --> n39
+  n40["orchestrator.ts"]
+  n32 --> n40
+  n41["policy.ts"]
+  n32 --> n41
+  n42["refactor.ts"]
+  n32 --> n42
+  n43["save.ts"]
+  n32 --> n43
+  n44["search.ts"]
+  n32 --> n44
+  n45["setup.ts"]
+  n32 --> n45
+  n46["summarize.ts"]
+  n32 --> n46
+  n47["sync.ts"]
+  n32 --> n47
+  n48["update-rule.ts"]
+  n32 --> n48
+  n49["verification.ts"]
+  n32 --> n49
+  n50["chunker.ts"]
+  n31 --> n50
+  n51["config.ts"]
+  n31 --> n51
+  n52["index.ts"]
+  n31 --> n52
+  n53["ollama.ts"]
+  n31 --> n53
+  n54["project-detect.ts"]
+  n31 --> n54
+  n55["project.ts"]
+  n31 --> n55
+  n56["supabase.ts"]
+  n31 --> n56
+  n57["verification-gate.ts"]
+  n31 --> n57
+  n58["version.ts"]
+  n31 --> n58
+  n59[".env.example"]
+  n0 --> n59
+  n60[".gitignore"]
+  n0 --> n60
+  n61["ARCHITECTURE.md"]
+  n0 --> n61
+  n62["CLAUDE.md"]
+  n0 --> n62
+  n63["LICENSE"]
+  n0 --> n63
+  n64["package-lock.json"]
+  n0 --> n64
+  n65["package.json"]
+  n0 --> n65
+  n66["project_file_architecture.md"]
+  n0 --> n66
+  n67["README.md"]
+  n0 --> n67
+  n68["tsconfig.json"]
+  n0 --> n68
 ```

@@ -1,7 +1,7 @@
-# Smart Claude Memory — System Architecture (v1.1.3)
+# Smart Claude Memory — System Architecture (v2.0.0-rc1)
 
-> **Stable baseline:** v1.1.3 — Seamless Onboarding & Version SSOT (Smart Claude Memory v1.1.0 Sovereign Orchestrator feature set, sealed with master schematic).
-> This document is the single source of truth for the system's structure and control flow. The marker-bounded Mermaid block in §4 is refreshed automatically by `sync_artefacts` after every worker success; the other diagrams are hand-maintained.
+> **Stable baseline:** v2.0.0-rc1 — bundles Architecture Guard + Automatic Session Handoff, the Typed Retrieval layer (Sovereign Taxonomy on `memory_chunks.metadata`, GIN-indexed metadata filter, strict project_id-first isolation), and the Global Knowledge Vault + Multi-IDE layer (reserved `'GLOBAL'` project_id with dual-scope retrieval, `init_project` Capabilities Header, `docs/IDE-INTEGRATION.md` for Cursor / Windsurf / Cline).
+> This document is the single source of truth for the system's structure and control flow. The marker-bounded Mermaid block in §5 is refreshed automatically by `sync_artefacts` after every worker success; the other diagrams are hand-maintained.
 
 ![Smart Claude Memory v1.1.3 Schematic](images/Smart%20Claude%20Memory%20v.1.1.2.jpeg)
 
@@ -119,7 +119,74 @@ The version string is owned by `package.json`. `src/version.ts` reads it once vi
 
 ---
 
-## 4. File Architecture (auto-generated)
+## 4. Sovereign Taxonomy (v2)
+
+Every chunk in `memory_chunks` carries a `metadata jsonb` column whose contract is the **Sovereign Taxonomy**. Four categories cover everything the orchestrator stores; anything that does not fit is a session log.
+
+| `metadata.type` | Captures | When to use |
+|---|---|---|
+| `DECISION` | Architectural choices + rationale | A trade-off was named and a path was picked |
+| `PATTERN`  | Code standards + Rule 5–8 enforcement | A reusable convention or guardrail surfaced |
+| `ERROR`    | Bug post-mortems + fixes | A defect was observed, root-caused, and resolved |
+| `LOG`      | General session progress | Catch-all narrative useful for replay/audit |
+
+Optional fields: `status` (free-form: `open`, `verified`, `superseded`, …), `context_id` (correlation key for multi-step work — e.g. a backlog id), plus arbitrary pass-through keys. The taxonomy is enforced in TypeScript (`save_memory`'s tool description prompts the agent; the SQL RPC accepts arbitrary jsonb), not via a CHECK constraint, so the contract can evolve without a migration.
+
+### 4.1 Retrieval order — tenancy first, taxonomy second, vector third
+
+Retrieval composes three predicates in fixed order, so cross-project leakage is structurally impossible:
+
+```mermaid
+flowchart LR
+  Q[search_memory call] --> P{project_id =<br/>p_project_id?}
+  P -->|no| X[discard — tenancy guard]
+  P -->|yes| M{metadata @><br/>p_metadata_filter?}
+  M -->|no| X
+  M -->|yes| S{1 - cos_dist >=<br/>min_similarity?}
+  S -->|no| X
+  S -->|yes| O[ORDER BY embedding &lt;=&gt; q<br/>LIMIT match_count]
+  O --> R[ranked rows]
+```
+
+The `metadata @>` predicate is index-driven: migration `007_metadata_typed_retrieval.sql` ships a GIN index using `jsonb_path_ops` (smaller and ~2–3× faster than the default `jsonb_ops` for containment), and the planner bitmap-ANDs it with the existing `(project_id)` btree. Cost on the Supabase Free Tier stays $0; no external metadata service is involved.
+
+### 4.2 Write path
+
+`save_memory` is the canonical write side: it embeds `content` via Ollama, then calls the `upsert_memory_rule(p_project_id, p_file_origin, p_chunk_index, p_content, p_embedding, p_metadata)` RPC. Its tool description prompts the calling agent to set `metadata.type` on every save. The legacy `update_rule` shape continues to work for policy hydration and migrations but is no longer the canonical write path.
+
+```mermaid
+flowchart LR
+  A[agent decides<br/>to save a memory] --> B{categorize<br/>metadata.type}
+  B --> C[save_memory call]
+  C --> D[Ollama embed<br/>768-dim vector]
+  D --> E[upsert_memory_rule RPC<br/>project_id-scoped UNIQUE]
+  E --> F[(memory_chunks<br/>+ GIN metadata)]
+```
+
+### 4.3 Global vs Local Retrieval (v2.0.0-rc1 — migration 008)
+
+A reserved `project_id` of literal `'GLOBAL'` is the **Knowledge Vault**: any chunk written there is visible to every project. Universal patterns, lessons-learned, and Rule 9 entries belong here. Routine project memories stay scoped to the slug derived from `process.cwd()`.
+
+**Write side.** `save_memory({ ..., metadata: { ..., is_global: true } })` overrides the row's `project_id` to `'GLOBAL'` regardless of any explicit `project_id` argument; `is_global: true` is also persisted inside the metadata jsonb for audit. Only set this for cross-project truths — anything project-local should NOT be promoted to `'GLOBAL'`, or the vault loses signal.
+
+**Read side.** `search_memory` is dual-scope by default: `match_memory_chunks(..., p_include_global := true)` evaluates rows where `project_id = p_project_id OR project_id = 'GLOBAL'`, then applies the same metadata + similarity predicates and ORDER BY. Pass `include_global: false` to restrict to the current project. The two scopes share the same GIN(metadata) and btree(project_id) indexes, so the planner bitmap-ANDs cleanly without a separate query.
+
+```mermaid
+flowchart LR
+  Q[search_memory call] --> S{include_global?}
+  S -->|false| L[project_id = current]
+  S -->|true default| D[project_id IN<br/>current, GLOBAL]
+  L --> M{metadata @><br/>p_metadata_filter?}
+  D --> M
+  M -->|yes| F[similarity floor<br/>+ ORDER BY embedding]
+  F --> R[merged ranked rows]
+```
+
+The dual-scope union does NOT relax tenancy: every row remains tagged with its origin `project_id`, so caller code can still distinguish "from this project" vs "from the global vault". `'GLOBAL'` is reserved — `init_project` slugifies the cwd basename, which never produces this literal, so no project can accidentally write to the vault by being in a directory called "GLOBAL"; the only entry is the explicit `is_global: true` flag.
+
+---
+
+## 5. File Architecture (auto-generated)
 
 The Mermaid block below is refreshed by `sync_artefacts` after every worker success. Do not edit content between the markers by hand.
 
@@ -129,117 +196,149 @@ The Mermaid block below is refreshed by `sync_artefacts` after every worker succ
 %% Auto-generated. Do not edit between the MEMORY:ARCH markers.
 flowchart TD
   n0["Claude-Memory/"]
-  n1["hooks/"]
+  n1[".claude/"]
   n0 --> n1
-  n2["md-policy.py"]
-  n1 --> n2
-  n3["README.md"]
-  n1 --> n3
-  n4["images/"]
-  n0 --> n4
-  n5["Smart Claude Memory v.1.1.2.jpeg"]
-  n4 --> n5
-  n6["scripts/"]
-  n0 --> n6
-  n7["001_schema.sql"]
-  n6 --> n7
-  n8["002_multi_project.sql"]
-  n6 --> n8
-  n9["003_file_hash.sql"]
-  n6 --> n9
-  n10["004_backlog_frozen.sql"]
-  n6 --> n10
-  n11["005_archive_backlog.sql"]
-  n6 --> n11
-  n12["apply-schema.ts"]
-  n6 --> n12
-  n13["backup-and-remove.ts"]
-  n6 --> n13
-  n14["e2e-incremental-test.ts"]
-  n6 --> n14
-  n15["e2e-isolation-test.ts"]
-  n6 --> n15
-  n16["e2e-test.ts"]
-  n6 --> n16
-  n17["purge-samia-rules.ts"]
-  n6 --> n17
-  n18["src/"]
-  n0 --> n18
-  n19["tools/"]
-  n18 --> n19
-  n20["backlog.ts"]
-  n19 --> n20
-  n21["batch-freeze-patterns.ts"]
-  n19 --> n21
-  n22["conflict.ts"]
-  n19 --> n22
-  n23["frozen-cache.ts"]
-  n19 --> n23
-  n24["health.ts"]
-  n19 --> n24
-  n25["hygiene.ts"]
-  n19 --> n25
-  n26["image.ts"]
-  n19 --> n26
-  n27["orchestrator.ts"]
-  n19 --> n27
-  n28["policy.ts"]
-  n19 --> n28
-  n29["refactor.ts"]
-  n19 --> n29
-  n30["search.ts"]
-  n19 --> n30
-  n31["setup.ts"]
-  n19 --> n31
-  n32["summarize.ts"]
-  n19 --> n32
-  n33["sync.ts"]
-  n19 --> n33
-  n34["update-rule.ts"]
-  n19 --> n34
-  n35["verification.ts"]
-  n19 --> n35
-  n36["chunker.ts"]
-  n18 --> n36
-  n37["config.ts"]
-  n18 --> n37
-  n38["index.ts"]
-  n18 --> n38
-  n39["ollama.ts"]
-  n18 --> n39
-  n40["project-detect.ts"]
-  n18 --> n40
-  n41["project.ts"]
-  n18 --> n41
-  n42["supabase.ts"]
-  n18 --> n42
-  n43["verification-gate.ts"]
-  n18 --> n43
-  n44["version.ts"]
-  n18 --> n44
-  n45[".env.example"]
-  n0 --> n45
-  n46[".gitignore"]
-  n0 --> n46
-  n47["ARCHITECTURE.md"]
-  n0 --> n47
-  n48["LICENSE"]
-  n0 --> n48
-  n49["package-lock.json"]
-  n0 --> n49
-  n50["package.json"]
-  n0 --> n50
-  n51["README.md"]
-  n0 --> n51
-  n52["tsconfig.json"]
-  n0 --> n52
+  n2["docs/"]
+  n0 --> n2
+  n3["IDE-INTEGRATION.md"]
+  n2 --> n3
+  n4["NEXT-SESSION-PROMPT.md"]
+  n2 --> n4
+  n5["hooks/"]
+  n0 --> n5
+  n6["md-policy.py"]
+  n5 --> n6
+  n7["README.md"]
+  n5 --> n7
+  n8["images/"]
+  n0 --> n8
+  n9["Smart Claude Memory v.1.1.2.jpeg"]
+  n8 --> n9
+  n10["scripts/"]
+  n0 --> n10
+  n11["001_schema.sql"]
+  n10 --> n11
+  n12["002_multi_project.sql"]
+  n10 --> n12
+  n13["003_file_hash.sql"]
+  n10 --> n13
+  n14["004_backlog_frozen.sql"]
+  n10 --> n14
+  n15["005_archive_backlog.sql"]
+  n10 --> n15
+  n16["006_security_hardening.sql"]
+  n10 --> n16
+  n17["006_smoke.sql"]
+  n10 --> n17
+  n18["006_verify.sql"]
+  n10 --> n18
+  n19["007_metadata_typed_retrieval.sql"]
+  n10 --> n19
+  n20["008_global_scope.sql"]
+  n10 --> n20
+  n21["009_fix_rpc_dual_scope.sql"]
+  n10 --> n21
+  n22["apply-schema.ts"]
+  n10 --> n22
+  n23["backup-and-remove.ts"]
+  n10 --> n23
+  n24["e2e-incremental-test.ts"]
+  n10 --> n24
+  n25["e2e-isolation-test.ts"]
+  n10 --> n25
+  n26["e2e-test.ts"]
+  n10 --> n26
+  n27["purge-samia-rules.ts"]
+  n10 --> n27
+  n28["smoke-008.ts"]
+  n10 --> n28
+  n29["verify-007.ts"]
+  n10 --> n29
+  n30["verify-008.ts"]
+  n10 --> n30
+  n31["src/"]
+  n0 --> n31
+  n32["tools/"]
+  n31 --> n32
+  n33["backlog.ts"]
+  n32 --> n33
+  n34["batch-freeze-patterns.ts"]
+  n32 --> n34
+  n35["conflict.ts"]
+  n32 --> n35
+  n36["frozen-cache.ts"]
+  n32 --> n36
+  n37["health.ts"]
+  n32 --> n37
+  n38["hygiene.ts"]
+  n32 --> n38
+  n39["image.ts"]
+  n32 --> n39
+  n40["orchestrator.ts"]
+  n32 --> n40
+  n41["policy.ts"]
+  n32 --> n41
+  n42["refactor.ts"]
+  n32 --> n42
+  n43["save.ts"]
+  n32 --> n43
+  n44["search.ts"]
+  n32 --> n44
+  n45["setup.ts"]
+  n32 --> n45
+  n46["summarize.ts"]
+  n32 --> n46
+  n47["sync.ts"]
+  n32 --> n47
+  n48["update-rule.ts"]
+  n32 --> n48
+  n49["verification.ts"]
+  n32 --> n49
+  n50["chunker.ts"]
+  n31 --> n50
+  n51["config.ts"]
+  n31 --> n51
+  n52["index.ts"]
+  n31 --> n52
+  n53["ollama.ts"]
+  n31 --> n53
+  n54["project-detect.ts"]
+  n31 --> n54
+  n55["project.ts"]
+  n31 --> n55
+  n56["supabase.ts"]
+  n31 --> n56
+  n57["verification-gate.ts"]
+  n31 --> n57
+  n58["version.ts"]
+  n31 --> n58
+  n59[".env.example"]
+  n0 --> n59
+  n60[".gitignore"]
+  n0 --> n60
+  n61["ARCHITECTURE.md"]
+  n0 --> n61
+  n62["CLAUDE.md"]
+  n0 --> n62
+  n63["LICENSE"]
+  n0 --> n63
+  n64["package-lock.json"]
+  n0 --> n64
+  n65["package.json"]
+  n0 --> n65
+  n66["project_file_architecture.md"]
+  n0 --> n66
+  n67["README.md"]
+  n0 --> n67
+  n68["tsconfig.json"]
+  n0 --> n68
 ```
 
 <!-- MEMORY:ARCH:END -->
 
 ---
 
-## 5. Version History
+## 6. Version History
 
 | Version | Summary |
 |---|---|
@@ -250,3 +349,5 @@ flowchart TD
 | **v1.1.0** | **Sovereign Orchestrator — delegation pattern + Autonomous Self-Healing + cross-platform spawn fix + ARCHITECTURE.md consolidation** |
 | **v1.1.2** | **Master Schematic & Sovereign Baseline — definitive visual identity + version-locked production release** |
 | **v1.1.3** | **Seamless Onboarding & Version SSOT — dynamic version SSOT, batch policy hydration, smart-scout init_project** |
+| **v1.1.4** | **Architecture Guard + Automatic Session Handoff — Core 3 audit on init_project, session-end regenerates per-section diagrams, next_session_command_markdown handoff** |
+| **v2.0.0-rc1** | **Release Candidate — bundles Typed Retrieval + Strict Project Isolation (Sovereign Taxonomy on memory_chunks.metadata, GIN(jsonb_path_ops) index, match_memory_chunks p_metadata_filter, save_memory tool with category-prompting description) AND Global Knowledge Vault + Multi-IDE (reserved 'GLOBAL' project_id, dual-scope match_memory_chunks p_include_global, save_memory metadata.is_global, init_project Capabilities Header, docs/IDE-INTEGRATION.md for Cursor/Windsurf/Cline). $0 — pure pgvector + JSONB + same Ollama infra. Originally tagged as a separate milestone but folded back into rc1 — release candidate semantics, not yet a stable major.** |
