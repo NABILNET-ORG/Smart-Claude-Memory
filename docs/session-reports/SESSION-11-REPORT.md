@@ -64,8 +64,11 @@ Sandbox workspace used to verify that `ensureSovereignConstitution()` propagates
 | `SCM-S11-D2` | DECISION | claude-memory | Session boundaries driven by context saturation or explicit user command, never task completion. |
 | `SCM-S11-D3` | DECISION | claude-memory | Sovereign DNA upgraded to v2.1 and ready for ecosystem-wide deployment. |
 | `SCM-S11-D4` | DECISION | claude-memory | Discovery of the ES-module caching bottleneck in MCP server lifecycle. |
+| `SCM-S11-D5` | DECISION | claude-memory | Living Docs Sync is now Step 0 of the Atomic Wrap-Up Ritual (constitutional requirement). |
+| `SCM-S11-D6` | DECISION | claude-memory | All emitters aligned with Sovereign DNA v2.1 (dynamic Session N+1 numbering in `next_session_command_markdown`). |
 | `PATTERN-DECISION-ID-FORMAT` | PATTERN | **GLOBAL** | `SCM-S<N>-D<i>` decision indexing as a universal traceability pattern. |
 | `PATTERN-MCP-RESTART-AFTER-BUILD` | PATTERN | **GLOBAL** | Compiled MCP servers must be restarted after `dist/` rebuild — Node.js ES-module caching gotcha. |
+| `PATTERN-SOVEREIGN-VETTING-GATE` | PATTERN | **GLOBAL** | Mandatory `global_rationale` enforcement (Rule 10) prevents vault pollution and ensures every cross-project memory carries a deterministic universality justification. |
 
 D1 was issued during a brief "stick with v2.0" detour before the user pivoted to the v2.1 hardening plan. It is preserved as historical record (decisions are append-only); D3 is the operative baseline for ecosystem deployment.
 
@@ -113,3 +116,28 @@ D1 was issued during a brief "stick with v2.0" detour before the user pivoted to
 - ✅ All four DECISIONs and two PATTERNs persisted to Supabase via `save_memory` and confirmed by id.
 
 Session 11 closes with the v2.1 baseline shipped, validated end-to-end via the infection test, and the operational lessons captured for the next agent that boots into this codebase.
+
+---
+
+## Continuation Addendum (post initial wrap)
+
+Session 11 continued past the first wrap-commit (`0cf9d8b`) to land three additional sovereign improvements before the final close. Decisions D5, D6 and PATTERN-SOVEREIGN-VETTING-GATE were added in this continuation phase.
+
+### D5 — Living Docs Sync as Step 0 (commit `5def0a3`)
+
+Reframed the Atomic Wrap-Up Ritual from 4 steps to 5. New **Step 0 — Mandatory Living Docs Sync** is inserted before the report: the Agent MUST call `manage_backlog({ action: "session_end" })` FIRST and verify both `readme_sync.updated === true` AND `architecture_sync.updated === true` before proceeding to Step 1. README.md (Recent Progress: 5 most recent archived tasks) and ARCHITECTURE.md (refreshed Mermaid diagrams) are non-negotiable living surfaces — a wrap that leaves them stale ships a lie to the next agent. Mirrored into [src/tools/sovereign-constitution.ts](src/tools/sovereign-constitution.ts) and [CLAUDE.md](CLAUDE.md). The cleanup commit `0ef5998` from Session 11's own first wrap was the motivating example: under the old 4-step ritual the sync ran AFTER the wrap commit, producing a leftover artefact. Step 0 collapses that into one wrap commit going forward.
+
+### D6 — Emitter alignment with the Dynamic Numbering rule (commit `e20309d`)
+
+Closed a doc-vs-runtime drift in [src/tools/backlog.ts](src/tools/backlog.ts). The constitution template promised the next-session line would emit `"# Then read docs/NEXT-SESSION-PROMPT.md for the full Session [N+1] plan."` but the runtime emitter shipped a hardcoded `"session boot prompt."` instead. Added a `nextSessionNumber(workspace)` helper that scans `docs/session-reports/` for `SESSION-<N>-REPORT.md` files, extracts the highest N via regex, and returns N+1 (default 1 if missing). Template literal updated to use the dynamic value. Verified post-restart: this very wrap-up's `manage_backlog({action:"session_end"})` response emitted `"Session 12 plan."` correctly, validating PATTERN-MCP-RESTART-AFTER-BUILD's prediction in real time.
+
+### PATTERN-SOVEREIGN-VETTING-GATE → GLOBAL (id 10170)
+
+Promoted Rule 10's mandatory global_rationale enforcement to a universal architecture pattern. Codifies the principle that any multi-project memory system needs a server-side, string-validated, audit-traceable gate to prevent the global vault from degrading into a project-specific dumping ground. Companion to PATTERN-DECISION-ID-FORMAT (id 10165) and PATTERN-MCP-RESTART-AFTER-BUILD (id 10166); together they form the Sovereign Memory Triad: typed taxonomy + vetting gate + scout proposal.
+
+### Final tally
+
+- **6 DECISIONs** (`SCM-S11-D1`…`SCM-S11-D6`).
+- **3 GLOBAL PATTERNs** (`PATTERN-DECISION-ID-FORMAT`, `PATTERN-MCP-RESTART-AFTER-BUILD`, `PATTERN-SOVEREIGN-VETTING-GATE`).
+- **6 commits** in the Session 11 timeline: `a7eb07d` (v2.1 hardening), `0cf9d8b` (initial wrap), `0ef5998` (artefact-sync cleanup), `5def0a3` (Living Docs Sync mandate), `e20309d` (emitter alignment), and the final wrap commit appended for this continuation addendum.
+- **Step 0 verified live** in this final wrap: `readme_sync.updated === true && architecture_sync.updated === true` — the rule it codifies is now self-enforcing for all future wraps.
