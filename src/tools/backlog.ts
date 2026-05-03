@@ -37,6 +37,29 @@ function pickNextTask(rows: BacklogRow[]): BacklogRow | null {
   )[0];
 }
 
+/**
+ * Detect the highest SESSION-N-REPORT.md in docs/session-reports/ and return
+ * N+1 for the next-session command block. Defaults to 1 if the directory is
+ * missing or empty. Implements the v2.1 Sovereign DNA "Dynamic Numbering" rule.
+ */
+async function nextSessionNumber(workspace: string): Promise<number> {
+  const reportsDir = join(workspace, "docs", "session-reports");
+  try {
+    const entries = await readdir(reportsDir);
+    let maxN = 0;
+    for (const name of entries) {
+      const m = name.match(/^SESSION-(\d+)-REPORT\.md$/i);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (Number.isFinite(n) && n > maxN) maxN = n;
+      }
+    }
+    return maxN + 1;
+  } catch {
+    return 1;
+  }
+}
+
 const PROGRESS_HEADER = "### 🚀 Recent Progress";
 
 // ─── Living architecture sync ────────────────────────────────────────────
@@ -401,13 +424,14 @@ export async function manageBacklog(args: BacklogAction) {
       // its final message. Keep the body minimal (3 lines) so it survives a
       // copy through any terminal. Triple-backticks inside the JSON string
       // are emitted as-is; the agent's renderer interprets them when posted.
+      const nextN = await nextSessionNumber(process.cwd());
       const nextSessionCommandMarkdown = [
         "## 🚀 NEXT SESSION START COMMAND (Copy-Paste)",
         "",
         "```text",
         "init_project()",
         `search_memory({ query: "Active Backlog", project_id: "${projectId}", k: 10 })`,
-        "# Then read docs/NEXT-SESSION-PROMPT.md for the full session boot prompt.",
+        `# Then read docs/NEXT-SESSION-PROMPT.md for the full Session ${nextN} plan.`,
         "```",
       ].join("\n");
 
