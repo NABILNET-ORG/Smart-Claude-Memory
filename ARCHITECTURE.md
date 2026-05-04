@@ -202,148 +202,152 @@ flowchart TD
   n0 --> n1
   n2["docs/"]
   n0 --> n2
-  n3["session-reports/"]
+  n3["assets/"]
   n2 --> n3
-  n4["SESSION-10-REPORT.md"]
+  n4["schematic.png"]
   n3 --> n4
-  n5["SESSION-11-REPORT.md"]
-  n3 --> n5
-  n6["IDE-INTEGRATION.md"]
-  n2 --> n6
-  n7["NEXT-SESSION-PROMPT.md"]
-  n2 --> n7
-  n8["hooks/"]
-  n0 --> n8
-  n9["md-policy.py"]
-  n8 --> n9
-  n10["README.md"]
-  n8 --> n10
-  n11["images/"]
+  n5["session-reports/"]
+  n2 --> n5
+  n6["SESSION-10-REPORT.md"]
+  n5 --> n6
+  n7["SESSION-11-REPORT.md"]
+  n5 --> n7
+  n8["SESSION-12-REPORT.md"]
+  n5 --> n8
+  n9["IDE-INTEGRATION.md"]
+  n2 --> n9
+  n10["NEXT-SESSION-PROMPT.md"]
+  n2 --> n10
+  n11["hooks/"]
   n0 --> n11
-  n12["GPT SMC v2.0-rc1.png"]
+  n12["md-policy.py"]
   n11 --> n12
-  n13["SCM-v2-Master-Schematic.png"]
+  n13["README.md"]
   n11 --> n13
-  n14["scripts/"]
+  n14["images/"]
   n0 --> n14
-  n15["001_schema.sql"]
+  n15["GPT SMC v2.0-rc1.png"]
   n14 --> n15
-  n16["002_multi_project.sql"]
-  n14 --> n16
-  n17["003_file_hash.sql"]
-  n14 --> n17
-  n18["004_backlog_frozen.sql"]
-  n14 --> n18
-  n19["005_archive_backlog.sql"]
-  n14 --> n19
-  n20["006_security_hardening.sql"]
-  n14 --> n20
-  n21["006_smoke.sql"]
-  n14 --> n21
-  n22["006_verify.sql"]
-  n14 --> n22
-  n23["007_metadata_typed_retrieval.sql"]
-  n14 --> n23
-  n24["008_global_scope.sql"]
-  n14 --> n24
-  n25["009_fix_rpc_dual_scope.sql"]
-  n14 --> n25
-  n26["apply-schema.ts"]
-  n14 --> n26
-  n27["backup-and-remove.ts"]
-  n14 --> n27
-  n28["e2e-incremental-test.ts"]
-  n14 --> n28
-  n29["e2e-isolation-test.ts"]
-  n14 --> n29
-  n30["e2e-test.ts"]
-  n14 --> n30
-  n31["purge-samia-rules.ts"]
-  n14 --> n31
-  n32["smoke-008.ts"]
-  n14 --> n32
-  n33["verify-007.ts"]
-  n14 --> n33
-  n34["verify-008.ts"]
-  n14 --> n34
-  n35["src/"]
-  n0 --> n35
-  n36["tools/"]
-  n35 --> n36
-  n37["backlog.ts"]
-  n36 --> n37
-  n38["batch-freeze-patterns.ts"]
-  n36 --> n38
-  n39["conflict.ts"]
-  n36 --> n39
-  n40["frozen-cache.ts"]
-  n36 --> n40
-  n41["health.ts"]
-  n36 --> n41
-  n42["hygiene.ts"]
-  n36 --> n42
-  n43["image.ts"]
-  n36 --> n43
-  n44["orchestrator.ts"]
-  n36 --> n44
-  n45["policy.ts"]
-  n36 --> n45
-  n46["refactor.ts"]
-  n36 --> n46
-  n47["save.ts"]
-  n36 --> n47
-  n48["search.ts"]
-  n36 --> n48
-  n49["setup.ts"]
-  n36 --> n49
-  n50["sovereign-constitution.ts"]
-  n36 --> n50
-  n51["summarize.ts"]
-  n36 --> n51
-  n52["sync.ts"]
-  n36 --> n52
-  n53["update-rule.ts"]
-  n36 --> n53
-  n54["verification.ts"]
-  n36 --> n54
-  n55["chunker.ts"]
-  n35 --> n55
-  n56["config.ts"]
-  n35 --> n56
-  n57["index.ts"]
-  n35 --> n57
-  n58["ollama.ts"]
-  n35 --> n58
-  n59["project-detect.ts"]
-  n35 --> n59
-  n60["project.ts"]
-  n35 --> n60
-  n61["supabase.ts"]
-  n35 --> n61
-  n62["verification-gate.ts"]
-  n35 --> n62
-  n63["version.ts"]
-  n35 --> n63
-  n64[".env.example"]
-  n0 --> n64
-  n65[".gitignore"]
-  n0 --> n65
-  n66["ARCHITECTURE.md"]
+  n16["scripts/"]
+  n0 --> n16
+  n17["001_schema.sql"]
+  n16 --> n17
+  n18["002_multi_project.sql"]
+  n16 --> n18
+  n19["003_file_hash.sql"]
+  n16 --> n19
+  n20["004_backlog_frozen.sql"]
+  n16 --> n20
+  n21["005_archive_backlog.sql"]
+  n16 --> n21
+  n22["006_security_hardening.sql"]
+  n16 --> n22
+  n23["006_smoke.sql"]
+  n16 --> n23
+  n24["006_verify.sql"]
+  n16 --> n24
+  n25["007_metadata_typed_retrieval.sql"]
+  n16 --> n25
+  n26["008_global_scope.sql"]
+  n16 --> n26
+  n27["009_fix_rpc_dual_scope.sql"]
+  n16 --> n27
+  n28["apply-schema.ts"]
+  n16 --> n28
+  n29["backup-and-remove.ts"]
+  n16 --> n29
+  n30["e2e-incremental-test.ts"]
+  n16 --> n30
+  n31["e2e-isolation-test.ts"]
+  n16 --> n31
+  n32["e2e-test.ts"]
+  n16 --> n32
+  n33["purge-samia-rules.ts"]
+  n16 --> n33
+  n34["smoke-008.ts"]
+  n16 --> n34
+  n35["verify-007.ts"]
+  n16 --> n35
+  n36["verify-008.ts"]
+  n16 --> n36
+  n37["src/"]
+  n0 --> n37
+  n38["tools/"]
+  n37 --> n38
+  n39["backlog.ts"]
+  n38 --> n39
+  n40["batch-freeze-patterns.ts"]
+  n38 --> n40
+  n41["conflict.ts"]
+  n38 --> n41
+  n42["frozen-cache.ts"]
+  n38 --> n42
+  n43["health.ts"]
+  n38 --> n43
+  n44["hygiene.ts"]
+  n38 --> n44
+  n45["image.ts"]
+  n38 --> n45
+  n46["orchestrator.ts"]
+  n38 --> n46
+  n47["policy.ts"]
+  n38 --> n47
+  n48["refactor.ts"]
+  n38 --> n48
+  n49["save.ts"]
+  n38 --> n49
+  n50["search.ts"]
+  n38 --> n50
+  n51["setup.ts"]
+  n38 --> n51
+  n52["sovereign-constitution.ts"]
+  n38 --> n52
+  n53["summarize.ts"]
+  n38 --> n53
+  n54["sync.ts"]
+  n38 --> n54
+  n55["update-rule.ts"]
+  n38 --> n55
+  n56["verification.ts"]
+  n38 --> n56
+  n57["chunker.ts"]
+  n37 --> n57
+  n58["config.ts"]
+  n37 --> n58
+  n59["index.ts"]
+  n37 --> n59
+  n60["ollama.ts"]
+  n37 --> n60
+  n61["project-detect.ts"]
+  n37 --> n61
+  n62["project.ts"]
+  n37 --> n62
+  n63["supabase.ts"]
+  n37 --> n63
+  n64["verification-gate.ts"]
+  n37 --> n64
+  n65["version.ts"]
+  n37 --> n65
+  n66[".env.example"]
   n0 --> n66
-  n67["CLAUDE.md"]
+  n67[".gitignore"]
   n0 --> n67
-  n68["LICENSE"]
+  n68["ARCHITECTURE.md"]
   n0 --> n68
-  n69["package-lock.json"]
+  n69["CLAUDE.md"]
   n0 --> n69
-  n70["package.json"]
+  n70["LICENSE"]
   n0 --> n70
-  n71["project_file_architecture.md"]
+  n71["package-lock.json"]
   n0 --> n71
-  n72["README.md"]
+  n72["package.json"]
   n0 --> n72
-  n73["tsconfig.json"]
+  n73["project_file_architecture.md"]
   n0 --> n73
+  n74["README.md"]
+  n0 --> n74
+  n75["tsconfig.json"]
+  n0 --> n75
 ```
 
 <!-- MEMORY:ARCH:END -->

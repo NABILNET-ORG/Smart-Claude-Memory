@@ -81,6 +81,32 @@ The original mis-numbered rows (`SCM-S11-D7`: project-local id `10173`, GLOBAL i
 
 ---
 
+## Continuation 2 — Visual Baseline Upgrade (post `3960876`)
+
+Session 12 continued one more turn after the renumber-fix to ship the v2.1.0 master schematic and standardize the asset path. Wrap committed in `88dcd12`, pushed to `origin/main`.
+
+### Visual baseline standardization (commit `88dcd12`)
+
+The signed v2.1.0 master schematic was promoted from `Downloads/` into a neutral, drift-resistant location:
+
+- **Created:** [docs/assets/schematic.png](../assets/schematic.png) (1,920,192 bytes — copied verbatim from `C:/Users/saeee/Downloads/Signed SMC v21.png`).
+- **Removed:** the orphaned old baseline `images/SCM-v2-Master-Schematic.png` to fully migrate (matching the user's stated intent of "Standardizing to .png and a neutral name to prevent future drift").
+- **ARCHITECTURE.md §1** image ref + caption: `images/SCM-v2-Master-Schematic.png` → `docs/assets/schematic.png`; alt text + caption bumped from `v2.0.0-rc1` → `v2.1.0`.
+- **README.md** hero image: same change as ARCHITECTURE.md.
+- All Core 3 edits applied surgically (zero `Write` calls on CLAUDE.md / README.md / ARCHITECTURE.md).
+
+### Hurdle — MCP disconnect during the upgrade
+
+The `smart-claude-memory` MCP server disconnected mid-session, so `sync_artefacts` and `manage_backlog` were unavailable when commit `88dcd12` shipped. The marker-bounded ARCHITECTURE.md §5 auto-block and the README.md "🗺️ File Architecture" auto-block continued to reference the now-deleted `images/SCM-v2-Master-Schematic.png` until the MCP server reconnected at the start of this final wrap turn — at which point Step 0 (Living Docs Sync via `manage_backlog({action:"session_end"})`) refreshed both auto-blocks to reflect the current `docs/assets/schematic.png` location. The transient gap was surfaced to the user clearly rather than being papered over silently — the constitution's "ships a lie to the next agent and is forbidden" rule was respected.
+
+### Tally — Continuation 2
+
+- **0 new DECISIONs** — visual baseline upgrade is doc/ops work, not an architectural choice.
+- **2 commits** appended to Session 12's timeline: `88dcd12` (visual baseline upgrade), then this final wrap-up commit.
+- **1 new asset** ([docs/assets/schematic.png](../assets/schematic.png)) and **1 orphaned baseline removed** (`images/SCM-v2-Master-Schematic.png`).
+
+---
+
 ## Final Checklist (v2.1 self-audit)
 
 - ✅ `npm run build` returns zero `tsc` errors.
@@ -95,8 +121,9 @@ The original mis-numbered rows (`SCM-S11-D7`: project-local id `10173`, GLOBAL i
 ## Final tally — Session 12
 
 - **1 DECISION** (`SCM-S12-D1`, local + GLOBAL — supersedes the originally mis-numbered `SCM-S11-D7` rows).
-- **3 commits** on `origin/main`: `648902e` (Strategic Context Policy + README sync), `d429fe3` (originally-tagged "Session 11 continuation 2" wrap), and the renumber-fix commit appended for this report.
-- **2 modified Core 3 files** (CLAUDE.md, README.md), **1 modified template** (`src/tools/sovereign-constitution.ts`), **2 session reports touched** (SESSION-11-REPORT.md trimmed, SESSION-12-REPORT.md created).
+- **5 commits** on `origin/main`: `648902e` (Strategic Context Policy + README sync), `d429fe3` (originally-tagged "Session 11 continuation 2" wrap), `3960876` (renumber-fix), `88dcd12` (visual baseline upgrade — Continuation 2), and the final wrap-up commit appended for this report.
+- **Core 3 modified across all rounds**: CLAUDE.md (Strategic Context Policy mirror), README.md (sync edits + hero image ref), ARCHITECTURE.md (§1 schematic ref). **1 modified template** (`src/tools/sovereign-constitution.ts`). **2 session reports touched** (SESSION-11-REPORT.md trimmed, SESSION-12-REPORT.md created + extended).
+- **1 new asset** (`docs/assets/schematic.png`), **1 orphaned baseline removed** (`images/SCM-v2-Master-Schematic.png`).
 - **0 destructive operations** — no force-push, no history rewrite, no `Write` on Core 3.
 
 Session 12 closes. Session 13 boots with `init_project()` + `search_memory({ query: "Active Backlog" })` per the resume prompt below.
