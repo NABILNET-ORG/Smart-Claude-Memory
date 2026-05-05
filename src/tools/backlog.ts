@@ -451,6 +451,7 @@ export async function manageBacklog(args: BacklogAction) {
         "",
         "```text",
         "init_project()",
+        "check_system_health()",
         `search_memory({ query: "Active Backlog", project_id: "${projectId}", k: 10 })`,
         `# Then read docs/NEXT-SESSION-PROMPT.md for the full Session ${nextN} plan.`,
         "```",
