@@ -2,7 +2,7 @@ import { promises as fs } from "fs";
 import * as path from "path";
 import * as os from "os";
 
-export const BLOAT_THRESHOLD = 3000;
+export const BLOAT_THRESHOLD = 10000;
 
 export function estimateTokens(text: string): number {
   if (!text) return 0;
