@@ -55,7 +55,7 @@ Never write to GLOBAL silently — promotion always waits on user confirmation.
 
 0. Ensure `docs/scm-memory/` is added to `.gitignore` BEFORE any archiving takes place to prevent accidental data exfiltration.
 1. Surface the recommendation and ask for explicit YES/NO consent.
-2. On YES: create `docs/scm-memory/`, archive the bloated files there, vectorize via `sync_local_memory({ force: true })`, then regenerate via `ensureSovereignConstitution({ force: true })`.
+2. On YES: create docs/scm-memory/, archive the bloated files there, vectorize via sync_local_memory({ force: true }), then regenerate by running init_project() (which auto-creates the constitution if missing).
 3. On NO: take no action — the recommendation resurfaces next boot.
 
 Archive, never delete — Supabase vectors keep the on-disk source recoverable.
