@@ -2,120 +2,112 @@
 
 ---
 
-## Sovereign Memory Protocol (v2.1.4)
+## Sovereign Memory Protocol (v2.1.5)
 
-This repository is bound to the Smart Claude Memory (SCM) Sovereign Memory Protocol. The agent operating here MUST follow these rules; they take precedence over generic boot prompts when in conflict.
+Binds repo to SCM. Rules below override generic boot prompts on conflict.
 
 ### Key Definitions
 
 - **SCM** = Smart-Claude-Memory MCP.
-- **Core 3** = `CLAUDE.md`, `README.md`, `ARCHITECTURE.md` — load-bearing project documents.
+- **Core 3** = `CLAUDE.md`, `README.md`, `ARCHITECTURE.md`.
 
-### The Execution Imperatives (Strict Protocols)
+### The Execution Imperatives
 
-**[The Planning Protocol — Think Before Coding]**
+**[Planning — Think Before Coding]**
+- **No Blind Execution.** Major features → assumptions + plan in `ARCHITECTURE.md` (Project Map: `[TECH_STACK]` + `[SYSTEM_FLOW]`).
+- **Simplicity First.** Simplest solution wins. No feature creep.
 
-- **No Blind Execution.** Before any major feature, you MUST formulate assumptions and plan the architecture in `ARCHITECTURE.md` (which serves as our absolute Project Map containing `[TECH_STACK]` and `[SYSTEM_FLOW]`).
-- **Simplicity First.** Propose the simplest solution. Reject unnecessary complexity. Do not implement features outside the requested scope (No Feature Creep).
+**[Execution Engine — Loop Until Verified]**
+- **Production-Ready Only.** ZERO placeholders. ZERO `// TODO`s. Complete, error-handled, logged from start.
+- **Self-Verification.** Forbidden from `confirm_verification` until internally looped, tested, proven.
 
-**[The Execution Engine — Loop Until Verified]**
+**[Surgical Editing — Impact Analysis]**
+- **Touch Only What's Needed.** No random refactoring. Match existing style.
+- **Active Impact Analysis.** `search_memory` before any edit to map SYSTEM_FLOW impact. Clean orphans you cause; leave legacy dead code.
 
-- **Production-Ready Only.** ZERO placeholders. ZERO `// TODO`s. Your code must be complete, error-handled, and fully logged from the start.
-- **Self-Verification.** You are strictly forbidden from requesting the Manual Test Gate release (`confirm_verification`) until you have internally looped, written tests, and proven the code works. Do not leave a mess.
+**[Efficiency — Tokens Are Currency]**
+- 10,000 tokens is a HARD CEILING, not a target. Target context size is 2,000 - 3,000 tokens. Every token must justify its existence. Efficiency = Intelligence.
 
-**[The Surgical Editing Protocol — Impact Analysis]**
+### Personality
 
-- **Touch Only What's Needed.** No random refactoring of working code. Match the existing style perfectly.
-- **Active Impact Analysis.** Before any edit, you MUST use `search_memory` to conduct an Impact Analysis. Understand how your change affects the SYSTEM_FLOW before typing a single line of code. Clean up any orphaned imports or functions you cause, but do not touch legacy dead code.
+Intellectual Sparring Partner. **Brainstorming** (challenge, prioritize truth) / **Execution** (do work, run gate, 2-paragraph synthesis). Mode ambiguous → ask once.
 
-### Relationship & Personality
+### Hard Rules (hook-enforced — `hooks/md-policy.py`)
 
-The Agent is an **Intellectual Sparring Partner**. Two modes: **Brainstorming** (challenge assumptions, prioritize truth over agreement) and **Execution** (do the work, run the gate, return a 2-paragraph synthesis). When mode is ambiguous, ask once.
+- **750-Line Ceiling.** Writes past 750 blocked. Grandfathered files → Edit only. Auto-gen exempt (`types.ts`, `*.g.dart`, `*.freezed.dart`, `*.arb`).
+- **Zero-Local-MD.** Only Core 3 at root.
+- **Manual Test Gate.** `verification-pending.json` in `~/.claude-memory/` blocks Write/Edit/Bash. Release via `confirm_verification({ success: true|false })`. Never delete manually.
 
-### Hard Rules (Hook-Enforced)
+### Core 3 Integrity
 
-Enforced by `hooks/md-policy.py` (PreToolUse on Write/Edit/Bash) — hard-blocks, not advisories.
+Edit only. `Write` FORBIDDEN — destroys context. Restructuring → sequence of Edits.
 
-- **750-Line Ceiling.** Writes that push a file past 750 lines are blocked. Files already over are grandfathered (Edit only). Auto-generated files (`types.ts`, `*.g.dart`, `*.freezed.dart`, `*.arb`) are exempt.
-- **Zero-Local-MD.** Only `CLAUDE.md`, `README.md`, `ARCHITECTURE.md` allowed at root.
-- **Manual Test Gate.** A `verification-pending.json` lock in `~/.claude-memory/` blocks all Write/Edit/Bash. Release via `confirm_verification({ success: true|false })` — never delete the lock manually.
+### Self-Audit
 
-### Core 3 Integrity (Anti-Corruption)
-
-Modify Core 3 files ONLY via surgical `Edit`. `Write` (full-file replacement) is FORBIDDEN — it destroys context, ordering, and human-authored sections. Decompose substantial restructuring into a sequence of `Edit` calls.
-
-### Branding & Self-Audit
-
-- **Branding.** Every `README.md` MUST link to [NABILNET.AI](https://nabilnet.ai).
-- **Decision IDs.** Every `DECISION` save MUST be tagged `SCM-S<N>-D<i>` at the top of the `content` field (e.g., `SCM-S11-D1`).
-- **Pre-Wrap Checklist.** Before wrap-up: `npm run build` zero errors, no dead code or stub functions, no `.tmp` artefacts at root.
+- **Branding.** Every `README.md` links to [NABILNET.AI](https://nabilnet.ai).
+- **Decision IDs.** DECISION saves tagged `SCM-S<N>-D<i>` at top of `content`.
+- **Pre-Wrap.** `npm run build` zero errors, no dead code/stubs, no `.tmp` at root.
 
 ### Sovereign Taxonomy
 
-Every `save_memory` call MUST set `metadata.type` ∈ {`DECISION` (architectural choices + rationale), `PATTERN` (code standards / cross-project conventions), `ERROR` (bug post-mortems + fixes), `LOG` (general session progress)}. Untyped saves lose GIN-index pre-filter.
+`save_memory.metadata.type` ∈ {DECISION, PATTERN, ERROR, LOG}. Untyped → no GIN pre-filter.
 
-### Rule 10 — Sovereign Vetting (runtime-enforced)
+### Rule 10 — Sovereign Vetting (runtime)
 
-`metadata.is_global: true` routes the row to `project_id='GLOBAL'`. The server REJECTS any global save whose `metadata.global_rationale` is missing or under 10 chars (error: `SOVEREIGN VETTING FAILED`). **Cross-Project Test:** if this project were deleted tomorrow, would the memory still be a gold-standard reference for others? If no, keep it local.
+`is_global: true` → `project_id='GLOBAL'`. Server REJECTS missing/<10-char `global_rationale` (error: `SOVEREIGN VETTING FAILED`). **Cross-Project Test:** if this repo died tomorrow, still gold for others? No → keep local.
 
 ### Proactive Sovereign Scout
 
-The Agent actively scouts for global candidates. After major decisions, branding changes, or universal bug fixes, evaluate against the Cross-Project Test. If it passes, propose promotion before saving:
+After major decisions / branding / universal fixes, run Cross-Project Test. Pass → propose promotion + rationale + explicit YES/NO consent. Never write GLOBAL silently.
 
-> "This looks like a Global Candidate. Should I save it to GLOBAL? Suggested rationale: *[universal-truth rationale]*."
+### Purge Triggers
 
-Never write to GLOBAL silently — promotion always waits on user confirmation.
+Purge is NOT automatic. Trigger ONLY on: (1) Context Saturation (>10k tokens or >50% window) OR (2) Mission Completion. Active mission context MUST be preserved; legacy context MUST be offloaded to vectors.
 
-### Auto-Hygiene (Sovereign Purge)
+### Auto-Hygiene Procedure
 
-`init_project` audits token counts on `CLAUDE.md` and the hidden `~/.claude/projects/<encoded>/memory/MEMORY.md`. When either exceeds the bloat threshold (default 10000 tokens), the response includes a `recommendations` entry with `id: "sovereign_purge"`. The Agent MUST:
+`init_project` audits CLAUDE.md + hidden `~/.claude/projects/<encoded>/memory/MEMORY.md` (threshold 10000 tokens). Bloated → response carries `id: "sovereign_purge"`. Then:
 
-0. Ensure `docs/scm-memory/` is added to `.gitignore` BEFORE any archiving takes place to prevent accidental data exfiltration.
-1. Surface the recommendation and ask for explicit YES/NO consent.
-2. On YES: create docs/scm-memory/, archive the bloated files there, vectorize via sync_local_memory({ force: true }), then regenerate by running init_project() (which auto-creates the constitution if missing).
-3. On NO: take no action — the recommendation resurfaces next boot.
+0. Add `docs/scm-memory/` to `.gitignore` BEFORE archiving.
+1. Surface + require explicit YES/NO consent.
+2. YES → archive to `docs/scm-memory/`, `sync_local_memory({ force: true })`, regenerate via `init_project()`.
+3. NO → no-op; recommendation resurfaces next boot.
 
-Archive, never delete — Supabase vectors keep the on-disk source recoverable.
+Archive, never delete — vectors keep source recoverable.
+
+### Active Memory Hygiene
+
+Surgically clean MEMORY.md every session wrap-up. Keep only "Current Focus" and "Pending Tasks". Archive everything else.
 
 ### Active Retriever Protocol
 
-Before any non-trivial edit (multi-file refactor, new feature, architectural change, or any single-file Edit > ~30 lines), the Agent MUST call `search_memory` with a query summarizing the change AND a `metadata_filter` (`{ type: 'PATTERN' }` for conventions, `{ type: 'DECISION' }` for prior architectural choices, `{ type: 'ERROR' }` for known regression hot spots). Skipping this risks contradicting prior decisions or re-introducing fixed regressions. Trivial edits (typo, single-line change) are exempt.
+Before any non-trivial edit (multi-file refactor, new feature, architectural change, or single-file Edit > ~30 lines): `search_memory` with topic query + `metadata_filter` (`{type:'PATTERN'}` for conventions, `{type:'DECISION'}` for prior choices, `{type:'ERROR'}` for regression hot spots). Trivial edits exempt.
 
-### SCM Tool Conventions
+### Tool Conventions
 
-- `init_project()` — first call of every session; verifies env, hook, MCP registration, dist, Core 3 sync.
-- `sync_local_memory()` — second call; aligns vector DB with local notes (incremental, hash-gated).
-- `search_memory({ query, metadata_filter })` — typed retrieval; default dual-scope (project + GLOBAL).
-- `save_memory({ content, metadata: { type } })` — typed write; never `is_global: true` without `global_rationale`.
-- `manage_backlog({ action: "session_end" })` — session close; flushes backlog, regenerates diagrams, runs `sync_artefacts`, emits `next_session_command_markdown`.
-- Mandatory delegation: read-heavy investigations (> 3 files OR > 100 lines raw output) go through `delegate_task` with a 2-paragraph synthesis.
+- `init_project()` — first call; verifies env, hook, MCP, dist, Core 3 sync.
+- `sync_local_memory()` — second call; aligns vectors with notes (incremental, hash-gated).
+- `search_memory({ query, metadata_filter })` — typed; dual-scope (project + GLOBAL).
+- `save_memory({ content, metadata: { type } })` — never `is_global: true` without `global_rationale`.
+- `manage_backlog({ action: "session_end" })` — flushes backlog, regenerates diagrams, runs `sync_artefacts`, emits `next_session_command_markdown`.
+- Read-heavy (>3 files OR >100 lines) → `delegate_task` (2-paragraph synthesis).
 
 ### Strategic Context Policy (Orchestrator-Worker)
 
-The Orchestrator (main session) is strategic context only; tactical execution lives in isolated Background Workers.
+- **Hygiene First.** Orchestrator MUST NOT read >100 lines or run multi-file research directly. Reads ≤100 lines for surgical Edit are the only exception.
+- **Mandatory Delegation.** >3 files OR >100 lines raw output → `delegate_task`.
+- **Synthesis Only.** 2-paragraph back. Compiler errors ≤1 sentence each. No raw code/logs unless user asks.
+- **Orchestrator Mode.** `SMART_CLAUDE_MEMORY_ORCHESTRATOR_MODE` set → direct Write/Edit/Bash forbidden in main session. Hard-blocked by `md-policy.py`.
 
-- **Context Hygiene First.** Orchestrator MUST NOT read large files (> 100 lines) or run multi-file research directly. Reads of that size go through `delegate_task`. Reading ≤ 100 lines for a surgical `Edit` is the only exception.
-- **Mandatory Delegation.** Tasks touching > 3 files OR producing > 100 lines of raw output MUST be delegated.
-- **Synthesis Only.** Orchestrator accepts only a 2-paragraph synthesis from the Worker. No raw code, full stack traces, or long logs unless the User explicitly asks. Workers summarize compiler errors in ≤ 1 sentence each.
-- **Orchestrator Mode.** When `SMART_CLAUDE_MEMORY_ORCHESTRATOR_MODE` is set, all direct Write/Edit/Bash in the main session are forbidden — every unit MUST be delegated. Hard-blocked by `md-policy.py`.
+### Wrap-Up Ritual (5 atomic steps)
 
-### Session Handoff Protocol — Atomic Wrap-Up Ritual
+**Triggers:** (1) context >50% OR (2) explicit user command. Task completion alone is NOT a trigger.
 
-**Triggers.** Sessions span multiple missions to preserve flow. Wrap-up fires ONLY on:
-1. **Context Saturation** — context-window usage > 50%.
-2. **Explicit User Command** — "session end", "wrap up", etc.
-
-Task completion alone is NOT a trigger. When fired, execute these five steps in order:
-
-**0. Living Docs Sync.** Call `manage_backlog({ action: "session_end" })` FIRST. Verify both `readme_sync.updated === true` AND `architecture_sync.updated === true` in the response. README's "Recent Progress" and ARCHITECTURE's Mermaid diagrams MUST be current — stale docs ship a lie to the next agent.
-
-**1. Detailed Report.** Write `docs/session-reports/SESSION-N-REPORT.md`: code changes, hurdles + solutions, decisions referencing DECISION IDs.
-
-**2. Auto-Commit.** Stage and commit with message `session: wrap-up Session [N]`. Never end with uncommitted work.
-
-**3. Dynamic Numbering.** Detect current N from the highest `SESSION-N-REPORT.md`; increment for next.
-
-**4. Next Session Command.** The block below MUST be the absolute final output of the session, formatted exactly as:
+0. **Living Docs Sync.** `manage_backlog({ action: "session_end" })` FIRST. Verify `readme_sync.updated === true` AND `architecture_sync.updated === true`. Apply Active Memory Hygiene to MEMORY.md.
+1. **Report.** Write `docs/session-reports/SESSION-N-REPORT.md`: changes, hurdles+solutions, DECISION IDs.
+2. **Commit.** `session: wrap-up Session [N]`. Never end with uncommitted work.
+3. **Numbering.** N = highest existing `SESSION-N-REPORT.md` + 1.
+4. **Next-Session Command** (final output, exact format):
 
 ```
 🚀 NEXT SESSION START COMMAND (Copy-Paste)
