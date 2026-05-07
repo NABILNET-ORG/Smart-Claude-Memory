@@ -3,7 +3,7 @@ import path from "node:path";
 
 export const SOVEREIGN_CONSTITUTION_TEMPLATE = `---
 
-## Sovereign Memory Protocol (v2.1)
+## Sovereign Memory Protocol (v2.1.4)
 
 This repository is bound to the Smart Claude Memory (SCM) Sovereign Memory Protocol. The agent operating here MUST follow these rules; they take precedence over generic boot prompts when in conflict.
 
@@ -11,6 +11,23 @@ This repository is bound to the Smart Claude Memory (SCM) Sovereign Memory Proto
 
 - **SCM** = Smart-Claude-Memory MCP.
 - **Core 3** = \`CLAUDE.md\`, \`README.md\`, \`ARCHITECTURE.md\` — load-bearing project documents.
+
+### The Execution Imperatives (Strict Protocols)
+
+**[The Planning Protocol — Think Before Coding]**
+
+- **No Blind Execution.** Before any major feature, you MUST formulate assumptions and plan the architecture in \`ARCHITECTURE.md\` (which serves as our absolute Project Map containing \`[TECH_STACK]\` and \`[SYSTEM_FLOW]\`).
+- **Simplicity First.** Propose the simplest solution. Reject unnecessary complexity. Do not implement features outside the requested scope (No Feature Creep).
+
+**[The Execution Engine — Loop Until Verified]**
+
+- **Production-Ready Only.** ZERO placeholders. ZERO \`// TODO\`s. Your code must be complete, error-handled, and fully logged from the start.
+- **Self-Verification.** You are strictly forbidden from requesting the Manual Test Gate release (\`confirm_verification\`) until you have internally looped, written tests, and proven the code works. Do not leave a mess.
+
+**[The Surgical Editing Protocol — Impact Analysis]**
+
+- **Touch Only What's Needed.** No random refactoring of working code. Match the existing style perfectly.
+- **Active Impact Analysis.** Before any edit, you MUST use \`search_memory\` to conduct an Impact Analysis. Understand how your change affects the SYSTEM_FLOW before typing a single line of code. Clean up any orphaned imports or functions you cause, but do not touch legacy dead code.
 
 ### Relationship & Personality
 
