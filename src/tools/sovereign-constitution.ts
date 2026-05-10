@@ -338,11 +338,17 @@ export async function upgradeConstitutionBlock(
 
   const fromVersion = extracted.version;
   const toVersion = CANONICAL_CONSTITUTION_VERSION;
-  if (fromVersion === toVersion) {
-    return { action: "already_synced", path: claudeMdPath, version: fromVersion };
+
+  // Hash-first validation. Trusting the version header alone is unsafe: a
+  // half-applied upgrade (correct header bump, body still missing the new
+  // rules) would otherwise masquerade as in-sync, and force:true would be
+  // bypassed by the prior naive version-equality short-circuit.
+  const blockHash = sha256Hex(extracted.block);
+  const targetHash = KNOWN_CANONICAL_HASHES[toVersion];
+  if (targetHash !== undefined && blockHash === targetHash) {
+    return { action: "already_synced", path: claudeMdPath, version: toVersion };
   }
 
-  const blockHash = sha256Hex(extracted.block);
   const expected = KNOWN_CANONICAL_HASHES[fromVersion];
   const isAutoSafe = expected !== undefined && expected === blockHash;
   if (!isAutoSafe && !force) {
@@ -354,7 +360,8 @@ export async function upgradeConstitutionBlock(
       reason: "customized",
       recommendation:
         `Block hash ${blockHash.slice(0, 12)}… does not match the registered canonical hash for ` +
-        `${fromVersion}. The block has local customizations. Re-run with force:true to overwrite.`,
+        `${fromVersion} (claimed) or ${toVersion} (target). The block has local drift. ` +
+        `Re-run with force:true to overwrite with the canonical template.`,
     };
   }
 
