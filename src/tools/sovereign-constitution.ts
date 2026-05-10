@@ -1,4 +1,5 @@
 import { promises as fs } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 
 export const SOVEREIGN_CONSTITUTION_TEMPLATE = `---
@@ -195,4 +196,188 @@ export async function ensureSovereignConstitution(
       error: String(message),
     };
   }
+}
+
+// ─── v2.1.6: Deterministic constitution sync ──────────────────────────────
+// Field testing showed LLM-driven surgical Edits to upgrade CLAUDE.md
+// hallucinate and skip protocol sections. Replace the LLM with code: extract
+// the block by regex anchored on canonical structural markers, hash-compare
+// against a registry of previously-canonical versions, atomic-write when
+// safe (or when forced). Pre/post project-specific content is preserved.
+
+/**
+ * Current canonical constitution version. Bumped in lock-step with the
+ * SOVEREIGN_CONSTITUTION_TEMPLATE body.
+ */
+export const CANONICAL_CONSTITUTION_VERSION = "v2.1.6";
+
+/**
+ * SHA-256 hex digests of the canonical block body for each previously-shipped
+ * version, line endings normalized to LF. A workspace's existing block whose
+ * hash matches the entry for its detected version was unmodified by the user
+ * and is safe for silent auto-upgrade. No match → user has customized the
+ * block; require explicit `force: true` to overwrite.
+ *
+ * Each release SHOULD add an entry here BEFORE shipping a new template body
+ * so downstream auto-upgrades from the prior version stay deterministic.
+ */
+export const KNOWN_CANONICAL_HASHES: Record<string, string> = {
+  "v2.1.5": "4da4a326b4e3b81331038d439d31539157615550615bba51241ea6804931ca85",
+  "v2.1.6": "d35abf40d62c1878c1c49cadeb9bd47e1c849a4c01865ec4e6b4be551ec552fe",
+};
+
+export type UpgradeConstitutionOptions = {
+  dry_run?: boolean;
+  force?: boolean;
+};
+
+export type UpgradeConstitutionResult =
+  | { action: "already_synced"; path: string; version: string }
+  | {
+      action: "synced";
+      path: string;
+      from_version: string;
+      to_version: string;
+      pre_chars: number;
+      post_chars: number;
+      mode: "auto_safe" | "force";
+      dry_run: boolean;
+    }
+  | {
+      action: "drift_detected";
+      path: string;
+      from_version: string;
+      to_version: string;
+      reason: "customized";
+      recommendation: string;
+    }
+  | { action: "block_not_found"; path: string; suggestion: string }
+  | { action: "not_found"; path: string }
+  | { action: "error"; path: string; error: string };
+
+type ExtractedBlock = {
+  block: string;
+  version: string;
+  start: number;
+  end: number;
+  textLf: string;
+};
+
+/**
+ * Deterministic block extraction. Mirrors the strategy validated against
+ * the v2.1.5 and v2.1.6 hashes in KNOWN_CANONICAL_HASHES — any change to
+ * this function MUST be paired with a re-computation of the registry.
+ */
+function extractConstitutionBlock(text: string): ExtractedBlock | null {
+  const textLf = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  // Prepend a sentinel newline so the leading '---' separator at file start
+  // (no preceding newline) is still matchable by a single substring search.
+  const probe = "\n" + textLf;
+  const needle = "\n---\n\n## Sovereign Memory Protocol (v";
+  const i = probe.indexOf(needle);
+  if (i < 0) return null;
+  const start = i; // text[i] is the first char of the leading '---' line
+  const verStart = start + "---\n\n## Sovereign Memory Protocol (v".length;
+  const verEnd = textLf.indexOf(")", verStart);
+  if (verEnd < 0) return null;
+  const version = "v" + textLf.slice(verStart, verEnd);
+  // End anchor — sequenced markers guaranteed by the canonical template.
+  const markerIdx = textLf.indexOf("🚀 NEXT SESSION START COMMAND", start);
+  if (markerIdx < 0) return null;
+  const fenceCloseIdx = textLf.indexOf("```", markerIdx + 1);
+  if (fenceCloseIdx < 0) return null;
+  const trailingSep = textLf.indexOf("\n---\n", fenceCloseIdx);
+  if (trailingSep < 0) return null;
+  const end = trailingSep + "\n---\n".length;
+  return { block: textLf.slice(start, end), version, start, end, textLf };
+}
+
+function sha256Hex(s: string): string {
+  return createHash("sha256").update(s, "utf8").digest("hex");
+}
+
+async function atomicWriteFile(target: string, content: string): Promise<void> {
+  const tmp = `${target}.tmp`;
+  await fs.writeFile(tmp, content, "utf8");
+  await fs.rename(tmp, target);
+}
+
+/**
+ * Deterministic constitution upgrade: locate the protocol block in the
+ * target's CLAUDE.md, hash-compare against KNOWN_CANONICAL_HASHES, and
+ * atomically write the canonical template body when safe (or when forced).
+ * Pre/post project content is preserved byte-for-byte.
+ */
+export async function upgradeConstitutionBlock(
+  workspace: string,
+  options: UpgradeConstitutionOptions = {},
+): Promise<UpgradeConstitutionResult> {
+  const claudeMdPath = path.join(workspace, "CLAUDE.md");
+  const dryRun = options.dry_run === true;
+  const force = options.force === true;
+  let raw: string;
+  try {
+    raw = await fs.readFile(claudeMdPath, "utf8");
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") {
+      return { action: "not_found", path: claudeMdPath };
+    }
+    return { action: "error", path: claudeMdPath, error: (err as Error).message };
+  }
+
+  const extracted = extractConstitutionBlock(raw);
+  if (!extracted) {
+    return {
+      action: "block_not_found",
+      path: claudeMdPath,
+      suggestion:
+        "Run init_project to invoke ensureSovereignConstitution's append path.",
+    };
+  }
+
+  const fromVersion = extracted.version;
+  const toVersion = CANONICAL_CONSTITUTION_VERSION;
+  if (fromVersion === toVersion) {
+    return { action: "already_synced", path: claudeMdPath, version: fromVersion };
+  }
+
+  const blockHash = sha256Hex(extracted.block);
+  const expected = KNOWN_CANONICAL_HASHES[fromVersion];
+  const isAutoSafe = expected !== undefined && expected === blockHash;
+  if (!isAutoSafe && !force) {
+    return {
+      action: "drift_detected",
+      path: claudeMdPath,
+      from_version: fromVersion,
+      to_version: toVersion,
+      reason: "customized",
+      recommendation:
+        `Block hash ${blockHash.slice(0, 12)}… does not match the registered canonical hash for ` +
+        `${fromVersion}. The block has local customizations. Re-run with force:true to overwrite.`,
+    };
+  }
+
+  const pre = extracted.textLf.slice(0, extracted.start);
+  const post = extracted.textLf.slice(extracted.end);
+  const next = pre + SOVEREIGN_CONSTITUTION_TEMPLATE + post;
+
+  if (!dryRun) {
+    try {
+      await atomicWriteFile(claudeMdPath, next);
+    } catch (err) {
+      return { action: "error", path: claudeMdPath, error: (err as Error).message };
+    }
+  }
+
+  return {
+    action: "synced",
+    path: claudeMdPath,
+    from_version: fromVersion,
+    to_version: toVersion,
+    pre_chars: pre.length,
+    post_chars: post.length,
+    mode: isAutoSafe ? "auto_safe" : "force",
+    dry_run: dryRun,
+  };
 }

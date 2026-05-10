@@ -13,7 +13,9 @@ import { currentProjectId, slugify } from "../project.js";
 import { GLOBAL_PROJECT_ID } from "./save.js";
 import {
   ensureSovereignConstitution,
+  upgradeConstitutionBlock,
   type SovereignConstitutionResult,
+  type UpgradeConstitutionResult,
 } from "./sovereign-constitution.js";
 import {
   auditBloat,
@@ -412,6 +414,42 @@ export async function initProject(args: {
     });
   }
 
+  // 6b. Deterministic constitution version sync. Probe in dry-run mode; auto-
+  // apply ONLY when the existing block hash matches a previously-canonical
+  // entry in KNOWN_CANONICAL_HASHES (no user customization). Drift with local
+  // customizations surfaces as a directive — recommend, never overwrite
+  // silently. Eliminates the LLM-edit hallucination path entirely.
+  let constitutionUpgrade: UpgradeConstitutionResult | null = null;
+  if (sovereignConstitution.action !== "error") {
+    constitutionUpgrade = await upgradeConstitutionBlock(ws, { dry_run: true });
+    if (
+      constitutionUpgrade.action === "synced" &&
+      constitutionUpgrade.mode === "auto_safe"
+    ) {
+      constitutionUpgrade = await upgradeConstitutionBlock(ws, { dry_run: false });
+    }
+    if (constitutionUpgrade.action === "synced") {
+      checks.push({
+        name: "constitution:upgrade",
+        status: "ok",
+        detail: `Auto-synced ${constitutionUpgrade.from_version} → ${constitutionUpgrade.to_version} (${constitutionUpgrade.mode}, dry_run=${constitutionUpgrade.dry_run})`,
+      });
+    } else if (constitutionUpgrade.action === "drift_detected") {
+      checks.push({
+        name: "constitution:upgrade",
+        status: "warn",
+        detail: `Drift ${constitutionUpgrade.from_version} → ${constitutionUpgrade.to_version}: ${constitutionUpgrade.reason}`,
+        fix: `Run upgrade_constitution({ force: true }) to overwrite, or keep customizations and ignore.`,
+      });
+    } else if (constitutionUpgrade.action === "error") {
+      checks.push({
+        name: "constitution:upgrade",
+        status: "warn",
+        detail: `Upgrade probe failed: ${constitutionUpgrade.error}`,
+      });
+    }
+  }
+
   // 7. Architecture Guard — Core 3 audit (CLAUDE.md, README.md, ARCHITECTURE.md).
   // The audit is read-only; the agent reacts to `core3.required_action` and to
   // the `directives` array on the result envelope.
@@ -493,6 +531,11 @@ export async function initProject(args: {
   const directives: string[] = [];
   if (core3.required_action === "delegate_audit") {
     directives.push(core3.directive);
+  }
+  if (constitutionUpgrade && constitutionUpgrade.action === "drift_detected") {
+    directives.push(
+      `Constitution drift detected (${constitutionUpgrade.from_version} → ${constitutionUpgrade.to_version}). ${constitutionUpgrade.recommendation}`,
+    );
   }
 
   // v2.0.0-rc1 Capabilities Header — surfaces the protocol contract the agent should

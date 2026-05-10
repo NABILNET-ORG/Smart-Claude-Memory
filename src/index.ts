@@ -18,6 +18,7 @@ import { batchFreezePatterns } from "./tools/batch-freeze-patterns.js";
 import { refactorGuard } from "./tools/refactor.js";
 import { analyzeRegression } from "./tools/verification.js";
 import { delegateTask, syncArtefacts } from "./tools/orchestrator.js";
+import { upgradeConstitutionBlock } from "./tools/sovereign-constitution.js";
 import { ensureSchema, startKeepAlive, writeFrozenPatternsCache } from "./supabase.js";
 import { currentProjectId } from "./project.js";
 import { VERSION } from "./version.js";
@@ -179,6 +180,39 @@ server.tool(
       ),
   },
   async (args) => ({ content: [{ type: "text", text: JSON.stringify(await saveMemory(args), null, 2) }] }),
+);
+
+server.tool(
+  "upgrade_constitution",
+  "Deterministically upgrade the workspace CLAUDE.md to the canonical Sovereign Memory Protocol template via regex-anchored block replacement. Pre/post project-specific content is preserved byte-for-byte. dry_run:true returns the analysis without writing. force:true overwrites even when the existing block has local customizations (block hash differs from the registered canonical hash). Returns a discriminated union with `action`: already_synced | synced | drift_detected | block_not_found | not_found | error.",
+  {
+    workspace: z
+      .string()
+      .optional()
+      .describe(
+        "Absolute path to the workspace whose CLAUDE.md should be upgraded. Defaults to process.cwd().",
+      ),
+    dry_run: z
+      .boolean()
+      .optional()
+      .describe(
+        "When true, return what the upgrade would do without modifying any files.",
+      ),
+    force: z
+      .boolean()
+      .optional()
+      .describe(
+        "When true, overwrite the constitution block even if its hash does not match a registered canonical hash. Use only when you have reviewed the local customizations and intend to discard them.",
+      ),
+  },
+  async (args) => {
+    const ws = args.workspace ?? process.cwd();
+    const result = await upgradeConstitutionBlock(ws, {
+      dry_run: args.dry_run,
+      force: args.force,
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  },
 );
 
 // ─── v0.5.0 tools ─────────────────────────────────────────────────────────
