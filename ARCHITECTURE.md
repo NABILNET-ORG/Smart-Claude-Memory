@@ -254,6 +254,74 @@ flowchart LR
 
 ---
 
+### 4.5 Trajectory Compression — AgentDiet (Agentic OS 2026 — Mission 2, proposed)
+
+**Goal.** Save context tokens *during* a mission, not just at session end. Long ops logs (raw tool output, stack traces, verbose JSON) that accumulate in `memory_chunks` are compressed into ~50-token semantic summaries by a background daemon. The read path **substitutes** the compressed summary into search results in place of the bloated original, so every future `search_memory` call returns dense content.
+
+**Storage decision: dedicated `trajectory_summaries` table — DO NOT mutate `memory_chunks` rows in place.**
+
+Rationale (single decisive reason): `memory_chunks` is an immutable HNSW-indexed vault. Rewriting `content` would dirty vector pages, invalidate the embedding (which was computed on the original text), and violate the Constitution's "Archive, never delete" rule. Compression is a *derived view*: the raw row stays addressable for forensics (and for M3 Sleep Learning to mine reusable patterns), while a separate table holds the dense summary that the read path projects in.
+
+**Proposed schema** (migration `011_trajectory_compaction.sql`, lands in M2):
+
+| Column | Type | Purpose |
+|---|---|---|
+| `id` | `bigserial PK` | Stable handle |
+| `project_id` | `text NOT NULL` | Tenancy; `'GLOBAL'` permitted |
+| `source_chunk_id` | `bigint NOT NULL` | FK → `memory_chunks.id` (raw provenance, ON DELETE CASCADE) |
+| `summary` | `text NOT NULL` | Compressed ~50-token semantic summary |
+| `summary_embedding` | `vector(768)` | Ollama embed of summary (downstream M3 mining) |
+| `source_tokens` | `int NOT NULL` | Pre-compression token estimate |
+| `summary_tokens` | `int NOT NULL` | Post-compression token estimate |
+| `compression_ratio` | `real GENERATED ALWAYS AS (summary_tokens::real / NULLIF(source_tokens,0)) STORED` | Self-audit |
+| `strategy` | `text NOT NULL` | `'heuristic+llm'` (extensible) |
+| `model` | `text NOT NULL` | e.g. `gemma3:e2b` (audit trail) |
+| `created_at` | `timestamptz NOT NULL DEFAULT now()` | When compaction ran |
+
+Indexes: UNIQUE `(project_id, source_chunk_id)`, btree `created_at DESC`, HNSW on `summary_embedding` (cosine). RLS reuses `006_security_hardening` `deny_anon_authenticated` verbatim — service-role only.
+
+**Tool surface (new in M2):**
+
+- `compact_trajectory({ chunk_id?, dry_run? })` — manual entry into the same pipeline the daemon runs. Returns `{ source_tokens, summary_tokens, compression_ratio, summary }`. Used for testing and one-off admin compaction.
+- `get_trajectory_summary({ chunk_id })` — read-back helper. Returns the compressed summary if present, else the raw row. Used by the read-path hint so the agent can drill down when truly needed.
+- The compactor daemon itself is **NOT** an MCP tool. It registers at server boot beside `startKeepAlive()` in `src/supabase.ts`, runs every 10 min, and is `.unref()`'d so it never blocks process exit.
+
+**Workflow — compactor daemon (write path):**
+
+```mermaid
+flowchart LR
+  T[idle tick 10m] --> Q[scan memory_chunks<br/>WHERE octet_length content > 16000<br/>AND NOT EXISTS summary]
+  Q --> C{candidates?}
+  C -->|none| W[wait next tick]
+  C -->|yes| H[heuristic strip:<br/>dedup tool-output,<br/>drop JSON blobs,<br/>truncate stack traces]
+  H --> S{stripped > 1000 tok?}
+  S -->|no| K[skip — already lean]
+  S -->|yes| L[Ollama gemma3:e2b<br/>summarize to 50 tok]
+  L --> E[embed summary<br/>via nomic-embed-text]
+  E --> I[INSERT trajectory_summaries<br/>memory_chunks row UNTOUCHED]
+```
+
+**Workflow — search_memory read path (substitution):**
+
+```mermaid
+flowchart LR
+  Q[search_memory query] --> R[match_memory_chunks RPC]
+  R --> J[LEFT JOIN trajectory_summaries<br/>ON source_chunk_id = chunk.id]
+  J --> P{summary present?}
+  P -->|no| O1[return raw content]
+  P -->|yes| O2[return summary<br/>prefixed with<br/>Compressed trajectory hint]
+  O1 --> X[caller context]
+  O2 --> X
+```
+
+**Read-path invariant.** The HNSW index and `memory_chunks` rows are never mutated by M2. The substitution is a SQL projection: ranking still happens against the original embedding (high recall preserved), but the returned `content` field is swapped to the dense summary when one exists. Raw text is *one tool call away* (`get_trajectory_summary`) but stays out of context unless explicitly requested. A 4 000-token raw trajectory becomes a 50-token line in the agent's window — an 80× context saving per compressed row, compounding over thousands of past sessions.
+
+**Forward links to later missions:**
+- **M3 (Sleep Learning):** the idle daemon mines `trajectory_summaries` JOIN `archive_backlog` for repeated successful sequences and calls `package_skill` autonomously — compressed summaries are dramatically cheaper to scan than raw logs.
+- **M4 (Transactional Workflows):** per-step trajectory summaries become checkpoint deltas, enabling resume-from-step without replaying raw operational logs.
+
+---
+
 ## 5. File Architecture (auto-generated)
 
 The Mermaid block below is refreshed by `sync_artefacts` after every worker success. Do not edit content between the markers by hand.

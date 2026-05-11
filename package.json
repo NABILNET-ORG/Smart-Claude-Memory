@@ -12,7 +12,8 @@
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "schema": "tsx scripts/apply-schema.ts",
-    "backup": "tsx scripts/backup-and-remove.ts"
+    "backup": "tsx scripts/backup-and-remove.ts",
+    "test": "node --import tsx --experimental-test-module-mocks --no-warnings --test tests/trajectory-stripper.test.ts tests/trajectory-summarizer.test.ts tests/trajectory-daemon.test.ts"
   },
   "engines": {
     "node": ">=20"

@@ -2,6 +2,7 @@ import { stat, readFile } from "node:fs/promises";
 import * as path from "node:path";
 import { config } from "../config.js";
 import { supabase, getKeepAliveStatus, FROZEN_CACHE_PATH } from "../supabase.js";
+import { getCompactorStatus } from "../trajectory/daemon.js";
 import { VERSION } from "../version.js";
 
 // Sovereign Orchestrator defaults (mirrored from delegateTask/buildWorkerPrompt).
@@ -38,6 +39,7 @@ type HealthReport = {
     missing: string[];
   };
   keep_alive: ReturnType<typeof getKeepAliveStatus>;
+  trajectory_compactor: ReturnType<typeof getCompactorStatus>;
   policy_enforcement: {
     cache_path: string;
     cache_present: boolean;
@@ -215,6 +217,7 @@ export async function checkSystemHealth(): Promise<HealthReport> {
       missing: ollamaResult.missing,
     },
     keep_alive: getKeepAliveStatus(),
+    trajectory_compactor: getCompactorStatus(),
     policy_enforcement: policy,
     orchestrator,
     summary,

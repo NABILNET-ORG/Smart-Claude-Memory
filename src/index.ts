@@ -25,6 +25,13 @@ import {
   requestSkill,
   requestSkillInputShape,
 } from "./tools/skills.js";
+import {
+  compactTrajectoryHandler,
+  compactTrajectoryInputShape,
+  getTrajectorySummaryHandler,
+  getTrajectorySummaryInputShape,
+} from "./tools/compact.js";
+import { startCompactor } from "./trajectory/daemon.js";
 import { ensureSchema, startKeepAlive, writeFrozenPatternsCache } from "./supabase.js";
 import { currentProjectId } from "./project.js";
 import { VERSION } from "./version.js";
@@ -51,6 +58,12 @@ try {
 // Keep the Supabase HTTPS pool warm so the first call after idle doesn't
 // pay 1-2s of cold-start.
 startKeepAlive();
+
+// Start the trajectory compaction daemon (Agentic OS 2026 / AgentDiet).
+// Idle compactor: every TRAJECTORY_COMPACTOR_INTERVAL_MS, pulls the next
+// batch of bloated memory_chunks rows and compresses them into
+// trajectory_summaries. .unref()'d so it never blocks process exit.
+startCompactor();
 
 // Export the current frozen_features snapshot to the shared cache file so
 // hooks/md-policy.py can read it without hitting Supabase per tool call.
@@ -238,6 +251,30 @@ server.tool(
   requestSkillInputShape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await requestSkill(args), null, 2) }],
+  }),
+);
+
+// ─── Agentic OS 2026 — Trajectory Compaction (SCM-S18-D1) ──────────────────
+
+server.tool(
+  "compact_trajectory",
+  "Compact a bloated memory_chunks row into a ~50-token semantic summary via the heuristic+LLM pipeline. With chunk_id: targets one row. Without chunk_id: runs one daemon tick over the next batch. dry_run skips persistence.",
+  compactTrajectoryInputShape,
+  async (args) => ({
+    content: [
+      { type: "text", text: JSON.stringify(await compactTrajectoryHandler(args), null, 2) },
+    ],
+  }),
+);
+
+server.tool(
+  "get_trajectory_summary",
+  "Read back the compressed summary for a given memory_chunks row id, with original/compressed token counts and compression ratio. Returns {found:false} if no summary exists.",
+  getTrajectorySummaryInputShape,
+  async (args) => ({
+    content: [
+      { type: "text", text: JSON.stringify(await getTrajectorySummaryHandler(args), null, 2) },
+    ],
   }),
 );
 
