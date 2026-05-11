@@ -549,7 +549,7 @@ For inquiries, integrations, or sovereign-grade Claude Code tooling, visit [nabi
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-05-10T07:43:10.111Z for `smart-claude-memory`._
+_Auto-synced at 2026-05-11T06:17:51.891Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
