@@ -1,6 +1,10 @@
-// Sleep Learning tool handlers (Agentic OS 2026 / Mission 3 / SCM-S19-D1).
-// Three handlers — review queue interaction for skill_candidates:
+// Sleep Learning tool handlers (Agentic OS 2026 / Mission 3 / SCM-S19-D1,
+// extended SCM-S22-D1 for M3 Proposer Remediation).
+// Four handlers — review queue interaction for skill_candidates:
 //   * list_skill_candidates    → SELECT from skill_candidates (filterable)
+//   * compose_skill_candidate  → UPDATE proposed_name/proposed_steps (Single
+//                                Brain entry point — Orchestrator-only
+//                                generative step; daemon stubs with NULLs)
 //   * promote_skill_candidate  → promote_candidate_to_skill RPC
 //   * reject_skill_candidate   → UPDATE state='rejected' + notes
 //
@@ -90,6 +94,98 @@ export async function listSkillCandidates(
   }
   const rows = (data ?? []) as unknown as SkillCandidateRow[];
   return { count: rows.length, candidates: rows };
+}
+
+// ─── compose_skill_candidate ──────────────────────────────────────────────
+
+// SCM-S22-D1 (M3 Proposer Remediation). The sleep daemon stubs candidates
+// with NULL proposed_name / proposed_steps / model (Single Brain mandate).
+// The Orchestrator (Claude) calls this tool to inject the generative output
+// — a kebab-case name and an ordered, executable step list — before the
+// candidate is eligible for promote_candidate_to_skill (which enforces
+// NOT-NULL on both fields).
+//
+// M5 crash-catch: when a curriculum_tasks row has linked_candidate_id set,
+// the Orchestrator MUST call compose_skill_candidate FIRST. The atomic
+// apply_curriculum_task RPC calls promote_candidate_to_skill in the same
+// transaction; a NULL name/steps will raise and abort the whole flow.
+
+const PROPOSED_STEP_SHAPE = z.object({
+  step: z.number().int().positive(),
+  action: z.string().min(1),
+});
+
+export const composeSkillCandidateInputShape = {
+  candidate_id: z
+    .number()
+    .int()
+    .positive()
+    .describe("skill_candidates.id of the row to compose. Must currently be in state='mined'."),
+  proposed_name: z
+    .string()
+    .min(1)
+    .max(60)
+    .describe(
+      "Kebab-case skill name, ≤ 60 chars. Becomes agent_skills.name on promotion. " +
+        "Should capture the recurring pattern in a single noun phrase " +
+        "(e.g. 'commit-with-conventional-message', 'apply-bug-fix-with-test').",
+    ),
+  proposed_steps: z
+    .array(PROPOSED_STEP_SHAPE)
+    .min(1)
+    .describe(
+      "Ordered, concrete, executable steps. Each step is {step: int, action: string}. " +
+        "Actions must be verbatim-executable by an agent — no abstractions, no commentary. " +
+        "Derived from the cluster_summaries of the mined candidate.",
+    ),
+};
+
+const composeSkillCandidateSchema = z.object(composeSkillCandidateInputShape);
+export type ComposeSkillCandidateInput = z.infer<typeof composeSkillCandidateSchema>;
+
+export type ComposeSkillCandidateResult = {
+  candidate_id: number;
+  proposed_name: string;
+  step_count: number;
+  state: "mined";
+  updated_at: string;
+};
+
+export async function composeSkillCandidate(
+  args: ComposeSkillCandidateInput,
+): Promise<ComposeSkillCandidateResult> {
+  const parsed = composeSkillCandidateSchema.parse(args);
+
+  const { data, error } = await supabase
+    .from("skill_candidates")
+    .update({
+      proposed_name: parsed.proposed_name,
+      proposed_steps: parsed.proposed_steps,
+      model: "orchestrator:claude",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", parsed.candidate_id)
+    .eq("state", "mined")
+    .select("id, proposed_name, proposed_steps, state, updated_at")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`compose_skill_candidate failed: ${error.message}`);
+  }
+  if (!data) {
+    throw new Error(
+      `compose_skill_candidate: candidate ${parsed.candidate_id} not found OR not in state='mined' ` +
+        "(promoted/rejected candidates are immutable).",
+    );
+  }
+  const steps = Array.isArray(data.proposed_steps) ? data.proposed_steps : [];
+  return {
+    candidate_id: data.id as number,
+    proposed_name: data.proposed_name as string,
+    step_count: steps.length,
+    state: "mined",
+    updated_at: data.updated_at as string,
+  };
 }
 
 // ─── promote_skill_candidate ──────────────────────────────────────────────

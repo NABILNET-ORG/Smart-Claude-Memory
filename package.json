@@ -8,7 +8,8 @@
     "smart-claude-memory-mcp": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "lint:boundaries": "tsx scripts/lint-boundaries.ts",
+    "build": "npm run lint:boundaries && tsc",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "schema": "tsx scripts/apply-schema.ts",

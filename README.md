@@ -191,11 +191,11 @@ search_memory({ query: "auth flow", project_id: "acme-api" })
 2. Pulls the last 5 archived rows via `listArchive`.
 3. Replaces the `### 🚀 Recent Progress
 
+* [DONE] [System Hardening][P1] M3 Proposer Remediation — strip Ollama from src/sleep/proposer.ts; defer naming/step-gen to Orchestrator curation tools (Single Brain mandate) (archived at 2026-05-12).
+* [DONE] [System Hardening][P2] CI-Lint Fence — statically enforce Boundary Invariant #1 (no AI/LLM imports inside src/curriculum/** or src/sleep/**); wire into npm run build (archived at 2026-05-12).
+* [DONE] [System Hardening][P2] Live M5 Curriculum Test — deliberately trigger curriculum_tasks queue item, run full lifecycle (pull→write→checkpoint→verify→auto-promote) (archived at 2026-05-12).
 * [DONE] [Agentic OS 2026] M5 — Autonomous Curriculum: zero-human exploration mode where the agent writes tests/refactors during idle time (archived at 2026-05-12).
 * [DONE] [Agentic OS 2026] M4 — Transactional Workflows: auto-rollback checkpoints for multi-step agent tasks (no restart-from-scratch on failure) (archived at 2026-05-12).
-* [DONE] [Agentic OS 2026] M3 — Sleep Learning (Idle Daemon): background worker that mines archive_backlog for successful task patterns and auto-packages skills (archived at 2026-05-11).
-* [DONE] [Agentic OS 2026] M2 — Trajectory Compression (AgentDiet): background compressor that summarizes long ops logs into dense ~50-token semantic summaries (archived at 2026-05-11).
-* [DONE] [Agentic OS 2026] M1 — JIT Skill Retrieval (Zero-Bloat RAG): implement package_skill + request_skill for semantic-search JIT skill injection without prompt bloat (archived at 2026-05-11).
 ### 🚀 Recent Progress
 
 * [DONE] Fix login form validation (archived at 2026-04-24).
@@ -549,7 +549,7 @@ For inquiries, integrations, or sovereign-grade Claude Code tooling, visit [nabi
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-05-12T11:32:36.856Z for `smart-claude-memory`._
+_Auto-synced at 2026-05-12T13:56:13.652Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
@@ -654,13 +654,13 @@ flowchart TD
   n28 --> n49
   n50["e2e-test.ts"]
   n28 --> n50
-  n51["purge-samia-rules.ts"]
+  n51["lint-boundaries.ts"]
   n28 --> n51
-  n52["smoke-008.ts"]
+  n52["purge-samia-rules.ts"]
   n28 --> n52
-  n53["smoke-010.ts"]
+  n53["smoke-008.ts"]
   n28 --> n53
-  n54["… (4 more)"]
+  n54["… (10 more)"]
   n28 --> n54
   n55["src/"]
   n0 --> n55
@@ -676,112 +676,110 @@ flowchart TD
   n59 --> n60
   n61["miner.ts"]
   n59 --> n61
-  n62["proposer.ts"]
-  n59 --> n62
-  n63["tools/"]
-  n55 --> n63
-  n64["backlog.ts"]
-  n63 --> n64
-  n65["batch-freeze-patterns.ts"]
-  n63 --> n65
-  n66["bloat-audit.ts"]
-  n63 --> n66
-  n67["checkpoint.ts"]
-  n63 --> n67
-  n68["compact.ts"]
-  n63 --> n68
-  n69["conflict.ts"]
-  n63 --> n69
-  n70["curriculum.ts"]
-  n63 --> n70
-  n71["frozen-cache.ts"]
-  n63 --> n71
-  n72["health.ts"]
-  n63 --> n72
-  n73["hygiene.ts"]
-  n63 --> n73
-  n74["image.ts"]
-  n63 --> n74
-  n75["orchestrator.ts"]
-  n63 --> n75
-  n76["policy.ts"]
-  n63 --> n76
-  n77["refactor.ts"]
-  n63 --> n77
-  n78["save.ts"]
-  n63 --> n78
-  n79["search.ts"]
-  n63 --> n79
-  n80["setup.ts"]
-  n63 --> n80
-  n81["skills.ts"]
-  n63 --> n81
-  n82["sleep.ts"]
-  n63 --> n82
-  n83["sovereign-constitution.ts"]
-  n63 --> n83
-  n84["summarize.ts"]
-  n63 --> n84
-  n85["sync.ts"]
-  n63 --> n85
-  n86["verification.ts"]
-  n63 --> n86
-  n87["trajectory/"]
-  n55 --> n87
-  n88["daemon.ts"]
-  n87 --> n88
-  n89["stripper.ts"]
-  n87 --> n89
-  n90["summarizer.ts"]
-  n87 --> n90
-  n91["transactions/"]
-  n55 --> n91
-  n92["checkpoint.ts"]
-  n91 --> n92
-  n93["chunker.ts"]
+  n62["tools/"]
+  n55 --> n62
+  n63["backlog.ts"]
+  n62 --> n63
+  n64["batch-freeze-patterns.ts"]
+  n62 --> n64
+  n65["bloat-audit.ts"]
+  n62 --> n65
+  n66["checkpoint.ts"]
+  n62 --> n66
+  n67["compact.ts"]
+  n62 --> n67
+  n68["conflict.ts"]
+  n62 --> n68
+  n69["curriculum.ts"]
+  n62 --> n69
+  n70["frozen-cache.ts"]
+  n62 --> n70
+  n71["health.ts"]
+  n62 --> n71
+  n72["hygiene.ts"]
+  n62 --> n72
+  n73["image.ts"]
+  n62 --> n73
+  n74["orchestrator.ts"]
+  n62 --> n74
+  n75["policy.ts"]
+  n62 --> n75
+  n76["refactor.ts"]
+  n62 --> n76
+  n77["save.ts"]
+  n62 --> n77
+  n78["search.ts"]
+  n62 --> n78
+  n79["setup.ts"]
+  n62 --> n79
+  n80["skills.ts"]
+  n62 --> n80
+  n81["sleep.ts"]
+  n62 --> n81
+  n82["sovereign-constitution.ts"]
+  n62 --> n82
+  n83["summarize.ts"]
+  n62 --> n83
+  n84["sync.ts"]
+  n62 --> n84
+  n85["verification.ts"]
+  n62 --> n85
+  n86["trajectory/"]
+  n55 --> n86
+  n87["daemon.ts"]
+  n86 --> n87
+  n88["stripper.ts"]
+  n86 --> n88
+  n89["summarizer.ts"]
+  n86 --> n89
+  n90["transactions/"]
+  n55 --> n90
+  n91["checkpoint.ts"]
+  n90 --> n91
+  n92["chunker.ts"]
+  n55 --> n92
+  n93["config.ts"]
   n55 --> n93
-  n94["config.ts"]
+  n94["index.ts"]
   n55 --> n94
-  n95["index.ts"]
+  n95["ollama.ts"]
   n55 --> n95
-  n96["ollama.ts"]
+  n96["project-detect.ts"]
   n55 --> n96
-  n97["project-detect.ts"]
+  n97["project.ts"]
   n55 --> n97
-  n98["project.ts"]
+  n98["supabase.ts"]
   n55 --> n98
-  n99["supabase.ts"]
+  n99["verification-gate.ts"]
   n55 --> n99
-  n100["verification-gate.ts"]
+  n100["version.ts"]
   n55 --> n100
-  n101["version.ts"]
-  n55 --> n101
-  n102["tests/"]
-  n0 --> n102
-  n103["trajectory-daemon.test.ts"]
-  n102 --> n103
-  n104["trajectory-stripper.test.ts"]
-  n102 --> n104
-  n105["trajectory-summarizer.test.ts"]
-  n102 --> n105
-  n106[".env.example"]
+  n101["tests/"]
+  n0 --> n101
+  n102["trajectory-daemon.test.ts"]
+  n101 --> n102
+  n103["trajectory-stripper.test.ts"]
+  n101 --> n103
+  n104["trajectory-summarizer.test.ts"]
+  n101 --> n104
+  n105[".env.example"]
+  n0 --> n105
+  n106[".gitignore"]
   n0 --> n106
-  n107[".gitignore"]
+  n107["ARCHITECTURE.md"]
   n0 --> n107
-  n108["ARCHITECTURE.md"]
+  n108["CLAUDE.md"]
   n0 --> n108
-  n109["CLAUDE.md"]
+  n109["LICENSE"]
   n0 --> n109
-  n110["LICENSE"]
+  n110["package-lock.json"]
   n0 --> n110
-  n111["package-lock.json"]
+  n111["package.json"]
   n0 --> n111
-  n112["package.json"]
+  n112["project_file_architecture.md"]
   n0 --> n112
-  n113["project_file_architecture.md"]
+  n113["README.md"]
   n0 --> n113
-  n114["README.md"]
+  n114["tsconfig.json"]
   n0 --> n114
-  n115["tsconfig.json"]
-  n0 --> n115
 ```

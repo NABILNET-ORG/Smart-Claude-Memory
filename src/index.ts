@@ -34,6 +34,8 @@ import {
 import {
   listSkillCandidates,
   listSkillCandidatesInputShape,
+  composeSkillCandidate,
+  composeSkillCandidateInputShape,
   promoteSkillCandidate,
   promoteSkillCandidateInputShape,
   rejectSkillCandidate,
@@ -333,8 +335,17 @@ server.tool(
 );
 
 server.tool(
+  "compose_skill_candidate",
+  "SINGLE BRAIN entry point. SCM-S22-D1 (M3 Proposer Remediation): the sleep daemon now stubs candidates with NULL proposed_name / proposed_steps / model — generative naming and step extraction are exclusively Orchestrator (Claude) work. UPDATEs skill_candidates SET proposed_name, proposed_steps WHERE id=? AND state='mined' (promoted/rejected rows are immutable). model is stamped 'orchestrator:claude' for audit. MUST be called before promote_skill_candidate — promote_candidate_to_skill RPC enforces NOT-NULL and will raise otherwise. ⚠ M5 CRASH-CATCH: when a curriculum_tasks row has linked_candidate_id set, the Orchestrator MUST call compose_skill_candidate BEFORE apply_curriculum_task — the atomic apply RPC fires promote_candidate_to_skill in the same transaction, so a null name/steps aborts the whole flow.",
+  composeSkillCandidateInputShape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await composeSkillCandidate(args), null, 2) }],
+  }),
+);
+
+server.tool(
   "promote_skill_candidate",
-  "Mint a mined skill_candidate into agent_skills via the promote_candidate_to_skill RPC. Identity (project_id, proposed_name) reuses package_skill's upsert path: re-promoting the same name bumps the version while preserving telemetry. Description defaults to proposed_name + a digest of proposed_steps; pass description to override. trigger_keywords mirrors package_skill for the M1 detector.",
+  "Mint a composed skill_candidate into agent_skills via the promote_candidate_to_skill RPC. Identity (project_id, proposed_name) reuses package_skill's upsert path: re-promoting the same name bumps the version while preserving telemetry. Description defaults to proposed_name + a digest of proposed_steps; pass description to override. trigger_keywords mirrors package_skill for the M1 detector. PRECONDITION: candidate must have non-null proposed_name AND proposed_steps — call compose_skill_candidate first (the daemon stubs with NULLs under the Single Brain mandate).",
   promoteSkillCandidateInputShape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await promoteSkillCandidate(args), null, 2) }],
@@ -418,7 +429,7 @@ server.tool(
 
 server.tool(
   "apply_curriculum_task",
-  "Verification-gated finalize. On success=true: asserts (1) ~/.claude-memory/verification-pending.json is CLEAR (override with bypass_verification_gate:true for tooling); (2) checkpoint_id references a workflow_checkpoints row with status='committed' in the same project. Atomic SQL transaction flips the task to 'verified' AND — if linked_candidate_id was set by the scanner (stale-candidate signal) — fires promote_candidate_to_skill in the same transaction. This is the ONLY M5-permitted auto-promote call site. On success=false: flips status='rejected'; no checkpoint or gate validation required.",
+  "Verification-gated finalize. On success=true: asserts (1) ~/.claude-memory/verification-pending.json is CLEAR (override with bypass_verification_gate:true for tooling); (2) checkpoint_id references a workflow_checkpoints row with status='committed' in the same project. Atomic SQL transaction flips the task to 'verified' AND — if linked_candidate_id was set by the scanner (stale-candidate signal) — fires promote_candidate_to_skill in the same transaction. This is the ONLY M5-permitted auto-promote call site. On success=false: flips status='rejected'; no checkpoint or gate validation required. ⚠ M5 CRASH-CATCH (SCM-S22-D1): if linked_candidate_id is set on the task, the Orchestrator MUST call compose_skill_candidate(candidate_id, proposed_name, proposed_steps) BEFORE invoking this tool. The sleep daemon now stubs candidates with NULL proposed_name/proposed_steps (Single Brain mandate); promote_candidate_to_skill enforces NOT-NULL inside the same SQL transaction and will abort the entire apply otherwise.",
   applyCurriculumTaskInputShape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await applyCurriculumTask(args), null, 2) }],
