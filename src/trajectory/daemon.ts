@@ -7,6 +7,7 @@
 
 import { embed } from "../ollama.js";
 import { supabase } from "../supabase.js";
+import { emit } from "../telemetry/emit.js";
 import { stripTrajectory } from "./stripper.js";
 import { summarizeTrajectory } from "./summarizer.js";
 
@@ -193,6 +194,8 @@ export async function runCompactionOnce(
 async function tick(): Promise<void> {
   if (state.running) return;
   state.running = true;
+  const __tStart = Date.now();
+  void emit({ daemon: "trajectory_compactor", event: "run_started" });
   try {
     const result = await runCompactionOnce({ limit: state.batch });
     state.lastRunCompacted = result.compacted;
@@ -200,13 +203,35 @@ async function tick(): Promise<void> {
     state.lastRunErrored = result.errored;
     state.lastRunDurationMs = result.duration_ms;
     state.lastRunAt = new Date().toISOString();
-  } catch {
+    void emit({
+      daemon: "trajectory_compactor",
+      event: "run_ended",
+      payload: {
+        compacted: state.lastRunCompacted,
+        skipped: state.lastRunSkipped,
+        errored: state.lastRunErrored,
+        duration_ms: Date.now() - __tStart,
+      },
+    });
+  } catch (err) {
     state.lastRunErrored++;
     state.lastRunAt = new Date().toISOString();
+    void emit({
+      daemon: "trajectory_compactor",
+      event: "run_errored",
+      payload: {
+        error_message: err instanceof Error ? err.message : String(err),
+        duration_ms: Date.now() - __tStart,
+      },
+    });
   } finally {
     state.running = false;
   }
 }
+
+// Public alias for one-shot invocation (smoke tests, Task 6 dashboard probe).
+// Keeps the internal `tick` name stable while exposing a stable external name.
+export const runTrajectoryCompactorOnce = tick;
 
 export function startCompactor(): void {
   if (state.timer) return;
