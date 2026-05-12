@@ -141,6 +141,87 @@ async function fetchSuccessArchiveByChunk(
   return out;
 }
 
+// ─── M4 rollback signals (Mission 4 / Phase B integration) ────────────────
+//
+// The miner reads workflow_checkpoints directly — there is NO separate
+// signals table. For each candidate cluster, every member's
+// trajectory_summaries.source_chunk_id is checked against rolledback
+// checkpoints; matches become negative-vote evidence that decrements the
+// cluster's success_count (floor 0). This keeps a high-frequency cluster
+// from getting promoted just because the same buggy pattern was rerun.
+//
+// Behaviour is strictly additive: when no rolledback rows exist (the M4
+// table is absent on legacy deploys, or there are simply no rollbacks),
+// the returned Map is empty and the mining loop is byte-identical to the
+// pre-M4 path.
+
+export type RollbackSignal = {
+  rollback_count: number;
+  last_rollback: string | null;
+};
+
+type RollbackRow = {
+  source_chunk_id: number | null;
+  status: string;
+  created_at: string;
+};
+
+/**
+ * Returns a Map<source_chunk_id, { rollback_count, last_rollback }> over
+ * the supplied chunk ids. Pure read — no writes. Tolerant of missing
+ * table: a query error (e.g. workflow_checkpoints not deployed yet) is
+ * swallowed and an empty Map is returned, so legacy deploys keep mining.
+ */
+export async function fetchRollbackSignalsByChunk(
+  projectId: string,
+  chunkIds: number[],
+): Promise<Map<number, RollbackSignal>> {
+  const out = new Map<number, RollbackSignal>();
+  if (!projectId || typeof projectId !== "string") return out;
+  const ids = Array.from(
+    new Set(chunkIds.filter((n): n is number => typeof n === "number" && Number.isFinite(n))),
+  );
+  if (ids.length === 0) return out;
+
+  // PostgREST's IN-form via .in() — equivalent to ANY($2) at the SQL layer,
+  // but stays inside the supabase-js builder so we don't need a custom RPC.
+  // Note: we group in TS (no GROUP BY across .in()) — N here is bounded by
+  // the per-tick batch (default 10, max 50), so O(N) aggregation is fine.
+  const { data, error } = await supabase
+    .from("workflow_checkpoints")
+    .select("source_chunk_id, status, created_at")
+    .eq("project_id", projectId)
+    .eq("status", "rolledback")
+    .in("source_chunk_id", ids);
+
+  if (error) {
+    // workflow_checkpoints not deployed yet (M4 migration 014 not applied)
+    // → return empty signal map. Mining proceeds without rollback penalty.
+    return out;
+  }
+
+  for (const row of (data ?? []) as RollbackRow[]) {
+    const sid = row.source_chunk_id;
+    if (typeof sid !== "number") continue;
+    const cur = out.get(sid);
+    if (cur) {
+      cur.rollback_count += 1;
+      if (
+        typeof row.created_at === "string" &&
+        (cur.last_rollback === null || row.created_at > cur.last_rollback)
+      ) {
+        cur.last_rollback = row.created_at;
+      }
+    } else {
+      out.set(sid, {
+        rollback_count: 1,
+        last_rollback: typeof row.created_at === "string" ? row.created_at : null,
+      });
+    }
+  }
+  return out;
+}
+
 // ─── clustering ───────────────────────────────────────────────────────────
 
 type Cluster = {
@@ -232,6 +313,22 @@ export async function mineClusters(
 
   const clusters = clusterSummaries(successful);
 
+  // M4 / Phase B: load rollback signals for every source_chunk_id that
+  // participates in any cluster ≥ minFreq. We scan ONCE per tick (single
+  // round-trip over .in()) so the per-cluster overhead is O(1). When the
+  // workflow_checkpoints table is not yet deployed (legacy boot path),
+  // fetchRollbackSignalsByChunk returns an empty Map and mining is
+  // byte-identical to the pre-M4 behavior.
+  const candidateChunkIds: number[] = [];
+  for (const c of clusters) {
+    if (c.summaries.length < minFreq) continue;
+    for (const s of c.summaries) candidateChunkIds.push(s.source_chunk_id);
+  }
+  const rollbackByChunk = await fetchRollbackSignalsByChunk(
+    opts.projectId,
+    candidateChunkIds,
+  );
+
   const stubs: CandidateStub[] = [];
   for (const c of clusters) {
     if (c.summaries.length < minFreq) continue;
@@ -259,15 +356,35 @@ export async function mineClusters(
       .slice()
       .sort((a, b) => b.summary.length - a.summary.length)[0].summary;
 
+    // Sum rollback votes across every chunk that fed this cluster.
+    // Floor at 0 so success_count never goes negative — that would crash
+    // the upsert_skill_candidate CHECK constraint (success_count ≥ 0).
+    let clusterRollbackCount = 0;
+    for (const s of c.summaries) {
+      const sig = rollbackByChunk.get(s.source_chunk_id);
+      if (sig) clusterRollbackCount += sig.rollback_count;
+    }
+    const baseSuccessCount = c.summaries.length;
+    const adjustedSuccessCount = Math.max(
+      0,
+      baseSuccessCount - clusterRollbackCount,
+    );
+    if (clusterRollbackCount > 0) {
+      console.log(
+        `[M3] applied ${clusterRollbackCount} rollback signals to cluster hash=${c.hash} (success_count ${baseSuccessCount} -> ${adjustedSuccessCount})`,
+      );
+    }
+
     stubs.push({
       project_id: opts.projectId,
       pattern_hash: c.hash,
       source_summary_ids: summaryIds,
       source_backlog_ids: backlogIds,
       frequency: c.summaries.length,
-      // Every contributing summary is from a 'status=success' archive row
-      // (INNER JOIN guard above), so success_count = frequency by construction.
-      success_count: c.summaries.length,
+      // INNER JOIN guarantees every contributing summary maps to a success
+      // archive row, so the pre-M4 floor is c.summaries.length. M4 rollback
+      // signals decrement this floor by clusterRollbackCount (≥ 0).
+      success_count: adjustedSuccessCount,
       candidate_embedding: centroid,
       representative_summary: representative,
       cluster_summaries: c.summaries.map((s) => s.summary),

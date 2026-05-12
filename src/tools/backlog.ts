@@ -8,6 +8,7 @@ import {
   updateBacklog,
   archiveDoneBacklog,
   listArchive,
+  supabase,
   type BacklogRow,
   type BacklogStatus,
 } from "../supabase.js";
@@ -28,7 +29,8 @@ export type BacklogAction =
     }
   | { action: "prune_done"; project_id?: string }
   | { action: "archive_list"; project_id?: string; limit?: number }
-  | { action: "session_end"; project_id?: string };
+  | { action: "session_end"; project_id?: string }
+  | { action: "backfill_archive_chunks"; project_id?: string; dry_run?: boolean };
 
 /** Lowest priority number wins (1 = highest). Ties broken by oldest-first. */
 function pickNextTask(rows: BacklogRow[]): BacklogRow | null {
@@ -339,6 +341,190 @@ async function injectMermaidIntoReadme(readmeText: string, projectId: string): P
   }
 }
 
+// ─── M4 Phase B: backfill archive_backlog.chunk_id for legacy rows ───────
+//
+// Rationale: migration 014 patched archive_done_backlog so future archives
+// auto-populate chunk_id from the terminal-committed checkpoint. Rows
+// archived BEFORE 014 was applied have chunk_id = NULL even when they
+// carry metadata.checkpoint_root_id (copied verbatim from cloud_backlog).
+// This helper closes that gap.
+//
+// dry_run=true is a PURE READ — no UPDATEs hit the database. The caller
+// runs dry_run first to inspect the impact, then re-runs with dry_run=false
+// to commit. This is user-gated; the helper itself does not auto-execute.
+
+export type BackfillArchiveChunksResult = {
+  scanned: number;
+  backfilled: number;
+  ambiguous: number;
+  skipped: number;
+  dry_run: boolean;
+};
+
+type ArchiveBacklogRowForBackfill = {
+  id: number;
+  project_id: string;
+  title: string;
+  archived_at: string;
+  metadata: Record<string, unknown> | null;
+};
+
+type MemoryChunkMatch = {
+  id: number;
+  created_at: string;
+};
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+export async function backfillArchiveChunkIds(
+  projectId: string,
+  dryRun: boolean,
+): Promise<BackfillArchiveChunksResult> {
+  if (!projectId || typeof projectId !== "string") {
+    throw new Error("backfillArchiveChunkIds: projectId is required");
+  }
+
+  // 1. Scan archive_backlog rows missing chunk_id.
+  const { data: rows, error: scanErr } = await supabase
+    .from("archive_backlog")
+    .select("id, project_id, title, archived_at, metadata")
+    .eq("project_id", projectId)
+    .is("chunk_id", null)
+    .order("archived_at", { ascending: false });
+
+  if (scanErr) {
+    throw new Error(
+      `[M4] backfillArchiveChunkIds: archive_backlog scan failed: ${scanErr.message}`,
+    );
+  }
+
+  const candidates = (rows ?? []) as ArchiveBacklogRowForBackfill[];
+  let backfilled = 0;
+  let ambiguous = 0;
+  let skipped = 0;
+
+  for (const row of candidates) {
+    const metadata =
+      row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+        ? row.metadata
+        : null;
+    const checkpointRootRaw =
+      metadata && typeof metadata.checkpoint_root_id !== "undefined"
+        ? metadata.checkpoint_root_id
+        : null;
+    let resolvedChunkId: number | null = null;
+
+    // 2a. Primary path: metadata.checkpoint_root_id → terminal_committed_checkpoint.
+    if (checkpointRootRaw !== null) {
+      const rootId =
+        typeof checkpointRootRaw === "number"
+          ? checkpointRootRaw
+          : typeof checkpointRootRaw === "string" && /^\d+$/.test(checkpointRootRaw)
+            ? Number.parseInt(checkpointRootRaw, 10)
+            : null;
+      if (rootId !== null && rootId > 0) {
+        const { data: rpcData, error: rpcErr } = await supabase.rpc(
+          "terminal_committed_checkpoint",
+          {
+            p_project_id: projectId,
+            p_skill_id: null,
+            p_root_id: rootId,
+          },
+        );
+        if (rpcErr) {
+          // RPC missing (014 not applied) → skip this row, fall through to
+          // heuristic which will also fail and bump skipped.
+          console.log(
+            `[M4] backfill: terminal_committed_checkpoint RPC failed for archive_backlog.id=${row.id}: ${rpcErr.message}`,
+          );
+        } else {
+          const scid =
+            typeof rpcData === "number"
+              ? rpcData
+              : Array.isArray(rpcData) && rpcData.length > 0 && typeof rpcData[0] === "number"
+                ? (rpcData[0] as number)
+                : null;
+          if (scid !== null) resolvedChunkId = scid;
+        }
+      }
+    }
+
+    // 2b. Heuristic fallback: search memory_chunks by title + ±1d window.
+    if (resolvedChunkId === null) {
+      const archivedAt = Date.parse(row.archived_at);
+      if (!Number.isFinite(archivedAt)) {
+        skipped++;
+        continue;
+      }
+      const windowStart = new Date(archivedAt - ONE_DAY_MS).toISOString();
+      const windowEnd = new Date(archivedAt + ONE_DAY_MS).toISOString();
+      // Defensive title trim — long titles can blow the textSearch path.
+      const titleHint = row.title.slice(0, 120);
+      const { data: chunkMatches, error: chunkErr } = await supabase
+        .from("memory_chunks")
+        .select("id, created_at")
+        .eq("project_id", projectId)
+        .gte("created_at", windowStart)
+        .lte("created_at", windowEnd)
+        .ilike("content", `%${titleHint}%`)
+        .limit(3);
+      if (chunkErr) {
+        skipped++;
+        continue;
+      }
+      const matches = (chunkMatches ?? []) as MemoryChunkMatch[];
+      if (matches.length === 0) {
+        skipped++;
+        continue;
+      }
+      if (matches.length > 1) {
+        ambiguous++;
+        continue;
+      }
+      resolvedChunkId = matches[0].id;
+    }
+
+    if (resolvedChunkId === null) {
+      skipped++;
+      continue;
+    }
+
+    if (dryRun) {
+      console.log(
+        `[M4] backfill (dry_run): would set archive_backlog.id=${row.id}.chunk_id=${resolvedChunkId}`,
+      );
+      backfilled++;
+      continue;
+    }
+
+    const { error: updErr } = await supabase
+      .from("archive_backlog")
+      .update({ chunk_id: resolvedChunkId })
+      .eq("id", row.id)
+      .eq("project_id", projectId)
+      .is("chunk_id", null); // double-guard against races
+    if (updErr) {
+      console.log(
+        `[M4] backfill: update failed for archive_backlog.id=${row.id}: ${updErr.message}`,
+      );
+      skipped++;
+      continue;
+    }
+    console.log(
+      `[M4] backfill: set archive_backlog.id=${row.id}.chunk_id=${resolvedChunkId}`,
+    );
+    backfilled++;
+  }
+
+  return {
+    scanned: candidates.length,
+    backfilled,
+    ambiguous,
+    skipped,
+    dry_run: dryRun,
+  };
+}
+
 export async function manageBacklog(args: BacklogAction) {
   const projectId = "project_id" in args && args.project_id ? args.project_id : currentProjectId;
 
@@ -378,6 +564,19 @@ export async function manageBacklog(args: BacklogAction) {
         project_id: projectId,
         count: rows.length,
         archived_tasks: rows,
+      };
+    }
+
+    case "backfill_archive_chunks": {
+      // M4 Phase B: populate archive_backlog.chunk_id for legacy rows whose
+      // cloud_backlog carried metadata.checkpoint_root_id but predate the
+      // 014 archive_done_backlog patch. dry_run=true is a pure read.
+      const dryRun = args.dry_run ?? false;
+      const result = await backfillArchiveChunkIds(projectId, dryRun);
+      return {
+        action: "backfill_archive_chunks",
+        project_id: projectId,
+        ...result,
       };
     }
 

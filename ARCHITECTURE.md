@@ -399,6 +399,50 @@ flowchart LR
 
 ---
 
+## M4 — Transactional Workflows (Checkpoints)
+
+**Mission.** Multi-step agent tasks can fail mid-flight. M4 makes them transactional: each step is wrapped in a checkpoint that either commits (pinning a `trajectory_summaries` delta as its replay anchor) or rolls back (restoring the agent to the last committed step and feeding the failure to the M3 miner). NO snapshot engine — restoration replays `trajectory_summaries` by `source_chunk_id`.
+
+**Unified invariant.** `checkpoint = { skill_boundary (M1), trajectory_delta (M2), learner_signal (M3) }`. M4 ships the binding, not a parallel snapshot engine. There is NO separate `workflow_steps` table — `trajectory_summaries` IS the per-step delta store. The checkpoint row carries the pointer (`source_chunk_id`), not the payload.
+
+**Lifecycle (write + restore path):**
+
+```mermaid
+flowchart LR
+  RS[request_skill - M1] --> OR[openCheckpoint - root<br/>step_index=0, parent=NULL]
+  OR --> EX[step execution<br/>tool calls + writes]
+  EX --> AD[AgentDiet daemon - M2<br/>writes trajectory_summaries row]
+  AD --> OUT{step outcome?}
+  OUT -- success --> CC[commitCheckpoint<br/>pin source_chunk_id]
+  OUT -- failure --> RB[rollbackCheckpoint<br/>reason logged]
+  RB --> WALK[terminal_committed_checkpoint<br/>walk parent chain]
+  WALK --> RESTORE[restoreFrom<br/>get_trajectory_summary]
+  RESTORE --> SIG[emit M3 learner_signal<br/>miner picks up failure context]
+  CC --> NEXT[openCheckpoint - next step<br/>parent_id = prior committed]
+  NEXT --> EX
+  CC --> END[session_end ritual]
+  END --> LIFT[archive_done_backlog<br/>lifts terminal-committed chunk_id<br/>into archive_backlog.chunk_id]
+  LIFT --> S19[closes S19 backfill gap]
+```
+
+**New components (Phase A lays foundation; B exposes surface):**
+
+| Component | Kind | Phase | Purpose |
+|---|---|---|---|
+| `workflow_checkpoints` | table | A | Per-step checkpoint rows: skill_id (M1), parent_id chain, source_chunk_id (M2 anchor), status. |
+| `terminal_committed_checkpoint` | SQL fn | A | Recursive CTE: returns source_chunk_id of deepest committed descendant. Shared by restore + archive. |
+| `archive_done_backlog` (patched) | SQL fn | A | CREATE OR REPLACE inside 014 (NEVER edits 005). Now populates `archive_backlog.chunk_id` from the terminal committed checkpoint per task. Legacy non-skill rows still archive with NULL chunk_id. |
+| `openCheckpoint` / `commitCheckpoint` / `rollbackCheckpoint` / `listCheckpoints` / `restoreFrom` | TS service | A | Pure functions in `src/transactions/checkpoint.ts`. No MCP surface yet. |
+| `checkpoint_create` / `_commit` / `_rollback` / `_list` | MCP tools | B | 4 deferred-Phase-B tools that wrap the service for orchestrator use. |
+| `backfillArchiveChunkIds()` | one-shot | B | Closes S19: populates `archive_backlog.chunk_id` for the legacy 7523-row corpus where a checkpoint chain exists. |
+| miner rollback-signal extension | M3 patch | B | Extends `src/sleep/miner.ts` to LEFT JOIN `workflow_checkpoints` so rolled-back checkpoint chains feed negative-example mining. |
+
+**Restoration contract.** `restoreFrom(checkpointId)` does NOT replay a snapshot — it looks up the checkpoint's `source_chunk_id` and calls the existing M2 `get_trajectory_summary` RPC. The returned ~50-token compressed summary IS the replay surface: the agent re-reads its own compressed delta, not a heavy state blob. This is the M4 / M2 binding made concrete.
+
+**S19 closure.** Migration 013 added `archive_backlog.chunk_id` (nullable, FK SET NULL) but left it unpopulated. 014's `archive_done_backlog` patch is the first writer: when a task's archived row links to a checkpoint chain, the deepest committed checkpoint's `source_chunk_id` is lifted in. Forward compat: tasks with no checkpoint chain (legacy, non-skill-mediated) still archive with `chunk_id = NULL`. The Phase-B `backfillArchiveChunkIds()` one-shot retro-fills historic rows.
+
+---
+
 ## 5. File Architecture (auto-generated)
 
 The Mermaid block below is refreshed by `sync_artefacts` after every worker success. Do not edit content between the markers by hand.

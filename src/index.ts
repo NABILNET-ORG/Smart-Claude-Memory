@@ -39,6 +39,16 @@ import {
   rejectSkillCandidate,
   rejectSkillCandidateInputShape,
 } from "./tools/sleep.js";
+import {
+  checkpointCreateHandler,
+  checkpointCreateInputShape,
+  checkpointCommitHandler,
+  checkpointCommitInputShape,
+  checkpointRollbackHandler,
+  checkpointRollbackInputShape,
+  checkpointListHandler,
+  checkpointListInputShape,
+} from "./tools/checkpoint.js";
 import { startCompactor } from "./trajectory/daemon.js";
 import { startSleepLearner } from "./sleep/daemon.js";
 import { ensureSchema, startKeepAlive, writeFrozenPatternsCache } from "./supabase.js";
@@ -322,19 +332,74 @@ server.tool(
   }),
 );
 
+// ─── Agentic OS 2026 — Transactional Workflow Checkpoints (M4 / Phase B) ───
+
+server.tool(
+  "checkpoint_create",
+  "Open a workflow_checkpoints row (status='open') anchoring one step of a (possibly skill-mediated) multi-step task. parent_id null = root step; pass parent_id to chain steps into an ordered tree whose terminal-committed source_chunk_id is the replay anchor. When parent_id is null AND backlog_task_id is supplied, the new checkpoint's id is stamped into cloud_backlog.metadata.checkpoint_root_id so archive_done_backlog can populate archive_backlog.chunk_id at archive time — completing the M2→M3 provenance link.",
+  checkpointCreateInputShape,
+  async (args) => ({
+    content: [
+      { type: "text", text: JSON.stringify(await checkpointCreateHandler(args), null, 2) },
+    ],
+  }),
+);
+
+server.tool(
+  "checkpoint_commit",
+  "Mark a checkpoint committed and pin source_chunk_id (the memory_chunks row whose trajectory_summaries entry is the replay anchor). Only rows currently in status='open' transition — re-committing is a no-op error so concurrent paths fail fast. The pinned chunk powers restoreFrom() / get_trajectory_summary replay surfaces and feeds archive_backlog.chunk_id at archive time.",
+  checkpointCommitInputShape,
+  async (args) => ({
+    content: [
+      { type: "text", text: JSON.stringify(await checkpointCommitHandler(args), null, 2) },
+    ],
+  }),
+);
+
+server.tool(
+  "checkpoint_rollback",
+  "Mark a checkpoint rolledback with a non-empty reason. Walks the parent_id chain via terminal_committed_checkpoint to surface the deepest committed ancestor's source_chunk_id (the replay anchor) so the caller can drive restoreFrom() at the application layer. Rolledback rows are read directly by the M3 Sleep Learner miner as negative signals — no separate signals table is needed.",
+  checkpointRollbackInputShape,
+  async (args) => ({
+    content: [
+      { type: "text", text: JSON.stringify(await checkpointRollbackHandler(args), null, 2) },
+    ],
+  }),
+);
+
+server.tool(
+  "checkpoint_list",
+  "List workflow_checkpoints rows scoped to the current project_id (or an explicit override). Optional filters: status ∈ {open, committed, rolledback}, skill_id (agent_skills.id). Ordered by id DESC (newest first). Default limit 20, max 100. Use to inspect mid-flight workflows, audit rollback churn, or surface terminal-committed anchors for ad-hoc replay.",
+  checkpointListInputShape,
+  async (args) => ({
+    content: [
+      { type: "text", text: JSON.stringify(await checkpointListHandler(args), null, 2) },
+    ],
+  }),
+);
+
 // ─── v0.5.0 tools ─────────────────────────────────────────────────────────
 
 server.tool(
   "manage_backlog",
-  "Atomic task backlog in Supabase. Natural-language triggers: 'add to backlog' / 'add task' → add; 'what's on my backlog' / 'list tasks' → list; 'mark done' / 'mark complete' → update with status:done; 'clean up done' → prune_done (archives, not deletes); 'show archive' / 'what did I finish' → archive_list; 'end session' / 'wrap up' / 'handover' → session_end (writes Progress Report to README.md, writes file-tree to project_file_architecture.md, and returns a 1-line resume prompt). Done tasks are ARCHIVED (moved to archive_backlog), never deleted.",
+  "Atomic task backlog in Supabase. Natural-language triggers: 'add to backlog' / 'add task' → add; 'what's on my backlog' / 'list tasks' → list; 'mark done' / 'mark complete' → update with status:done; 'clean up done' → prune_done (archives, not deletes); 'show archive' / 'what did I finish' → archive_list; 'end session' / 'wrap up' / 'handover' → session_end (writes Progress Report to README.md, writes file-tree to project_file_architecture.md, and returns a 1-line resume prompt); 'backfill chunks' / 'backfill archive' → backfill_archive_chunks (M4 Phase B: populate archive_backlog.chunk_id for legacy rows via terminal_committed_checkpoint or a title+timestamp heuristic; dry_run=true is a pure read). Done tasks are ARCHIVED (moved to archive_backlog), never deleted.",
   {
-    action: z.enum(["add", "list", "update", "prune_done", "archive_list", "session_end"]),
+    action: z.enum([
+      "add",
+      "list",
+      "update",
+      "prune_done",
+      "archive_list",
+      "session_end",
+      "backfill_archive_chunks",
+    ]),
     title: z.string().optional(),
     id: z.number().int().positive().optional(),
     status: z.enum(["todo", "in_progress", "blocked", "done"]).optional(),
     priority: z.number().int().min(1).max(5).optional(),
     notes: z.string().optional(),
     limit: z.number().int().positive().max(200).optional(),
+    dry_run: z.boolean().optional(),
     project_id: projectIdSchema,
   },
   async (args) => ({
