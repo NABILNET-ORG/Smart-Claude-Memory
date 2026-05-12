@@ -443,6 +443,104 @@ flowchart LR
 
 ---
 
+### 4.7 Autonomous Curriculum — Single-Brain Closure (Agentic OS 2026 — Mission 5)
+
+**Goal.** Close the Agentic OS 2026 loop. A deterministic, idle-time daemon enqueues curriculum candidates (test gaps, refactor hotspots, stale skill candidates) as **raw stubs only**. The Orchestrator (Claude) is the **sole executor**: pulls a stub, writes code under an M4 checkpoint, clears the verification gate, and on success atomically promotes any linked M3 candidate into the M1 skill vault. This is the only mission permitted to flip `SLEEP_LEARNER_AUTO_PROMOTE=true`, and only inside its own atomic verification path.
+
+**Three architectural mandates (immutable — hook-asserted in Phase A):**
+
+1. **Single Brain Boundary.** The curriculum daemon contains **zero generative AI**. Pure heuristics + `nomic-embed-text` embeddings only. No `gemma`, no Ollama generation, no LLM HTTP client. The daemon classifies and queues; it never proposes code, prose, or skill content. *Forward note:* M3's `src/sleep/proposer.ts` (`gemma4:e2b → JSON{name,steps}`) predates this mandate. M5 does NOT touch it, but a future remediation pass should strip M3's generative step in favor of M5's orchestrator-driven naming. Tracked separately; out of M5 scope.
+2. **Orchestrator as Sole Executor.** All code/test/refactor writing flows through the main Claude session. The daemon writes only to `curriculum_tasks` rows. Claude pulls via `pull_curriculum_task`, opens an M4 checkpoint, performs the write, raises `verification-pending.json` on any `main`-touching change, and commits **only after** `confirm_verification({success:true})` clears. The daemon never invokes Write/Edit/Bash.
+3. **M5 Auto-Promote Privilege.** M5 is the **only** caller permitted to set `SLEEP_LEARNER_AUTO_PROMOTE=true`, and only inside the atomic `apply_curriculum_task` SQL transaction. When a verified curriculum task carries a `linked_candidate_id`, the same transaction calls `promote_candidate_to_skill` (M3's existing RPC verbatim) and resets the flag back to `false` on commit. There is **no daemon-flag flip**, no global toggle, no out-of-band promotion path. The verified curriculum cycle **is** the curation.
+
+**Schema (`scripts/015_curriculum_tasks.sql`):**
+
+| Column | Type | Purpose |
+|---|---|---|
+| id | bigserial PK | |
+| project_id | text NOT NULL | Tenancy (GLOBAL forbidden) |
+| kind | text CHECK IN ('test_gap','refactor','rollback_repro') | Heuristic class |
+| target_path | text NOT NULL | File/module the task targets |
+| rationale | text NOT NULL | Deterministic signal description (e.g. `coverage 12%, 340 LOC`) |
+| signal_source | jsonb NOT NULL | `{coverage_pct?, rollback_count?, candidate_id?, embedding_centroid?}` |
+| linked_candidate_id | bigint NULL | FK → `skill_candidates(id)` — triggers M3 auto-promote on verify |
+| linked_checkpoint_id | bigint NULL | FK → `workflow_checkpoints(id)` (M4 binding) |
+| status | text CHECK IN ('queued','pulled','attempted','verified','rejected','expired') | |
+| pulled_by_session_id | text NULL | Audit |
+| pulled_at, verified_at, expires_at | timestamptz NULL | TTL window |
+| created_at, updated_at | timestamptz NOT NULL | |
+
+Indexes: `UNIQUE(project_id, target_path, kind) WHERE status='queued'` (idempotency); `btree(status, created_at)`; `btree(linked_candidate_id) WHERE linked_candidate_id IS NOT NULL`.
+RLS: `deny_anon_authenticated` (mirrors `006_security_hardening`). Service-role only.
+RPCs (`SECURITY DEFINER`, `search_path` including `'extensions'` — ERROR-11507 lesson):
+- `enqueue_curriculum_task(...)` — idempotent insert keyed by the UNIQUE WHERE-clause.
+- `pull_next_curriculum_task(p_project_id, p_kind?)` — `FOR UPDATE SKIP LOCKED`, sets `status='pulled'` + stamps `pulled_by_session_id`, `pulled_at`. Atomic claim.
+- `apply_curriculum_task(p_task_id, p_success, p_checkpoint_id)` — atomic: asserts `workflow_checkpoints.status='committed'`; on success sets `status='verified'`, `linked_checkpoint_id`, `verified_at`; **if** `linked_candidate_id IS NOT NULL`, calls `promote_candidate_to_skill(linked_candidate_id)` in the same transaction. On failure sets `status='rejected'`. Single SQL transaction — no out-of-band promotion possible.
+
+**Daemon (`src/curriculum/` — deterministic queuer, NO LLM):**
+
+- `scanner.ts` — three pure signal sources:
+  - **`test_gap`**: reads `coverage-summary.json` if present; enqueues files with `pct < 50 AND lines > 100`.
+  - **`rollback_repro`**: SQL aggregate over `workflow_checkpoints WHERE status='rolled_back'` grouped by `target_path` (derived from skill `steps[].path`). Threshold ≥ 3 rollbacks in 30 days.
+  - **`refactor` (stale-candidate)**: `skill_candidates WHERE state='mined' AND frequency ≥ 5 AND age(created_at) > 7 days`. Sets `linked_candidate_id` — this is the M3 auto-promote trigger.
+- `daemon.ts` — `startCurriculumDaemon()` / `stopCurriculumDaemon()` / `getCurriculumStatus()` / `runScanOnce()`. Mirrors `sleep_learner` shape: `setInterval(...).unref()`, module-level re-entrancy guard, per-source try/catch. **No `proposer.ts`. No Ollama client import.**
+
+Env knobs: `CURRICULUM_INTERVAL_MS=3600000` (1 h, staggered +30 min after sleep_learner), `CURRICULUM_BATCH=10`, `CURRICULUM_MIN_FREQ=3`, `CURRICULUM_TTL_DAYS=14`. Deliberately omitted: any `_MODEL` / `_PROPOSER` / `_GENERATE` knob — there is no generation surface to configure.
+
+Health: `check_system_health` gains a `curriculum_scanner` block — `{ enabled, interval_ms, last_run_at, last_run_queued, last_run_skipped, last_run_errored, last_run_duration_ms, queued_total, verified_total, rejected_total, auto_promotions_total }`.
+
+**Tool surface (`src/tools/curriculum.ts` — 4 MCP tools):**
+
+- `list_curriculum_tasks({ status?, kind?, limit? })` — queue inspection.
+- `pull_curriculum_task({ kind?, project_id? })` — orchestrator's entry point; atomic claim. Returns one task row or NULL.
+- `apply_curriculum_task({ task_id, success, checkpoint_id })` — wraps the apply RPC; **server-side** asserts the checkpoint is committed and the verification gate cleared (server reads `~/.claude-memory/verification-pending.json` absence as the precondition). On success + linked candidate, M3 auto-promote fires inside the same transaction.
+- `reject_curriculum_task({ task_id, reason })` — manual veto (status→rejected).
+
+**Lifecycle — [SYSTEM_FLOW] (daemon = queue ; orchestrator = brain):**
+
+```mermaid
+flowchart LR
+  COV[coverage-summary.json] --> SCAN[scanner.ts<br/>PURE heuristics<br/>NO LLM]
+  RB[(workflow_checkpoints<br/>status=rolled_back)] --> SCAN
+  SC[(skill_candidates<br/>mined freq≥5 age≥7d)] --> SCAN
+  SCAN --> ENQ[enqueue_curriculum_task]
+  ENQ --> CT[(curriculum_tasks<br/>status=queued)]
+
+  ORCH[Orchestrator - Claude<br/>SOLE EXECUTOR] --> PULL[pull_curriculum_task<br/>FOR UPDATE SKIP LOCKED]
+  PULL --> CT
+  PULL --> OCP[openCheckpoint - M4]
+  OCP --> WRITE[Claude writes test/refactor]
+  WRITE --> GATE[raise_verification_gate<br/>verification-pending.json]
+  GATE --> CV{confirm_verification<br/>success?}
+  CV -- yes --> VT[apply_curriculum_task<br/>atomic SQL tx]
+  VT --> CC[commitCheckpoint - M4]
+  CC --> AP{linked_candidate_id<br/>set?}
+  AP -- yes --> FLIP[promote_candidate_to_skill<br/>AUTO_PROMOTE=true<br/>scoped to this tx only]
+  FLIP --> SK[(agent_skills - M1)]
+  AP -- no --> DONE[task verified]
+  CV -- no --> RBK[rollbackCheckpoint - M4]
+  RBK --> SIG[emit M3 learner_signal]
+  SIG --> SC
+```
+
+**[TECH_STACK] additions:** `scripts/015_curriculum_tasks.sql`, `src/curriculum/{scanner,daemon}.ts`, `src/tools/curriculum.ts`, `src/healthcheck.ts` (+ block), `src/index.ts` (+ daemon start in MCP boot). No new runtime dependency. Reuses: `pg` (existing pool), `setInterval/unref` (M3 pattern), M4 checkpoint service, M3 `promote_candidate_to_skill` RPC.
+
+**Boundary invariants (CI-enforceable):**
+
+1. Static lint asserts `src/curriculum/**` contains no import from `ollama`, `@anthropic-ai/*`, `openai`, or any fetch call to an `*/generate`/`*/chat`/`*/completions` URL. The daemon is a deterministic queuer; the lint fence is its proof.
+2. The auto-promote path lives **only** inside `verify_curriculum_task` SQL — there is no TS-level promotion shortcut. Auditable by `grep promote_candidate_to_skill src/` returning **one** call site (the SQL RPC) plus M3's manual `promote_skill_candidate` tool (unchanged).
+3. `pull_curriculum_task` MUST use `FOR UPDATE SKIP LOCKED` to prevent two concurrent sessions claiming the same task. PG advisory locks are not used — the row-level claim suffices and is testable in the smoke run.
+
+**Closure of Agentic OS 2026.** M5 is the convergence point:
+- **M1 ← M5**: verified curriculum tasks become new `agent_skills` rows via M3's RPC.
+- **M2 ← M5**: every M5 attempt produces a `trajectory_summaries` row through the existing AgentDiet daemon.
+- **M3 ← M5**: M5 is the **only** legitimate trigger for auto-promote. M3's curator invariant remains intact for all other paths.
+- **M4 ← M5**: every M5 attempt is wrapped in `workflow_checkpoints`; rollback emits the M3 learner signal, closing the negative-example loop.
+
+The daemon proposes nothing. The Orchestrator executes everything. The promotion is atomic. The loop is closed.
+
+---
+
 ## 5. File Architecture (auto-generated)
 
 The Mermaid block below is refreshed by `sync_artefacts` after every worker success. Do not edit content between the markers by hand.
@@ -491,188 +589,198 @@ flowchart TD
   n8 --> n18
   n19["SESSION-20-REPORT.md"]
   n8 --> n19
-  n20["IDE-INTEGRATION.md"]
-  n2 --> n20
-  n21["NEXT-SESSION-PROMPT.md"]
+  n20["SESSION-21-REPORT.md"]
+  n8 --> n20
+  n21["IDE-INTEGRATION.md"]
   n2 --> n21
-  n22["hooks/"]
-  n0 --> n22
-  n23["md-policy.py"]
-  n22 --> n23
-  n24["README.md"]
-  n22 --> n24
-  n25["images/"]
-  n0 --> n25
-  n26["GPT SMC v2.0-rc1.png"]
-  n25 --> n26
-  n27["scripts/"]
-  n0 --> n27
-  n28["_m4_backfill_runner.mjs"]
-  n27 --> n28
-  n29["_m4_postcheck.mjs"]
-  n27 --> n29
-  n30["001_schema.sql"]
-  n27 --> n30
-  n31["002_multi_project.sql"]
-  n27 --> n31
-  n32["003_file_hash.sql"]
-  n27 --> n32
-  n33["004_backlog_frozen.sql"]
-  n27 --> n33
-  n34["005_archive_backlog.sql"]
-  n27 --> n34
-  n35["006_security_hardening.sql"]
-  n27 --> n35
-  n36["006_smoke.sql"]
-  n27 --> n36
-  n37["006_verify.sql"]
-  n27 --> n37
-  n38["007_metadata_typed_retrieval.sql"]
-  n27 --> n38
-  n39["008_global_scope.sql"]
-  n27 --> n39
-  n40["009_fix_rpc_dual_scope.sql"]
-  n27 --> n40
-  n41["010_agent_skills.sql"]
-  n27 --> n41
-  n42["011_trajectory_compaction.sql"]
-  n27 --> n42
-  n43["012_sleep_learning.sql"]
-  n27 --> n43
-  n44["013_archive_backlog_chunk_link.sql"]
-  n27 --> n44
-  n45["014_workflow_checkpoints.sql"]
-  n27 --> n45
+  n22["NEXT-SESSION-PROMPT.md"]
+  n2 --> n22
+  n23["hooks/"]
+  n0 --> n23
+  n24["md-policy.py"]
+  n23 --> n24
+  n25["README.md"]
+  n23 --> n25
+  n26["images/"]
+  n0 --> n26
+  n27["GPT SMC v2.0-rc1.png"]
+  n26 --> n27
+  n28["scripts/"]
+  n0 --> n28
+  n29["001_schema.sql"]
+  n28 --> n29
+  n30["002_multi_project.sql"]
+  n28 --> n30
+  n31["003_file_hash.sql"]
+  n28 --> n31
+  n32["004_backlog_frozen.sql"]
+  n28 --> n32
+  n33["005_archive_backlog.sql"]
+  n28 --> n33
+  n34["006_security_hardening.sql"]
+  n28 --> n34
+  n35["006_smoke.sql"]
+  n28 --> n35
+  n36["006_verify.sql"]
+  n28 --> n36
+  n37["007_metadata_typed_retrieval.sql"]
+  n28 --> n37
+  n38["008_global_scope.sql"]
+  n28 --> n38
+  n39["009_fix_rpc_dual_scope.sql"]
+  n28 --> n39
+  n40["010_agent_skills.sql"]
+  n28 --> n40
+  n41["011_trajectory_compaction.sql"]
+  n28 --> n41
+  n42["012_sleep_learning.sql"]
+  n28 --> n42
+  n43["013_archive_backlog_chunk_link.sql"]
+  n28 --> n43
+  n44["014_workflow_checkpoints.sql"]
+  n28 --> n44
+  n45["015_curriculum_tasks.sql"]
+  n28 --> n45
   n46["apply-schema.ts"]
-  n27 --> n46
+  n28 --> n46
   n47["backup-and-remove.ts"]
-  n27 --> n47
+  n28 --> n47
   n48["e2e-incremental-test.ts"]
-  n27 --> n48
+  n28 --> n48
   n49["e2e-isolation-test.ts"]
-  n27 --> n49
+  n28 --> n49
   n50["e2e-test.ts"]
-  n27 --> n50
+  n28 --> n50
   n51["purge-samia-rules.ts"]
-  n27 --> n51
+  n28 --> n51
   n52["smoke-008.ts"]
-  n27 --> n52
-  n53["… (4 more)"]
-  n27 --> n53
-  n54["src/"]
-  n0 --> n54
-  n55["sleep/"]
-  n54 --> n55
-  n56["daemon.ts"]
+  n28 --> n52
+  n53["smoke-010.ts"]
+  n28 --> n53
+  n54["… (4 more)"]
+  n28 --> n54
+  n55["src/"]
+  n0 --> n55
+  n56["curriculum/"]
   n55 --> n56
-  n57["miner.ts"]
-  n55 --> n57
-  n58["proposer.ts"]
-  n55 --> n58
-  n59["tools/"]
-  n54 --> n59
-  n60["backlog.ts"]
+  n57["daemon.ts"]
+  n56 --> n57
+  n58["scanner.ts"]
+  n56 --> n58
+  n59["sleep/"]
+  n55 --> n59
+  n60["daemon.ts"]
   n59 --> n60
-  n61["batch-freeze-patterns.ts"]
+  n61["miner.ts"]
   n59 --> n61
-  n62["bloat-audit.ts"]
+  n62["proposer.ts"]
   n59 --> n62
-  n63["checkpoint.ts"]
-  n59 --> n63
-  n64["compact.ts"]
-  n59 --> n64
-  n65["conflict.ts"]
-  n59 --> n65
-  n66["frozen-cache.ts"]
-  n59 --> n66
-  n67["health.ts"]
-  n59 --> n67
-  n68["hygiene.ts"]
-  n59 --> n68
-  n69["image.ts"]
-  n59 --> n69
-  n70["orchestrator.ts"]
-  n59 --> n70
-  n71["policy.ts"]
-  n59 --> n71
-  n72["refactor.ts"]
-  n59 --> n72
-  n73["save.ts"]
-  n59 --> n73
-  n74["search.ts"]
-  n59 --> n74
-  n75["setup.ts"]
-  n59 --> n75
-  n76["skills.ts"]
-  n59 --> n76
-  n77["sleep.ts"]
-  n59 --> n77
-  n78["sovereign-constitution.ts"]
-  n59 --> n78
-  n79["summarize.ts"]
-  n59 --> n79
-  n80["sync.ts"]
-  n59 --> n80
-  n81["verification.ts"]
-  n59 --> n81
-  n82["trajectory/"]
-  n54 --> n82
-  n83["daemon.ts"]
-  n82 --> n83
-  n84["stripper.ts"]
-  n82 --> n84
-  n85["summarizer.ts"]
-  n82 --> n85
-  n86["transactions/"]
-  n54 --> n86
-  n87["checkpoint.ts"]
-  n86 --> n87
-  n88["chunker.ts"]
-  n54 --> n88
-  n89["config.ts"]
-  n54 --> n89
-  n90["index.ts"]
-  n54 --> n90
-  n91["ollama.ts"]
-  n54 --> n91
-  n92["project-detect.ts"]
-  n54 --> n92
-  n93["project.ts"]
-  n54 --> n93
-  n94["supabase.ts"]
-  n54 --> n94
-  n95["verification-gate.ts"]
-  n54 --> n95
-  n96["version.ts"]
-  n54 --> n96
-  n97["tests/"]
-  n0 --> n97
-  n98["trajectory-daemon.test.ts"]
-  n97 --> n98
-  n99["trajectory-stripper.test.ts"]
-  n97 --> n99
-  n100["trajectory-summarizer.test.ts"]
-  n97 --> n100
-  n101[".env.example"]
-  n0 --> n101
-  n102[".gitignore"]
+  n63["tools/"]
+  n55 --> n63
+  n64["backlog.ts"]
+  n63 --> n64
+  n65["batch-freeze-patterns.ts"]
+  n63 --> n65
+  n66["bloat-audit.ts"]
+  n63 --> n66
+  n67["checkpoint.ts"]
+  n63 --> n67
+  n68["compact.ts"]
+  n63 --> n68
+  n69["conflict.ts"]
+  n63 --> n69
+  n70["curriculum.ts"]
+  n63 --> n70
+  n71["frozen-cache.ts"]
+  n63 --> n71
+  n72["health.ts"]
+  n63 --> n72
+  n73["hygiene.ts"]
+  n63 --> n73
+  n74["image.ts"]
+  n63 --> n74
+  n75["orchestrator.ts"]
+  n63 --> n75
+  n76["policy.ts"]
+  n63 --> n76
+  n77["refactor.ts"]
+  n63 --> n77
+  n78["save.ts"]
+  n63 --> n78
+  n79["search.ts"]
+  n63 --> n79
+  n80["setup.ts"]
+  n63 --> n80
+  n81["skills.ts"]
+  n63 --> n81
+  n82["sleep.ts"]
+  n63 --> n82
+  n83["sovereign-constitution.ts"]
+  n63 --> n83
+  n84["summarize.ts"]
+  n63 --> n84
+  n85["sync.ts"]
+  n63 --> n85
+  n86["verification.ts"]
+  n63 --> n86
+  n87["trajectory/"]
+  n55 --> n87
+  n88["daemon.ts"]
+  n87 --> n88
+  n89["stripper.ts"]
+  n87 --> n89
+  n90["summarizer.ts"]
+  n87 --> n90
+  n91["transactions/"]
+  n55 --> n91
+  n92["checkpoint.ts"]
+  n91 --> n92
+  n93["chunker.ts"]
+  n55 --> n93
+  n94["config.ts"]
+  n55 --> n94
+  n95["index.ts"]
+  n55 --> n95
+  n96["ollama.ts"]
+  n55 --> n96
+  n97["project-detect.ts"]
+  n55 --> n97
+  n98["project.ts"]
+  n55 --> n98
+  n99["supabase.ts"]
+  n55 --> n99
+  n100["verification-gate.ts"]
+  n55 --> n100
+  n101["version.ts"]
+  n55 --> n101
+  n102["tests/"]
   n0 --> n102
-  n103["ARCHITECTURE.md"]
-  n0 --> n103
-  n104["CLAUDE.md"]
-  n0 --> n104
-  n105["LICENSE"]
-  n0 --> n105
-  n106["package-lock.json"]
+  n103["trajectory-daemon.test.ts"]
+  n102 --> n103
+  n104["trajectory-stripper.test.ts"]
+  n102 --> n104
+  n105["trajectory-summarizer.test.ts"]
+  n102 --> n105
+  n106[".env.example"]
   n0 --> n106
-  n107["package.json"]
+  n107[".gitignore"]
   n0 --> n107
-  n108["project_file_architecture.md"]
+  n108["ARCHITECTURE.md"]
   n0 --> n108
-  n109["README.md"]
+  n109["CLAUDE.md"]
   n0 --> n109
-  n110["tsconfig.json"]
+  n110["LICENSE"]
   n0 --> n110
+  n111["package-lock.json"]
+  n0 --> n111
+  n112["package.json"]
+  n0 --> n112
+  n113["project_file_architecture.md"]
+  n0 --> n113
+  n114["README.md"]
+  n0 --> n114
+  n115["tsconfig.json"]
+  n0 --> n115
 ```
 
 <!-- MEMORY:ARCH:END -->

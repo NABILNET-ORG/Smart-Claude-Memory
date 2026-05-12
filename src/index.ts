@@ -49,8 +49,19 @@ import {
   checkpointListHandler,
   checkpointListInputShape,
 } from "./tools/checkpoint.js";
+import {
+  listCurriculumTasks,
+  listCurriculumTasksInputShape,
+  pullCurriculumTask,
+  pullCurriculumTaskInputShape,
+  applyCurriculumTask,
+  applyCurriculumTaskInputShape,
+  rejectCurriculumTask,
+  rejectCurriculumTaskInputShape,
+} from "./tools/curriculum.js";
 import { startCompactor } from "./trajectory/daemon.js";
 import { startSleepLearner } from "./sleep/daemon.js";
+import { startCurriculumDaemon } from "./curriculum/daemon.js";
 import { ensureSchema, startKeepAlive, writeFrozenPatternsCache } from "./supabase.js";
 import { currentProjectId } from "./project.js";
 import { VERSION } from "./version.js";
@@ -89,6 +100,13 @@ startCompactor();
 // trajectory_summaries ⋈ archive_backlog and emits skill_candidates.
 // .unref()'d so it never blocks process exit.
 startSleepLearner();
+
+// Start the curriculum daemon (Agentic OS 2026 / Mission 5 / SCM-S21-D1).
+// Deterministic queuer: every CURRICULUM_INTERVAL_MS, scans coverage,
+// rollback hotspots, and stale skill_candidates and enqueues
+// curriculum_tasks rows. Contains ZERO generative AI — Boundary Invariant #1
+// (ARCHITECTURE.md §4.7). .unref()'d so it never blocks process exit.
+startCurriculumDaemon();
 
 // Export the current frozen_features snapshot to the shared cache file so
 // hooks/md-policy.py can read it without hitting Supabase per tool call.
@@ -375,6 +393,44 @@ server.tool(
     content: [
       { type: "text", text: JSON.stringify(await checkpointListHandler(args), null, 2) },
     ],
+  }),
+);
+
+// ─── Agentic OS 2026 — M5 Autonomous Curriculum (SCM-S21-D1) ──────────────
+
+server.tool(
+  "list_curriculum_tasks",
+  "Inspect the M5 curriculum queue. SELECT from curriculum_tasks scoped to project_id (default: current). Optional filters: status ∈ {queued, pulled, attempted, verified, rejected, expired}, kind ∈ {test_gap, refactor, rollback_repro}. Ordered by created_at DESC. Default limit 20, max 100. Read-only — never mutates the queue.",
+  listCurriculumTasksInputShape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await listCurriculumTasks(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "pull_curriculum_task",
+  "Atomic claim of the next queued curriculum task. Wraps pull_next_curriculum_task RPC (FOR UPDATE SKIP LOCKED) — multi-session safe; two orchestrators never receive the same row. Prioritizes auto-promote-eligible tasks (linked_candidate_id IS NOT NULL) FIFO. Stamps pulled_by_session_id + pulled_at and flips status='pulled'. Returns {claimed:false, task:null} when the queue is empty. ORCHESTRATOR-ONLY entry point — the daemon never calls this.",
+  pullCurriculumTaskInputShape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await pullCurriculumTask(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "apply_curriculum_task",
+  "Verification-gated finalize. On success=true: asserts (1) ~/.claude-memory/verification-pending.json is CLEAR (override with bypass_verification_gate:true for tooling); (2) checkpoint_id references a workflow_checkpoints row with status='committed' in the same project. Atomic SQL transaction flips the task to 'verified' AND — if linked_candidate_id was set by the scanner (stale-candidate signal) — fires promote_candidate_to_skill in the same transaction. This is the ONLY M5-permitted auto-promote call site. On success=false: flips status='rejected'; no checkpoint or gate validation required.",
+  applyCurriculumTaskInputShape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await applyCurriculumTask(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "reject_curriculum_task",
+  "Manual veto. Update curriculum_tasks SET status='rejected', rejection_reason=<reason>. Use when the orchestrator decides the queued stub is not worth executing (e.g. heuristic false-positive, scope changed, file deprecated). Soft-delete: the row stays for audit.",
+  rejectCurriculumTaskInputShape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await rejectCurriculumTask(args), null, 2) }],
   }),
 );
 
