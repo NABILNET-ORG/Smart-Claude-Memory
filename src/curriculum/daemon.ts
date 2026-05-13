@@ -14,6 +14,7 @@
 
 import { currentProjectId } from "../project.js";
 import { runScanOnce, type ScannerConfig } from "./scanner.js";
+import { emit } from "../telemetry/emit.js";
 
 const DEFAULT_INTERVAL_MS = 3_600_000; // 1 h, staggered +30 min after sleep_learner
 const DEFAULT_BATCH = 10;
@@ -144,6 +145,8 @@ export async function runCurriculumScanOnce(): Promise<{
 async function tick(): Promise<void> {
   if (state.running) return;
   state.running = true;
+  const __tStart = Date.now();
+  void emit({ daemon: "curriculum_scanner", event: "run_started" });
   try {
     const r = await runCurriculumScanOnce();
     state.lastRunQueued = r.total_enqueued;
@@ -152,9 +155,27 @@ async function tick(): Promise<void> {
     state.lastRunDurationMs = r.duration_ms;
     state.lastRunAt = new Date().toISOString();
     state.queuedTotal += r.total_enqueued;
-  } catch {
+    void emit({
+      daemon: "curriculum_scanner",
+      event: "run_ended",
+      payload: {
+        queued: state.lastRunQueued,
+        skipped: state.lastRunSkipped,
+        errored: state.lastRunErrored,
+        duration_ms: Date.now() - __tStart,
+      },
+    });
+  } catch (err) {
     state.lastRunErrored++;
     state.lastRunAt = new Date().toISOString();
+    void emit({
+      daemon: "curriculum_scanner",
+      event: "run_errored",
+      payload: {
+        error_message: err instanceof Error ? err.message : String(err),
+        duration_ms: Date.now() - __tStart,
+      },
+    });
   } finally {
     state.running = false;
   }
@@ -188,10 +209,15 @@ export function stopCurriculumDaemon(): void {
 export function recordVerified(autoPromoted: boolean): void {
   state.verifiedTotal++;
   if (autoPromoted) state.autoPromotionsTotal++;
+  void emit({ daemon: "curriculum_scanner", event: "task_outcome", payload: { verified: 1 } });
+  if (autoPromoted) {
+    void emit({ daemon: "curriculum_scanner", event: "task_outcome", payload: { auto_promoted: 1 } });
+  }
 }
 
 export function recordRejected(): void {
   state.rejectedTotal++;
+  void emit({ daemon: "curriculum_scanner", event: "task_outcome", payload: { rejected: 1 } });
 }
 
 // ─── status (mirrors getSleepLearnerStatus shape) ─────────────────────────
@@ -233,3 +259,5 @@ export function getCurriculumStatus(): CurriculumStatus {
     auto_promotions_total: state.autoPromotionsTotal,
   };
 }
+
+export const runCurriculumScannerOnce = tick;
