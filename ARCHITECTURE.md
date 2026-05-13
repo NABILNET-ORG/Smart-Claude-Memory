@@ -542,6 +542,86 @@ The daemon proposes nothing. The Orchestrator executes everything. The promotion
 
 ---
 
+### 4.8 Observability & Telemetry (Agentic OS 2026 — Mission 6)
+
+The three background daemons (`sleep_learner`, `curriculum_scanner`, `trajectory_compactor`) persist every lifecycle event and every orchestrator-initiated state mutation to an append-only `daemon_telemetry` table (migration `scripts/016_daemon_telemetry.sql`, service-role grants in `scripts/017`). The persisted history is consumed by two decoupled read paths — the `system_dashboard` MCP tool (24h rollups, compressed Markdown output) and `check_system_health`'s derived per-daemon status (1h window, env-driven thresholds). In-memory `get*Status()` snapshots remain the fast path for live state; the table is the durable source of truth for rates, staleness, and overall health.
+
+**Event taxonomy** (`daemon_telemetry.event_type` CHECK constraint):
+
+| Event | Source | Payload |
+|---|---|---|
+| `run_started` | daemon tick top, fire-and-forget | none |
+| `run_ended` | daemon tick success path | `{compacted\|mined\|queued, skipped, errored, duration_ms}` (per daemon) |
+| `run_errored` | daemon tick catch | `{error_message, duration_ms}` |
+| `task_outcome` | orchestrator state mutations (`recordVerified` / `recordRejected` / auto-promote) | `{verified\|rejected\|auto_promoted: 1}` delta |
+
+Daemon ticks and orchestrator state mutations are intentionally separated by event type. `run_ended` is reserved strictly for tick completion; mixing orchestrator-initiated mutations into the same enum would poison the daemon run-rate rollups.
+
+**Fire-and-forget contract.** `src/telemetry/emit.ts` returns `Promise<void>` that ALWAYS resolves. Supabase errors are logged via `console.error` and swallowed. Daemons MUST survive a telemetry outage without crashing — the typed discriminated union in `src/telemetry/types.ts` is the only schema gate.
+
+**Decoupled read paths.** `system_dashboard` and `check_system_health` each issue their own Supabase query against `daemon_telemetry` — they do not share state, do not import each other, and have independent latency and failure modes. This is deliberate: a slow dashboard rollup MUST NOT delay a health check, and a transient telemetry-query failure inside the health check MUST NOT degrade the dashboard's output. The dashboard caps at 2000 rows over 24h; the health check caps at 1000 rows over 1h.
+
+```mermaid
+flowchart LR
+  subgraph Daemons["Daemon emit surface"]
+    SL[sleep_learner.tick]
+    CS[curriculum_scanner.tick]
+    TC[trajectory_compactor.tick]
+    RV[recordVerified/Rejected]
+  end
+
+  SL -->|void emit| E[emit fire-and-forget]
+  CS -->|void emit| E
+  TC -->|void emit| E
+  RV -->|task_outcome delta| E
+
+  E -->|insert| T[(daemon_telemetry)]
+
+  T -.->|read 24h, 2000-row cap| SD[system_dashboard handler]
+  T -.->|read 1h, 1000-row cap| CH[check_system_health]
+
+  SD --> MD[renderDashboardMarkdown]
+  MD --> AGENT[Claude IDE / agent]
+
+  GS[get*Status live snapshots] -->|fast path| SD
+  GS -->|fast path| CH
+
+  CH --> DDS[deriveDaemonStatus]
+  DDS -->|OBS_* env vars| TH[threshold checks]
+  TH --> WO[worst-of severity rollup]
+  WO --> OV[report.overall]
+  OV --> AGENT
+```
+
+**Derivation rules** (in order — first match wins):
+
+1. `enabled === false` → `healthy` with reason `"daemon disabled (out of scope)"`. A disabled daemon cannot be "down".
+2. `last_run_ended === null` AND no `run_ended` rows in 1h → `down` (silent daemon).
+3. Staleness: `now - last_run_ended > interval_ms × OBS_STALENESS_MULTIPLIER_DEFAULT` → `down`.
+4. 1h error rate `> OBS_ERR_RATE_DOWN_DEFAULT` → `down`.
+5. 1h error rate `> OBS_ERR_RATE_DEGRADED_DEFAULT` → `degraded`.
+6. Else → `healthy`.
+
+**Overall rollup.** `SEVERITY = {healthy:0, ok:0, degraded:1, down:2, unhealthy:2}`. The worst per-daemon derived status feeds `report.overall` only if it would WORSEN the value the existing Supabase + Ollama reachability checks already set — daemon derivation never improves overall.
+
+**Configuration:**
+
+| Environment variable | Default | Effect |
+|---|---|---|
+| `OBS_ERR_RATE_DEGRADED_DEFAULT` | `0.20` | Per-daemon → `degraded` when 1h error rate strictly exceeds this. |
+| `OBS_ERR_RATE_DOWN_DEFAULT` | `0.50` | Per-daemon → `down` when 1h error rate strictly exceeds this. |
+| `OBS_STALENESS_MULTIPLIER_DEFAULT` | `2.0` | Per-daemon → `down` when `now - last_run_ended > interval_ms × multiplier`. |
+
+Unparseable or missing env values fall back to the defaults; the helper never throws.
+
+**Boundary Invariant #1 preservation.** `src/telemetry/emit.ts` imports only the Supabase admin singleton and the project-id resolver — no model SDKs, no network endpoints beyond Supabase. The `lint:boundaries` CI fence (SCM-S22) was extended to cover the new module's daemon-side imports; neither `src/sleep/**` nor `src/curriculum/**` reaches outside via telemetry. The only new daemon-side import is `../telemetry/emit.js` — a local relative path. The Single Brain Boundary still holds.
+
+**Failure mode.** If Supabase is unreachable, `emit()` swallows the error locally and daemons continue ticking. `check_system_health`'s telemetry query also tolerates failure (silent fallback to empty rows + `console.error`); the top-level `supabase` reachability check is the canonical signal for "DB is broken", avoiding double-counting in the overall rollup.
+
+**Token efficiency.** `renderDashboardMarkdown` compresses the raw 24h aggregate (~8KB JSON) into a single Markdown table (~2KB) — roughly 4× compression. The compressed form is what `system_dashboard` returns to the agent, keeping dashboard reads under the 10k-token CLAUDE.md ceiling even when all three daemons are noisy.
+
+---
+
 ## 5. File Architecture (auto-generated)
 
 The Mermaid block below is refreshed by `sync_artefacts` after every worker success. Do not edit content between the markers by hand.
