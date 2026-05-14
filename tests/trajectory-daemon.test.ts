@@ -160,7 +160,9 @@ describe("compactor lifecycle", () => {
     assert.equal(typeof s.last_run_skipped, "number");
     assert.equal(typeof s.last_run_errored, "number");
     assert.equal(typeof s.last_run_duration_ms, "number");
-    assert.equal(Object.keys(s).length, 7);
+    assert.equal(typeof s.last_run_source_tokens, "number");
+    assert.equal(typeof s.last_run_summary_tokens, "number");
+    assert.equal(Object.keys(s).length, 9);
   });
 });
 
