@@ -20,8 +20,12 @@ const envNum = (k: string, def: number): number => {
 const OBS_ERR_RATE_DEGRADED = envNum("OBS_ERR_RATE_DEGRADED_DEFAULT", 0.2);
 const OBS_ERR_RATE_DOWN = envNum("OBS_ERR_RATE_DOWN_DEFAULT", 0.5);
 const OBS_STALENESS_MULTIPLIER = envNum("OBS_STALENESS_MULTIPLIER_DEFAULT", 2.0);
+// Cold-boot grace window: daemons without `run_ended` events within this many
+// milliseconds of MCP server start report `pending` rather than `down`. This
+// prevents the FTUX from showing a false `overall: down` on a healthy boot.
+const GRACE_MS = 15 * 60 * 1000;
 
-type DerivedStatus = "healthy" | "degraded" | "down";
+export type DerivedStatus = "healthy" | "pending" | "degraded" | "down";
 
 type DerivedBlock = {
   status: DerivedStatus;
@@ -33,14 +37,54 @@ type DerivedBlock = {
 
 type TelemetryRow = { event_type: string; created_at: string };
 
-function deriveDaemonStatus(
-  rows: TelemetryRow[],
-  intervalMs: number,
-  enabled: boolean,
-  lastRunAtIso: string | null,
-): DerivedBlock {
+// Worst-of severity. `pending` sits BELOW `degraded` so a cold-boot daemon
+// can never poison `overall` past `degraded`.
+const SEVERITY: Record<string, number> = {
+  healthy: 0,
+  ok: 0,
+  pending: 0.5,
+  degraded: 1,
+  down: 2,
+  unhealthy: 2,
+};
+
+/**
+ * Worst-of rollup across an arbitrary set of statuses using {@link SEVERITY}.
+ * Used to combine supabase/ollama check statuses with per-daemon derivations
+ * into a single top-level `overall` for the health report. Pure / no side effects.
+ */
+export function rollupOverall(statuses: DerivedStatus[]): DerivedStatus {
+  return statuses.reduce<DerivedStatus>(
+    (a, b) => ((SEVERITY[b] ?? 0) > (SEVERITY[a] ?? 0) ? b : a),
+    "healthy",
+  );
+}
+
+/**
+ * Input for the pure per-daemon status derivation. Testable in isolation.
+ * `uptimeSec` lets callers inject `process.uptime()` so tests stay deterministic.
+ * `graceMs` defaults to {@link GRACE_MS} but is overridable per-test.
+ */
+export type DeriveDaemonStatusInput = {
+  enabled: boolean;
+  events: TelemetryRow[];
+  uptimeSec: number;
+  intervalMs?: number;
+  lastRunAtIso?: string | null;
+  graceMs?: number;
+};
+
+export function deriveDaemonStatus(input: DeriveDaemonStatusInput): DerivedBlock {
+  const {
+    enabled,
+    events: rows,
+    uptimeSec,
+    intervalMs = 0,
+    lastRunAtIso = null,
+    graceMs = GRACE_MS,
+  } = input;
   // `enabled=false` short-circuit MUST come first — a disabled daemon
-  // is out of scope for liveness and cannot be "down".
+  // is out of scope for liveness and cannot be "down" or "pending".
   if (!enabled) {
     return {
       status: "healthy",
@@ -55,6 +99,19 @@ function deriveDaemonStatus(
     rows.find((r) => r.event_type === "run_ended")?.created_at ?? null;
   const effectiveLast = lastRunAtIso ?? mostRecentRunEnded;
   if (effectiveLast === null) {
+    // Cold-boot grace: within the grace window, no `run_ended` events yet is
+    // expected (the daemon may simply not have ticked once). Past the window,
+    // this becomes a real `down` signal as before.
+    const uptimeMs = uptimeSec * 1000;
+    if (uptimeMs < graceMs) {
+      return {
+        status: "pending",
+        reason: `within ${Math.round(graceMs / 60_000)}min grace window (uptime=${Math.round(uptimeMs / 1000)}s); awaiting first run_ended`,
+        error_rate_1h: 0,
+        staleness_ms: null,
+        last_run_ended_at: null,
+      };
+    }
     return {
       status: "down",
       reason: "no run_ended events on record",
@@ -131,7 +188,7 @@ type Check = {
 };
 
 type HealthReport = {
-  overall: "healthy" | "degraded" | "down";
+  overall: DerivedStatus;
   timestamp: string;
   checks: {
     supabase: Check;
@@ -347,55 +404,45 @@ export async function checkSystemHealth(): Promise<HealthReport> {
   const trajSnap = getCompactorStatus();
   const prunerSnap = getTelemetryPrunerStatus();
 
-  const sleepDerived = deriveDaemonStatus(
-    byDaemon.sleep_learner,
-    sleepSnap.interval_ms,
-    sleepSnap.enabled,
-    sleepSnap.last_run_at ?? null,
-  );
-  const currDerived = deriveDaemonStatus(
-    byDaemon.curriculum_scanner,
-    currSnap.interval_ms,
-    currSnap.enabled,
-    currSnap.last_run_at ?? null,
-  );
-  const trajDerived = deriveDaemonStatus(
-    byDaemon.trajectory_compactor,
-    trajSnap.interval_ms,
-    trajSnap.enabled,
-    trajSnap.last_run_at ?? null,
-  );
-  const prunerDerived = deriveDaemonStatus(
-    byDaemon.telemetry_pruner,
-    prunerSnap.interval_ms,
-    prunerSnap.enabled,
-    prunerSnap.last_run_at ?? null,
-  );
+  const uptimeSec = process.uptime();
+  const sleepDerived = deriveDaemonStatus({
+    enabled: sleepSnap.enabled,
+    events: byDaemon.sleep_learner,
+    uptimeSec,
+    intervalMs: sleepSnap.interval_ms,
+    lastRunAtIso: sleepSnap.last_run_at ?? null,
+  });
+  const currDerived = deriveDaemonStatus({
+    enabled: currSnap.enabled,
+    events: byDaemon.curriculum_scanner,
+    uptimeSec,
+    intervalMs: currSnap.interval_ms,
+    lastRunAtIso: currSnap.last_run_at ?? null,
+  });
+  const trajDerived = deriveDaemonStatus({
+    enabled: trajSnap.enabled,
+    events: byDaemon.trajectory_compactor,
+    uptimeSec,
+    intervalMs: trajSnap.interval_ms,
+    lastRunAtIso: trajSnap.last_run_at ?? null,
+  });
+  const prunerDerived = deriveDaemonStatus({
+    enabled: prunerSnap.enabled,
+    events: byDaemon.telemetry_pruner,
+    uptimeSec,
+    intervalMs: prunerSnap.interval_ms,
+    lastRunAtIso: prunerSnap.last_run_at ?? null,
+  });
 
   // Worst-of rollup: daemon derivation can only WORSEN overall, never improve it.
   // Preserves any degraded/down already set by supabase/ollama checks above.
-  const SEVERITY: Record<string, number> = {
-    healthy: 0,
-    ok: 0,
-    degraded: 1,
-    down: 2,
-    unhealthy: 2,
-  };
-  const daemonStatuses: DerivedStatus[] = [
+  overall = rollupOverall([
+    overall,
     sleepDerived.status,
     currDerived.status,
     trajDerived.status,
     prunerDerived.status,
-  ];
-  const worstDaemon = daemonStatuses.reduce<DerivedStatus>(
-    (a, b) => (SEVERITY[b] > SEVERITY[a] ? b : a),
-    "healthy",
-  );
-  const currentSev = SEVERITY[overall] ?? 0;
-  const worstSev = SEVERITY[worstDaemon] ?? 0;
-  if (worstSev > currentSev) {
-    overall = worstDaemon;
-  }
+  ]);
 
   const orchestrator = buildOrchestratorSnapshot(advisoryHook);
   const summary =
