@@ -26,6 +26,10 @@ const state = {
   lastRunSkipped: 0,
   lastRunErrored: 0,
   lastRunDurationMs: 0,
+  // Backlog #125 — per-tick token aggregates summed from CompactOneResult.
+  // Reset to 0 at the top of every runCompactionOnce; emitted in run_ended.
+  lastRunSourceTokens: 0,
+  lastRunSummaryTokens: 0,
   timer: null as NodeJS.Timeout | null,
   running: false,
 };
@@ -164,19 +168,33 @@ export async function compactOneChunk(
 
 export async function runCompactionOnce(
   opts: { limit?: number; dryRun?: boolean } = {},
-): Promise<{ compacted: number; skipped: number; errored: number; duration_ms: number }> {
+): Promise<{
+  compacted: number;
+  skipped: number;
+  errored: number;
+  duration_ms: number;
+  source_tokens: number;
+  summary_tokens: number;
+}> {
   const t0 = Date.now();
   const cfg = resolveConfig();
   const limit = opts.limit ?? cfg.batch;
   let compacted = 0;
   let skipped = 0;
   let errored = 0;
+  // Backlog #125 — per-tick token accumulators. Sum unconditionally: failed
+  // chunks contribute summary_tokens=0 (per `result()` builder), so summing
+  // them is a no-op edge-case-free.
+  let sourceTokens = 0;
+  let summaryTokens = 0;
 
   try {
     const candidates = await fetchCandidates(limit, cfg.minBytes);
     for (const row of candidates) {
       try {
         const r = await compactOneChunk(row.id, { dryRun: opts.dryRun });
+        sourceTokens += r.source_tokens;
+        summaryTokens += r.summary_tokens;
         if (r.ok) compacted++;
         else skipped++;
       } catch {
@@ -187,7 +205,14 @@ export async function runCompactionOnce(
     errored++;
   }
 
-  return { compacted, skipped, errored, duration_ms: Date.now() - t0 };
+  return {
+    compacted,
+    skipped,
+    errored,
+    duration_ms: Date.now() - t0,
+    source_tokens: sourceTokens,
+    summary_tokens: summaryTokens,
+  };
 }
 
 // Daemon tick — wrapped in try/finally so the loop NEVER throws.
@@ -202,7 +227,11 @@ async function tick(): Promise<void> {
     state.lastRunSkipped = result.skipped;
     state.lastRunErrored = result.errored;
     state.lastRunDurationMs = result.duration_ms;
+    state.lastRunSourceTokens = result.source_tokens;
+    state.lastRunSummaryTokens = result.summary_tokens;
     state.lastRunAt = new Date().toISOString();
+    // Backlog #125 — emit per-tick token aggregates via TrajectoryEndedPayload's
+    // `[extra: string]: unknown` slot. No types.ts change required.
     void emit({
       daemon: "trajectory_compactor",
       event: "run_ended",
@@ -211,6 +240,12 @@ async function tick(): Promise<void> {
         skipped: state.lastRunSkipped,
         errored: state.lastRunErrored,
         duration_ms: Date.now() - __tStart,
+        source_tokens: state.lastRunSourceTokens,
+        summary_tokens: state.lastRunSummaryTokens,
+        compression_ratio:
+          state.lastRunSourceTokens > 0
+            ? state.lastRunSummaryTokens / state.lastRunSourceTokens
+            : 0,
       },
     });
   } catch (err) {
@@ -258,6 +293,8 @@ export type CompactorStatus = {
   last_run_skipped: number;
   last_run_errored: number;
   last_run_duration_ms: number;
+  last_run_source_tokens: number;
+  last_run_summary_tokens: number;
 };
 
 export function getCompactorStatus(): CompactorStatus {
@@ -269,5 +306,7 @@ export function getCompactorStatus(): CompactorStatus {
     last_run_skipped: state.lastRunSkipped,
     last_run_errored: state.lastRunErrored,
     last_run_duration_ms: state.lastRunDurationMs,
+    last_run_source_tokens: state.lastRunSourceTokens,
+    last_run_summary_tokens: state.lastRunSummaryTokens,
   };
 }
