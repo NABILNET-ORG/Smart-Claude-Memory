@@ -329,6 +329,64 @@ type MigrationsCheck = {
 };
 type MigrationsBlock = { applied: number; skipped: number; total: number } | null;
 
+type OllamaModelsCheck = {
+  name: "ollama_models";
+  status: "ok" | "partial" | "not_ready";
+  detail: string;
+};
+
+const REQUIRED_OLLAMA_MODELS = ["moondream", "nomic-embed-text"] as const;
+
+/**
+ * Preflight: verify required Ollama models are pulled. Queries
+ * `${OLLAMA_HOST}/api/tags` (default http://localhost:11434) and checks that
+ * `moondream` and `nomic-embed-text` are both present (base name match,
+ * `:tag` suffix stripped). Failure modes:
+ *   - Ollama reachable, models missing → `partial` with `ollama pull` hint.
+ *   - Ollama unreachable (network / HTTP error) → `not_ready`.
+ * Exceptions never escape — `init_project` must not crash on this check.
+ * 5-second timeout via AbortController. No new dependencies.
+ */
+async function runOllamaModelsCheck(): Promise<OllamaModelsCheck> {
+  const host = process.env.OLLAMA_HOST || "http://localhost:11434";
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const r = await fetch(`${host}/api/tags`, { signal: controller.signal });
+    if (!r.ok) {
+      return {
+        name: "ollama_models",
+        status: "not_ready",
+        detail: `Ollama unreachable at ${host} (HTTP ${r.status})`,
+      };
+    }
+    const data = (await r.json()) as { models?: Array<{ name: string }> };
+    const present = (data.models ?? []).map((m) => m.name.split(":")[0]);
+    const missing = REQUIRED_OLLAMA_MODELS.filter((req) => !present.includes(req));
+    if (missing.length === 0) {
+      return {
+        name: "ollama_models",
+        status: "ok",
+        detail: `required models present: ${REQUIRED_OLLAMA_MODELS.join(", ")}`,
+      };
+    }
+    return {
+      name: "ollama_models",
+      status: "partial",
+      detail: `Missing Ollama models: ${missing.join(", ")}. Run: ollama pull ${missing.join(" ")}`,
+    };
+  } catch (err) {
+    const msg = (err as Error).message || String(err);
+    return {
+      name: "ollama_models",
+      status: "not_ready",
+      detail: `Ollama unreachable at ${host}: ${msg}`,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * BYO-Supabase bootstrap: open a fresh pg.Client against SUPABASE_POOLER_URL
  * (or SUPABASE_DB_URL fallback) and apply any pending migrations idempotently.
@@ -554,6 +612,13 @@ export async function initProject(args: {
   // to `{ status: "not_ready" }` — never throws.
   const migrationsResult = await runMigrationsCheck();
   checks.push(migrationsResult.check);
+
+  // 9. Ollama models preflight — verify required models are pulled. Surfaces an
+  // actionable `ollama pull <names>` command instead of a cryptic embedding
+  // failure deeper in the call chain. Never throws; unreachable Ollama
+  // collapses to `not_ready` with the host in the detail.
+  const ollamaModelsCheck = await runOllamaModelsCheck();
+  checks.push(ollamaModelsCheck);
 
   const anyNotReady = checks.some(
     (c) => c.status === "missing" || c.status === "not_ready",
