@@ -123,7 +123,7 @@ create policy deny_anon_authenticated on public.skill_candidates
 drop function if exists public.match_skill_candidates(extensions.vector, text, int, real, boolean);
 drop function if exists public.match_skill_candidates(extensions.vector, text, int, float, boolean);
 
-create function public.match_skill_candidates(
+create or replace function public.match_skill_candidates(
   query_embedding  extensions.vector(768),
   p_project_id     text,
   match_count      int     default 5,
@@ -172,7 +172,7 @@ $$;
 -- (a 'promoted' or 'rejected' candidate must not silently revert to 'mined').
 drop function if exists public.upsert_skill_candidate(text, text, bigint[], bigint[], int, int, extensions.vector, text, jsonb, text, text);
 
-create function public.upsert_skill_candidate(
+create or replace function public.upsert_skill_candidate(
   p_project_id          text,
   p_pattern_hash        text,
   p_source_summary_ids  bigint[],
@@ -266,7 +266,7 @@ $$;
 -- The candidate row is preserved (audit trail of what produced the skill).
 drop function if exists public.promote_candidate_to_skill(bigint, text, text[]);
 
-create function public.promote_candidate_to_skill(
+create or replace function public.promote_candidate_to_skill(
   p_candidate_id      bigint,
   p_description       text,
   p_trigger_keywords  text[]

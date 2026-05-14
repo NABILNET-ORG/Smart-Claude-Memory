@@ -107,7 +107,7 @@ create policy deny_anon_authenticated on public.agent_skills
 drop function if exists public.match_agent_skills(extensions.vector, text, int, real, boolean);
 drop function if exists public.match_agent_skills(extensions.vector, text, int, float, boolean);
 
-create function public.match_agent_skills(
+create or replace function public.match_agent_skills(
   query_embedding  extensions.vector(768),
   p_project_id     text,
   match_count      int     default 5,
@@ -168,7 +168,7 @@ $$;
 -- PRESERVE telemetry (frequency_used, success_rate, last_invoked_at).
 drop function if exists public.upsert_agent_skill(text, text, text, jsonb, text[], extensions.vector, bigint);
 
-create function public.upsert_agent_skill(
+create or replace function public.upsert_agent_skill(
   p_project_id                text,
   p_name                      text,
   p_description               text,
@@ -213,7 +213,7 @@ $$;
 -- skill, but persistent failures drag the score down within ~10 invocations).
 drop function if exists public.bump_skill_telemetry(bigint, boolean);
 
-create function public.bump_skill_telemetry(
+create or replace function public.bump_skill_telemetry(
   p_id      bigint,
   p_success boolean
 ) returns void

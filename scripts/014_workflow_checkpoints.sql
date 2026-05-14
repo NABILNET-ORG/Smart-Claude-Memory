@@ -187,7 +187,8 @@ begin
     id, project_id, title, status, priority, notes, metadata,
     created_at, updated_at,
     terminal_chunk_id
-  from linked;
+  from linked
+  on conflict do nothing;
 
   get diagnostics n = row_count;
   return n;

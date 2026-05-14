@@ -40,7 +40,8 @@ begin
     cloud_backlog_id, project_id, title, status, priority, notes, metadata, created_at, updated_at
   )
   select id, project_id, title, status, priority, notes, metadata, created_at, updated_at
-  from moved;
+  from moved
+  on conflict do nothing;
 
   get diagnostics n = row_count;
   return n;

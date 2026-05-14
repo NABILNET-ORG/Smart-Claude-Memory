@@ -110,7 +110,7 @@ create policy deny_anon_authenticated on public.curriculum_tasks
 
 drop function if exists public.enqueue_curriculum_task(text, text, text, text, jsonb, bigint, timestamptz);
 
-create function public.enqueue_curriculum_task(
+create or replace function public.enqueue_curriculum_task(
   p_project_id           text,
   p_kind                 text,
   p_target_path          text,
@@ -189,7 +189,7 @@ comment on function public.enqueue_curriculum_task(text, text, text, text, jsonb
 
 drop function if exists public.pull_next_curriculum_task(text, text, text);
 
-create function public.pull_next_curriculum_task(
+create or replace function public.pull_next_curriculum_task(
   p_project_id   text,
   p_kind         text,
   p_session_id   text
@@ -287,7 +287,7 @@ comment on function public.pull_next_curriculum_task(text, text, text) is
 
 drop function if exists public.apply_curriculum_task(bigint, boolean, bigint, text, text[]);
 
-create function public.apply_curriculum_task(
+create or replace function public.apply_curriculum_task(
   p_task_id            bigint,
   p_success            boolean,
   p_checkpoint_id      bigint,

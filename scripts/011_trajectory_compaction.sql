@@ -165,7 +165,7 @@ $$;
 -- direct table reads, so the only path in is via this RPC.
 drop function if exists public.get_trajectory_summary(bigint);
 
-create function public.get_trajectory_summary(
+create or replace function public.get_trajectory_summary(
   p_chunk_id bigint
 ) returns table (
   summary           text,
