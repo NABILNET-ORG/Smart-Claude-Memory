@@ -308,7 +308,12 @@ async function auditCore3(workspace: string): Promise<Core3Audit> {
 export type Capabilities = {
   protocol: "smart-claude-memory/v2.1.0";
   project_id: string;
-  global_scope: { available: true; project_id: typeof GLOBAL_PROJECT_ID };
+  global_scope: {
+    available: true;
+    project_id: typeof GLOBAL_PROJECT_ID;
+    browse_tool: string | null;
+    browse_args: readonly string[];
+  };
   taxonomy: ["DECISION", "PATTERN", "ERROR", "LOG"];
   context_gathering_hints: string[];
   delegate_task_threshold: string;
@@ -702,7 +707,12 @@ export async function initProject(args: {
   const capabilities: Capabilities = {
     protocol: "smart-claude-memory/v2.1.0",
     project_id: slugify(currentProjectId),
-    global_scope: { available: true, project_id: GLOBAL_PROJECT_ID },
+    global_scope: {
+      available: true,
+      project_id: GLOBAL_PROJECT_ID,
+      browse_tool: null,
+      browse_args: [],
+    },
     taxonomy: ["DECISION", "PATTERN", "ERROR", "LOG"],
     context_gathering_hints: [...CAPABILITIES_HINTS],
     delegate_task_threshold: ">3 files OR >100 lines raw output",
