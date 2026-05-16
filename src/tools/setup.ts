@@ -306,7 +306,7 @@ async function auditCore3(workspace: string): Promise<Core3Audit> {
 }
 
 export type Capabilities = {
-  protocol: "smart-claude-memory/v2.0.0-rc1";
+  protocol: "smart-claude-memory/v2.1.0";
   project_id: string;
   global_scope: { available: true; project_id: typeof GLOBAL_PROJECT_ID };
   taxonomy: ["DECISION", "PATTERN", "ERROR", "LOG"];
@@ -700,7 +700,7 @@ export async function initProject(args: {
   // adhere to during the session: dual-scope search, GLOBAL Knowledge Vault,
   // Sovereign Taxonomy, and the delegation threshold from CLAUDE.md.
   const capabilities: Capabilities = {
-    protocol: "smart-claude-memory/v2.0.0-rc1",
+    protocol: "smart-claude-memory/v2.1.0",
     project_id: slugify(currentProjectId),
     global_scope: { available: true, project_id: GLOBAL_PROJECT_ID },
     taxonomy: ["DECISION", "PATTERN", "ERROR", "LOG"],
