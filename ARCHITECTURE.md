@@ -553,7 +553,7 @@ RPCs (`SECURITY DEFINER`, `search_path` including `'extensions'` — ERROR-11507
 
 - `scanner.ts` — three pure signal sources:
   - **`test_gap`**: reads `coverage-summary.json` if present; enqueues files with `pct < 50 AND lines > 100`.
-  - **`rollback_repro`**: SQL aggregate over `workflow_checkpoints WHERE status='rolled_back'` grouped by `target_path` (derived from skill `steps[].path`). Threshold ≥ 3 rollbacks in 30 days.
+  - **`rollback_repro`**: SQL aggregate over `workflow_checkpoints WHERE status='rolledback'` grouped by `target_path` (taken directly from `workflow_checkpoints.step_label` — the orchestrator's free-text anchor; see `src/curriculum/scanner.ts:195-198` for the rationale: no LLM interpretation of `agent_skills.steps[]` needed). Threshold ≥ 3 rollbacks in 30 days. Production-validated Session 30 (`tests/curriculum-scanner.test.ts` 7/7, `npm run smoke:m5-rollback` green).
   - **`refactor` (stale-candidate)**: `skill_candidates WHERE state='mined' AND frequency ≥ 5 AND age(created_at) > 7 days`. Sets `linked_candidate_id` — this is the M3 auto-promote trigger.
 - `daemon.ts` — `startCurriculumDaemon()` / `stopCurriculumDaemon()` / `getCurriculumStatus()` / `runScanOnce()`. Mirrors `sleep_learner` shape: `setInterval(...).unref()`, module-level re-entrancy guard, per-source try/catch. **No `proposer.ts`. No Ollama client import.**
 
@@ -573,7 +573,7 @@ Health: `check_system_health` gains a `curriculum_scanner` block — `{ enabled,
 ```mermaid
 flowchart LR
   COV[coverage-summary.json] --> SCAN[scanner.ts<br/>PURE heuristics<br/>NO LLM]
-  RB[(workflow_checkpoints<br/>status=rolled_back)] --> SCAN
+  RB[(workflow_checkpoints<br/>status=rolledback)] --> SCAN
   SC[(skill_candidates<br/>mined freq≥5 age≥7d)] --> SCAN
   SCAN --> ENQ[enqueue_curriculum_task]
   ENQ --> CT[(curriculum_tasks<br/>status=queued)]
