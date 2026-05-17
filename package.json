@@ -42,7 +42,8 @@
     "schema": "tsx scripts/apply-schema.ts",
     "backup": "tsx scripts/backup-and-remove.ts",
     "test": "node --import tsx --experimental-test-module-mocks --no-warnings --test tests/trajectory-stripper.test.ts tests/trajectory-summarizer.test.ts tests/trajectory-daemon.test.ts tests/health.test.ts tests/migrations.test.ts tests/list-global-patterns.test.ts tests/capabilities.test.ts tests/orchestrator.test.ts tests/checkpoint.test.ts tests/curriculum-scanner.test.ts",
-    "smoke:m4": "tsx scripts/smoke-m4.ts"
+    "smoke:m4": "tsx scripts/smoke-m4.ts",
+    "smoke:m5-rollback": "tsx scripts/smoke-m5-rollback.ts"
   },
   "engines": {
     "node": ">=20"
