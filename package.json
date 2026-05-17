@@ -1,6 +1,6 @@
 {
   "name": "smart-claude-memory-mcp",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Sovereign memory protocol for Claude Code — typed, dual-scope, observability-grade. Bring your own empty Supabase project; the plugin handles the rest.",
   "author": "NABILNET.AI <https://nabilnet.ai>",
   "license": "MIT",
@@ -49,6 +49,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@supabase/supabase-js": "^2.104.0",
+    "archiver": "^7.0.1",
     "dotenv": "^17.4.2",
     "glob": "^13.0.6",
     "ollama": "^0.6.3",
@@ -59,7 +60,6 @@
     "@types/archiver": "^7.0.0",
     "@types/node": "^25.6.0",
     "@types/pg": "^8.20.0",
-    "archiver": "^7.0.1",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }
