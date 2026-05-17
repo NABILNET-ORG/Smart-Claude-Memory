@@ -2,25 +2,31 @@
 // Every test creates rows under a unique project_id namespace so cleanup is
 // exhaustive: a single DELETE on that project_id wipes ALL test artefacts.
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { supabase } from "../../src/supabase.js";
 
 export function uniqueProjectId(): string {
   return `__test_m4_${randomUUID().slice(0, 8)}__`;
 }
 
-// memory_chunks.embedding is vector(768) NOT NULL (scripts/001_schema.sql:8).
-// We don't need a real embedding for these tests — use a zero vector.
+// memory_chunks NOT NULL columns we have to satisfy:
+//   * embedding   vector(768)  → zero vector
+//   * content_hash text         → sha256(content) hex
 const ZERO_EMBEDDING = JSON.stringify(new Array(768).fill(0));
 
 export async function insertThrowawayChunk(projectId: string): Promise<number> {
+  // Use the project_id in the content so each test's chunk hashes uniquely,
+  // dodging any (file_origin, content_hash) uniqueness constraint between runs.
+  const content = `m4-test-chunk-${projectId}`;
+  const contentHash = createHash("sha256").update(content).digest("hex");
   const { data, error } = await supabase
     .from("memory_chunks")
     .insert({
       project_id: projectId,
       file_origin: "__m4_test__",
       chunk_index: 0,
-      content: "m4-test-chunk",
+      content,
+      content_hash: contentHash,
       embedding: ZERO_EMBEDDING,
     })
     .select("id")
