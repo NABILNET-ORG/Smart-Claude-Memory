@@ -765,252 +765,254 @@ flowchart TD
   n8 --> n26
   n27["SESSION-28-REPORT.md"]
   n8 --> n27
-  n28["superpowers/"]
-  n2 --> n28
-  n29["plans/"]
-  n28 --> n29
-  n30["2026-05-12-observability-telemetry.md"]
+  n28["SESSION-29-REPORT.md"]
+  n8 --> n28
+  n29["superpowers/"]
+  n2 --> n29
+  n30["plans/"]
   n29 --> n30
-  n31["2026-05-14-marketplace-packaging.md"]
-  n29 --> n31
-  n32["2026-05-15-v2.1.0-global-vault-ux.md"]
-  n29 --> n32
-  n33["2026-05-17-agentic-superpowers-integration.md"]
-  n29 --> n33
-  n34["specs/"]
-  n28 --> n34
-  n35["2026-05-13-telemetry-retention-design.md"]
-  n34 --> n35
-  n36["2026-05-14-marketplace-packaging-design.md"]
-  n34 --> n36
-  n37["IDE-INTEGRATION.md"]
-  n2 --> n37
-  n38["NEXT-SESSION-PROMPT.md"]
+  n31["2026-05-12-observability-telemetry.md"]
+  n30 --> n31
+  n32["2026-05-14-marketplace-packaging.md"]
+  n30 --> n32
+  n33["2026-05-15-v2.1.0-global-vault-ux.md"]
+  n30 --> n33
+  n34["2026-05-17-agentic-superpowers-integration.md"]
+  n30 --> n34
+  n35["specs/"]
+  n29 --> n35
+  n36["2026-05-13-telemetry-retention-design.md"]
+  n35 --> n36
+  n37["2026-05-14-marketplace-packaging-design.md"]
+  n35 --> n37
+  n38["IDE-INTEGRATION.md"]
   n2 --> n38
-  n39["release-notes-v2.1.0.md"]
+  n39["NEXT-SESSION-PROMPT.md"]
   n2 --> n39
-  n40["hooks/"]
-  n0 --> n40
-  n41["md-policy.py"]
-  n40 --> n41
-  n42["README.md"]
-  n40 --> n42
-  n43["images/"]
-  n0 --> n43
-  n44["GPT SMC v2.0-rc1.png"]
-  n43 --> n44
-  n45["scripts/"]
-  n0 --> n45
-  n46["001_schema.sql"]
-  n45 --> n46
-  n47["002_multi_project.sql"]
-  n45 --> n47
-  n48["003_file_hash.sql"]
-  n45 --> n48
-  n49["004_backlog_frozen.sql"]
-  n45 --> n49
-  n50["005_archive_backlog.sql"]
-  n45 --> n50
-  n51["006_security_hardening.sql"]
-  n45 --> n51
-  n52["007_metadata_typed_retrieval.sql"]
-  n45 --> n52
-  n53["008_global_scope.sql"]
-  n45 --> n53
-  n54["009_fix_rpc_dual_scope.sql"]
-  n45 --> n54
-  n55["010_agent_skills.sql"]
-  n45 --> n55
-  n56["011_trajectory_compaction.sql"]
-  n45 --> n56
-  n57["012_sleep_learning.sql"]
-  n45 --> n57
-  n58["013_archive_backlog_chunk_link.sql"]
-  n45 --> n58
-  n59["014_workflow_checkpoints.sql"]
-  n45 --> n59
-  n60["015_curriculum_tasks.sql"]
-  n45 --> n60
-  n61["016_daemon_telemetry.sql"]
-  n45 --> n61
-  n62["017_explicit_service_role_grants.sql"]
-  n45 --> n62
-  n63["018_telemetry_retention.sql"]
-  n45 --> n63
-  n64["apply-schema.ts"]
-  n45 --> n64
-  n65["backfill-ledger.ts"]
-  n45 --> n65
-  n66["backup-and-remove.ts"]
-  n45 --> n66
-  n67["e2e-incremental-test.ts"]
-  n45 --> n67
-  n68["e2e-isolation-test.ts"]
-  n45 --> n68
-  n69["e2e-test.ts"]
-  n45 --> n69
-  n70["lint-boundaries.ts"]
-  n45 --> n70
-  n71["… (19 more)"]
-  n45 --> n71
-  n72["src/"]
-  n0 --> n72
-  n73["curriculum/"]
-  n72 --> n73
-  n74["daemon.ts"]
+  n40["release-notes-v2.1.0.md"]
+  n2 --> n40
+  n41["hooks/"]
+  n0 --> n41
+  n42["md-policy.py"]
+  n41 --> n42
+  n43["README.md"]
+  n41 --> n43
+  n44["images/"]
+  n0 --> n44
+  n45["GPT SMC v2.0-rc1.png"]
+  n44 --> n45
+  n46["scripts/"]
+  n0 --> n46
+  n47["001_schema.sql"]
+  n46 --> n47
+  n48["002_multi_project.sql"]
+  n46 --> n48
+  n49["003_file_hash.sql"]
+  n46 --> n49
+  n50["004_backlog_frozen.sql"]
+  n46 --> n50
+  n51["005_archive_backlog.sql"]
+  n46 --> n51
+  n52["006_security_hardening.sql"]
+  n46 --> n52
+  n53["007_metadata_typed_retrieval.sql"]
+  n46 --> n53
+  n54["008_global_scope.sql"]
+  n46 --> n54
+  n55["009_fix_rpc_dual_scope.sql"]
+  n46 --> n55
+  n56["010_agent_skills.sql"]
+  n46 --> n56
+  n57["011_trajectory_compaction.sql"]
+  n46 --> n57
+  n58["012_sleep_learning.sql"]
+  n46 --> n58
+  n59["013_archive_backlog_chunk_link.sql"]
+  n46 --> n59
+  n60["014_workflow_checkpoints.sql"]
+  n46 --> n60
+  n61["015_curriculum_tasks.sql"]
+  n46 --> n61
+  n62["016_daemon_telemetry.sql"]
+  n46 --> n62
+  n63["017_explicit_service_role_grants.sql"]
+  n46 --> n63
+  n64["018_telemetry_retention.sql"]
+  n46 --> n64
+  n65["apply-schema.ts"]
+  n46 --> n65
+  n66["backfill-ledger.ts"]
+  n46 --> n66
+  n67["backup-and-remove.ts"]
+  n46 --> n67
+  n68["e2e-incremental-test.ts"]
+  n46 --> n68
+  n69["e2e-isolation-test.ts"]
+  n46 --> n69
+  n70["e2e-test.ts"]
+  n46 --> n70
+  n71["lint-boundaries.ts"]
+  n46 --> n71
+  n72["… (19 more)"]
+  n46 --> n72
+  n73["src/"]
+  n0 --> n73
+  n74["curriculum/"]
   n73 --> n74
-  n75["scanner.ts"]
-  n73 --> n75
-  n76["lib/"]
-  n72 --> n76
-  n77["migrations.ts"]
-  n76 --> n77
-  n78["sleep/"]
-  n72 --> n78
-  n79["daemon.ts"]
-  n78 --> n79
-  n80["miner.ts"]
-  n78 --> n80
-  n81["telemetry/"]
-  n72 --> n81
-  n82["emit.ts"]
-  n81 --> n82
-  n83["pruner.ts"]
-  n81 --> n83
-  n84["types.ts"]
-  n81 --> n84
-  n85["tools/"]
-  n72 --> n85
-  n86["backlog.ts"]
-  n85 --> n86
-  n87["batch-freeze-patterns.ts"]
-  n85 --> n87
-  n88["bloat-audit.ts"]
-  n85 --> n88
-  n89["checkpoint.ts"]
-  n85 --> n89
-  n90["compact.ts"]
-  n85 --> n90
-  n91["conflict.ts"]
-  n85 --> n91
-  n92["curriculum.ts"]
-  n85 --> n92
-  n93["frozen-cache.ts"]
-  n85 --> n93
-  n94["health.ts"]
-  n85 --> n94
-  n95["hygiene.ts"]
-  n85 --> n95
-  n96["image.ts"]
-  n85 --> n96
-  n97["list-global-patterns.ts"]
-  n85 --> n97
-  n98["orchestrator.ts"]
-  n85 --> n98
-  n99["policy.ts"]
-  n85 --> n99
-  n100["refactor.ts"]
-  n85 --> n100
-  n101["save.ts"]
-  n85 --> n101
-  n102["search.ts"]
-  n85 --> n102
-  n103["setup.ts"]
-  n85 --> n103
-  n104["shared-schemas.ts"]
-  n85 --> n104
-  n105["skills.ts"]
-  n85 --> n105
-  n106["sleep.ts"]
-  n85 --> n106
-  n107["sovereign-constitution.ts"]
-  n85 --> n107
-  n108["summarize.ts"]
-  n85 --> n108
-  n109["sync.ts"]
-  n85 --> n109
-  n110["system_dashboard.ts"]
-  n85 --> n110
-  n111["… (1 more)"]
-  n85 --> n111
-  n112["trajectory/"]
-  n72 --> n112
-  n113["daemon.ts"]
-  n112 --> n113
-  n114["stripper.ts"]
-  n112 --> n114
-  n115["summarizer.ts"]
-  n112 --> n115
-  n116["transactions/"]
-  n72 --> n116
-  n117["checkpoint.ts"]
-  n116 --> n117
-  n118["chunker.ts"]
-  n72 --> n118
-  n119["config.ts"]
-  n72 --> n119
-  n120["index.ts"]
-  n72 --> n120
-  n121["ollama.ts"]
-  n72 --> n121
-  n122["project-detect.ts"]
-  n72 --> n122
-  n123["project.ts"]
-  n72 --> n123
-  n124["supabase.ts"]
-  n72 --> n124
-  n125["verification-gate.ts"]
-  n72 --> n125
-  n126["version.ts"]
-  n72 --> n126
-  n127["tests/"]
-  n0 --> n127
-  n128["sql_fixtures/"]
-  n127 --> n128
-  n129["006_smoke.sql"]
+  n75["daemon.ts"]
+  n74 --> n75
+  n76["scanner.ts"]
+  n74 --> n76
+  n77["lib/"]
+  n73 --> n77
+  n78["migrations.ts"]
+  n77 --> n78
+  n79["sleep/"]
+  n73 --> n79
+  n80["daemon.ts"]
+  n79 --> n80
+  n81["miner.ts"]
+  n79 --> n81
+  n82["telemetry/"]
+  n73 --> n82
+  n83["emit.ts"]
+  n82 --> n83
+  n84["pruner.ts"]
+  n82 --> n84
+  n85["types.ts"]
+  n82 --> n85
+  n86["tools/"]
+  n73 --> n86
+  n87["backlog.ts"]
+  n86 --> n87
+  n88["batch-freeze-patterns.ts"]
+  n86 --> n88
+  n89["bloat-audit.ts"]
+  n86 --> n89
+  n90["checkpoint.ts"]
+  n86 --> n90
+  n91["compact.ts"]
+  n86 --> n91
+  n92["conflict.ts"]
+  n86 --> n92
+  n93["curriculum.ts"]
+  n86 --> n93
+  n94["frozen-cache.ts"]
+  n86 --> n94
+  n95["health.ts"]
+  n86 --> n95
+  n96["hygiene.ts"]
+  n86 --> n96
+  n97["image.ts"]
+  n86 --> n97
+  n98["list-global-patterns.ts"]
+  n86 --> n98
+  n99["orchestrator.ts"]
+  n86 --> n99
+  n100["policy.ts"]
+  n86 --> n100
+  n101["refactor.ts"]
+  n86 --> n101
+  n102["save.ts"]
+  n86 --> n102
+  n103["search.ts"]
+  n86 --> n103
+  n104["setup.ts"]
+  n86 --> n104
+  n105["shared-schemas.ts"]
+  n86 --> n105
+  n106["skills.ts"]
+  n86 --> n106
+  n107["sleep.ts"]
+  n86 --> n107
+  n108["sovereign-constitution.ts"]
+  n86 --> n108
+  n109["summarize.ts"]
+  n86 --> n109
+  n110["sync.ts"]
+  n86 --> n110
+  n111["system_dashboard.ts"]
+  n86 --> n111
+  n112["… (1 more)"]
+  n86 --> n112
+  n113["trajectory/"]
+  n73 --> n113
+  n114["daemon.ts"]
+  n113 --> n114
+  n115["stripper.ts"]
+  n113 --> n115
+  n116["summarizer.ts"]
+  n113 --> n116
+  n117["transactions/"]
+  n73 --> n117
+  n118["checkpoint.ts"]
+  n117 --> n118
+  n119["chunker.ts"]
+  n73 --> n119
+  n120["config.ts"]
+  n73 --> n120
+  n121["index.ts"]
+  n73 --> n121
+  n122["ollama.ts"]
+  n73 --> n122
+  n123["project-detect.ts"]
+  n73 --> n123
+  n124["project.ts"]
+  n73 --> n124
+  n125["supabase.ts"]
+  n73 --> n125
+  n126["verification-gate.ts"]
+  n73 --> n126
+  n127["version.ts"]
+  n73 --> n127
+  n128["tests/"]
+  n0 --> n128
+  n129["sql_fixtures/"]
   n128 --> n129
-  n130["006_verify.sql"]
-  n128 --> n130
-  n131["capabilities.test.ts"]
-  n127 --> n131
-  n132["health.test.ts"]
-  n127 --> n132
-  n133["list-global-patterns.test.ts"]
-  n127 --> n133
-  n134["migrations.test.ts"]
-  n127 --> n134
-  n135["orchestrator.test.ts"]
-  n127 --> n135
-  n136["trajectory-daemon.test.ts"]
-  n127 --> n136
-  n137["trajectory-stripper.test.ts"]
-  n127 --> n137
-  n138["trajectory-summarizer.test.ts"]
-  n127 --> n138
-  n139[".env.example"]
-  n0 --> n139
-  n140[".gitignore"]
+  n130["006_smoke.sql"]
+  n129 --> n130
+  n131["006_verify.sql"]
+  n129 --> n131
+  n132["capabilities.test.ts"]
+  n128 --> n132
+  n133["health.test.ts"]
+  n128 --> n133
+  n134["list-global-patterns.test.ts"]
+  n128 --> n134
+  n135["migrations.test.ts"]
+  n128 --> n135
+  n136["orchestrator.test.ts"]
+  n128 --> n136
+  n137["trajectory-daemon.test.ts"]
+  n128 --> n137
+  n138["trajectory-stripper.test.ts"]
+  n128 --> n138
+  n139["trajectory-summarizer.test.ts"]
+  n128 --> n139
+  n140[".env.example"]
   n0 --> n140
-  n141["ARCHITECTURE.md"]
+  n141[".gitignore"]
   n0 --> n141
-  n142["CHANGELOG.md"]
+  n142["ARCHITECTURE.md"]
   n0 --> n142
-  n143["CLAUDE.md"]
+  n143["CHANGELOG.md"]
   n0 --> n143
-  n144["LICENSE"]
+  n144["CLAUDE.md"]
   n0 --> n144
-  n145["marketplace.json"]
+  n145["LICENSE"]
   n0 --> n145
-  n146["package-lock.json"]
+  n146["marketplace.json"]
   n0 --> n146
-  n147["package.json"]
+  n147["package-lock.json"]
   n0 --> n147
-  n148["project_file_architecture.md"]
+  n148["package.json"]
   n0 --> n148
-  n149["README.md"]
+  n149["project_file_architecture.md"]
   n0 --> n149
-  n150["tsconfig.json"]
+  n150["README.md"]
   n0 --> n150
+  n151["tsconfig.json"]
+  n0 --> n151
 ```
 
 <!-- MEMORY:ARCH:END -->
