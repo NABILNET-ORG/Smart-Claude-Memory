@@ -43,6 +43,28 @@ Memory is strictly **per-project**: when you're in project A, Claude cannot see 
 
 ---
 
+## Install
+
+**Option A — Claude Code plugin (recommended for end users):**
+
+```
+/plugin install NABILNET-ORG/Smart-Claude-Memory
+```
+
+Auto-wires the MCP server and the `md-policy.py` PreToolUse hook via `.claude-plugin/plugin.json`. Zero manual `~/.claude.json` edits.
+
+**Option B — npm (for direct use or programmatic embedding):**
+
+```bash
+npm install smart-claude-memory-mcp
+```
+
+Published as [`smart-claude-memory-mcp`](https://www.npmjs.com/package/smart-claude-memory-mcp) (MIT). Exposes a `smart-claude-memory-mcp` binary you can wire into any MCP-compatible client.
+
+Both paths require an empty Supabase project + a local Ollama install with `moondream` and `nomic-embed-text` pulled. See [Bootstrap](#bootstrap) for the three-step setup ritual.
+
+---
+
 ## System Architecture
 
 The system operates under the Sovereign Orchestrator pattern with Autonomous Self-Healing. The diagrams below are mirrored from [ARCHITECTURE.md](ARCHITECTURE.md), which remains the canonical source of truth.
