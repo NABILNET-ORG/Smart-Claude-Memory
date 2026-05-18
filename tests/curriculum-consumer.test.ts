@@ -443,3 +443,43 @@ describe("apply_curriculum_task — success path", () => {
     assert.equal((skills ?? []).length, 0, "no agent_skills row created on aborted tx");
   });
 });
+
+// ─── Suite D: apply_curriculum_task — failure path ────────────────────────
+
+describe("apply_curriculum_task — failure path", () => {
+  test("D1: success=false → task flips to rejected, description persisted as rejection_reason, no promote", async () => {
+    const projectId = newProject();
+    const taskId = await insertThrowawayCurriculumTask(projectId, {
+      kind: "refactor",
+      targetPath: "d1",
+    });
+    await pullCurriculumTask({ project_id: projectId, session_id: "s32-d1" });
+
+    const result = await applyCurriculumTask({
+      task_id: taskId,
+      success: false,
+      description: "regression observed in C2 — rolling back this attempt",
+    });
+
+    assert.equal(result.ok, true, "failure path returns ok:true (the apply did happen)");
+    assert.equal(result.gate_clear, true, "gate check skipped on failure path");
+    assert.ok(result.result);
+    assert.equal(result.result!.applied_status, "rejected");
+    assert.equal(result.result!.promoted_candidate_id, null);
+    assert.equal(result.result!.promoted_skill_id, null);
+    assert.equal(result.result!.promoted_at, null);
+
+    const { data: row } = await supabase
+      .from("curriculum_tasks")
+      .select("status, rejection_reason, verified_at")
+      .eq("id", taskId)
+      .single();
+    assert.equal(row!.status, "rejected");
+    assert.equal(
+      row!.rejection_reason,
+      "regression observed in C2 — rolling back this attempt",
+      "description input persisted into rejection_reason column",
+    );
+    assert.equal(row!.verified_at, null, "verified_at NOT stamped on failure path");
+  });
+});
