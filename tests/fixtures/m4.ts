@@ -105,6 +105,11 @@ export type ThrowawaySkillCandidateOpts = {
   frequency?: number;
   successCount?: number;
   proposedName?: string | null;
+  // promote_candidate_to_skill (012_sleep_learning.sql:295) raises on NULL
+  // proposed_name OR proposed_steps. Tests that drive apply_curriculum_task
+  // through the success+linked_candidate atomic-promote path MUST set both.
+  // Pass `null` explicitly to characterize the NULL-aborts path (S32 C4).
+  proposedSteps?: unknown[] | null;
   // ISO timestamp string. When omitted, server default `now()` is used.
   // Use to test the staleCandidateMinAgeDays window.
   createdAt?: string;
@@ -123,7 +128,10 @@ export async function insertThrowawaySkillCandidate(
     state: opts.state ?? "mined",
     frequency: opts.frequency ?? 1,
     success_count: opts.successCount ?? 0,
-    proposed_name: opts.proposedName ?? `__m5_test_${patternHash.slice(-8)}`,
+    proposed_name:
+      opts.proposedName === null ? null : (opts.proposedName ?? `__m5_test_${patternHash.slice(-8)}`),
+    proposed_steps:
+      opts.proposedSteps === null ? null : (opts.proposedSteps ?? null),
   };
   if (opts.createdAt !== undefined) {
     row.created_at = opts.createdAt;
@@ -141,13 +149,69 @@ export async function insertThrowawaySkillCandidate(
   return data.id;
 }
 
+// ─── insertThrowawayCurriculumTask ────────────────────────────────────────
+// M5 Consumer (S32) fixture. Inserts a single curriculum_tasks row under the
+// test's project_id namespace. Default kind='refactor' + status='queued' so
+// the row is immediately pullable. Pass linkedCandidateId to exercise the
+// auto-promote bridge in apply_curriculum_task.
+
+export type ThrowawayCurriculumTaskOpts = {
+  kind?: "test_gap" | "refactor" | "rollback_repro";
+  targetPath?: string;
+  rationale?: string;
+  signalSource?: Record<string, unknown>;
+  linkedCandidateId?: number | null;
+  status?: "queued" | "pulled" | "attempted" | "verified" | "rejected" | "expired";
+  createdAt?: string;
+};
+
+export async function insertThrowawayCurriculumTask(
+  projectId: string,
+  opts: ThrowawayCurriculumTaskOpts = {},
+): Promise<number> {
+  const kind = opts.kind ?? "refactor";
+  // target_path must be unique per (project, target, kind) WHEN status='queued'
+  // (partial unique index curriculum_tasks_queued_target_kind_uniq).
+  // Random suffix dodges this when tests stack multiple queued rows.
+  const targetPath = opts.targetPath ?? `__m5_test_${randomUUID().slice(0, 8)}`;
+  const row: Record<string, unknown> = {
+    project_id: projectId,
+    kind,
+    target_path: targetPath,
+    rationale: opts.rationale ?? `__m5_consumer_test:${kind}`,
+    signal_source: opts.signalSource ?? {},
+    linked_candidate_id: opts.linkedCandidateId ?? null,
+    status: opts.status ?? "queued",
+  };
+  if (opts.createdAt !== undefined) {
+    row.created_at = opts.createdAt;
+  }
+  const { data, error } = await supabase
+    .from("curriculum_tasks")
+    .insert(row)
+    .select("id")
+    .single();
+  if (error || !data) {
+    throw new Error(
+      `insertThrowawayCurriculumTask failed: ${error?.message ?? "no row returned"}`,
+    );
+  }
+  return data.id;
+}
+
 export async function cleanupProject(projectId: string): Promise<void> {
   // Order matters: curriculum_tasks first (FKs to workflow_checkpoints via
   // linked_checkpoint_id AND skill_candidates via linked_candidate_id),
-  // then skill_candidates, then workflow_checkpoints (FKs to memory_chunks
-  // via source_chunk_id), then cloud_backlog, then memory_chunks.
+  // then skill_candidates (FKs agent_skills via promoted_skill_id ON DELETE
+  // SET NULL — safe to delete candidates first; agent_skills follow), then
+  // agent_skills (S32: M5 consumer atomic-promote tests mint real skill rows
+  // via promote_candidate_to_skill — they MUST be cleaned by project_id or
+  // they leak into the live agent_skills vault), then workflow_checkpoints
+  // (FKs to memory_chunks via source_chunk_id), then cloud_backlog, then
+  // memory_chunks.
   await supabase.from("curriculum_tasks").delete().eq("project_id", projectId);
   await supabase.from("skill_candidates").delete().eq("project_id", projectId);
+  await supabase.from("agent_skills").delete().eq("project_id", projectId);
   await supabase.from("workflow_checkpoints").delete().eq("project_id", projectId);
   await supabase.from("cloud_backlog").delete().eq("project_id", projectId);
   await supabase.from("memory_chunks").delete().eq("project_id", projectId);
