@@ -519,7 +519,7 @@ For inquiries, integrations, or sovereign-grade Claude Code tooling, visit [nabi
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-05-18T14:54:55.734Z for `smart-claude-memory`._
+_Auto-synced at 2026-05-18T15:31:06.105Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
@@ -596,7 +596,7 @@ flowchart TD
   n11 --> n35
   n36["SESSION-34-REPORT.md"]
   n11 --> n36
-  n37["… (1 more)"]
+  n37["… (5 more)"]
   n11 --> n37
   n38["specs/"]
   n5 --> n38

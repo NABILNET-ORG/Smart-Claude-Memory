@@ -879,7 +879,7 @@ flowchart TD
   n11 --> n35
   n36["SESSION-34-REPORT.md"]
   n11 --> n36
-  n37["… (1 more)"]
+  n37["… (5 more)"]
   n11 --> n37
   n38["specs/"]
   n5 --> n38
