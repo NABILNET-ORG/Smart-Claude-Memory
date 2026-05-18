@@ -81,3 +81,35 @@ describe("pruneMemory — dry-run", () => {
     assert.ok(survivors.includes(orphanFile), "orphan row must survive dry_run");
   });
 });
+
+describe("pruneMemory — inline:* filter (regression-killer)", () => {
+  const projectId = uniqueProjectId();
+  const inlineOrigin = `inline:${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+
+  after(async () => {
+    await deleteChunksForFile(projectId, inlineOrigin);
+  });
+
+  test("T3: skips inline:* origins even when explicit_paths names one with confirm:true", async () => {
+    await insertThrowawayChunkForFile(projectId, inlineOrigin, "ghost-row-must-survive");
+
+    const result = await pruneMemory({
+      explicit_paths: [inlineOrigin],
+      project_id: projectId,
+      confirm: true,
+    });
+
+    assert.equal(result.candidates.length, 1);
+    const c = result.candidates[0];
+    assert.equal(c.file_origin, inlineOrigin);
+    assert.equal(c.skipped_reason, "inline_origin");
+    assert.equal(c.chunk_count, 0);
+    assert.equal(c.exists_on_disk, false);
+
+    const survivors = await listFileOriginsForProject(projectId);
+    assert.ok(
+      survivors.includes(inlineOrigin),
+      "inline:* row MUST survive — silent wipe would lose save_memory state",
+    );
+  });
+});
