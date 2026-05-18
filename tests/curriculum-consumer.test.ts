@@ -27,6 +27,7 @@ import {
   listCurriculumTasks,
   pullCurriculumTask,
   applyCurriculumTask,
+  rejectCurriculumTask,
 } from "../src/tools/curriculum.js";
 import { supabase } from "../src/supabase.js";
 import { setPending, clearPending } from "../src/verification-gate.js";
@@ -481,5 +482,92 @@ describe("apply_curriculum_task — failure path", () => {
       "description input persisted into rejection_reason column",
     );
     assert.equal(row!.verified_at, null, "verified_at NOT stamped on failure path");
+  });
+});
+
+// ─── Suite E: reject_curriculum_task ──────────────────────────────────────
+
+describe("reject_curriculum_task", () => {
+  test("E1: reject a queued task → status=rejected, reason persisted as rejection_reason", async () => {
+    const projectId = newProject();
+    const taskId = await insertThrowawayCurriculumTask(projectId, {
+      kind: "refactor",
+      targetPath: "e1",
+    });
+
+    const result = await rejectCurriculumTask({
+      task_id: taskId,
+      reason: "out of scope for current sprint",
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.task_id, taskId);
+    assert.equal(result.status, "rejected");
+
+    const { data: row } = await supabase
+      .from("curriculum_tasks")
+      .select("status, rejection_reason, verified_at")
+      .eq("id", taskId)
+      .single();
+    assert.equal(row!.status, "rejected");
+    assert.equal(row!.rejection_reason, "out of scope for current sprint");
+    assert.equal(row!.verified_at, null, "reject path never stamps verified_at");
+  });
+
+  test("E2: reject a pulled task → status=rejected (no status precondition)", async () => {
+    const projectId = newProject();
+    const taskId = await insertThrowawayCurriculumTask(projectId, {
+      kind: "refactor",
+      targetPath: "e2",
+    });
+    await pullCurriculumTask({ project_id: projectId, session_id: "s32-e2" });
+
+    const result = await rejectCurriculumTask({
+      task_id: taskId,
+      reason: "mid-pull abort",
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.status, "rejected");
+
+    const { data: row } = await supabase
+      .from("curriculum_tasks")
+      .select("status, rejection_reason")
+      .eq("id", taskId)
+      .single();
+    assert.equal(row!.status, "rejected");
+    assert.equal(row!.rejection_reason, "mid-pull abort");
+  });
+
+  test("E3: reject an already-rejected task is idempotent — second reason OVERWRITES first (characterized)", async () => {
+    const projectId = newProject();
+    const taskId = await insertThrowawayCurriculumTask(projectId, {
+      kind: "refactor",
+      targetPath: "e3",
+    });
+
+    const first = await rejectCurriculumTask({
+      task_id: taskId,
+      reason: "first reason",
+    });
+    assert.equal(first.status, "rejected");
+
+    // Second reject — handler has NO status precondition (curriculum.ts:321-342).
+    // It unconditionally UPDATEs the row, so the reason is overwritten.
+    const second = await rejectCurriculumTask({
+      task_id: taskId,
+      reason: "second reason — overwrites first",
+    });
+    assert.equal(second.ok, true);
+    assert.equal(second.status, "rejected");
+
+    const { data: row } = await supabase
+      .from("curriculum_tasks")
+      .select("rejection_reason")
+      .eq("id", taskId)
+      .single();
+    assert.equal(
+      row!.rejection_reason,
+      "second reason — overwrites first",
+      "idempotent reject: second call overwrites rejection_reason",
+    );
   });
 });
