@@ -165,6 +165,18 @@ flowchart LR
   E --> F[(memory_chunks<br/>+ GIN metadata)]
 ```
 
+### 4.2.1 prune_memory — orphan reaping with explicit-paths gate (SCM-S31-D1)
+
+`prune_memory` is the deletion counterpart to `sync_local_memory`'s `orphan_files` reporting. It accepts a **required**, non-empty `explicit_paths: string[]` — no wildcards, no implicit scans — and for each path verifies (a) absence on disk and (b) presence in `memory_chunks` under the caller's `project_id` before any row leaves the database. The SQL goes through the pre-existing `deleteChunksForFile(project_id, file_origin)` helper, which is already pinned on both keys, so cross-project bleed is structurally impossible.
+
+Three hard guards protect against silent loss:
+
+1. **`inline:*` filter.** Synthetic `inline:<sha256>` origins emitted by `save_memory` have no on-disk counterpart; a naive absence check would flag them as orphans and wipe every inline-saved memory in the project. They are skipped before any DELETE, even with `confirm:true`.
+2. **GLOBAL refused.** `project_id='GLOBAL'` is rejected synchronously — those rows are all inline saves.
+3. **Dry-run default.** `confirm:false` (the default) returns a classified preview without touching the database.
+
+Every confirmed delete writes a JSON manifest to `~/.claude-memory/prune-backups/<ISO-stamp>-<project>/manifest.json` with `{project_id, prune_at, items: [{file_origin, chunk_count, was_orphan: true}]}`. The manifest is the archive — full reversal is a re-sync. This reconciles with the Constitution's "Archive, never delete" rule (SCM-S17-D1, SCM-S18-D1): that rule bans **content mutation** of immutable HNSW-indexed rows, not row-lifecycle reaping of rows whose source file is gone. FK CASCADE at §4.5 and the telemetry pruner's hard-DELETE at §4.8 already establish row-lifecycle deletion as in-doctrine when the deleted data is provably unobservable elsewhere.
+
 ### 4.3 Global vs Local Retrieval (v2.0.0-rc1 — migration 008)
 
 A reserved `project_id` of literal `'GLOBAL'` is the **Knowledge Vault**: any chunk written there is visible to every project. Universal patterns, lessons-learned, and Rule 9 entries belong here. Routine project memories stay scoped to the slug derived from `process.cwd()`.
