@@ -21,11 +21,15 @@ import {
   cleanupProject,
   insertThrowawayCurriculumTask,
   insertThrowawaySkillCandidate,
+  insertThrowawayCheckpoint,
 } from "./fixtures/m4.js";
 import {
   listCurriculumTasks,
   pullCurriculumTask,
+  applyCurriculumTask,
 } from "../src/tools/curriculum.js";
+import { supabase } from "../src/supabase.js";
+import { setPending, clearPending } from "../src/verification-gate.js";
 
 const createdProjectIds: string[] = [];
 function newProject(): string {
@@ -208,5 +212,234 @@ describe("pull_curriculum_task", () => {
     });
     assert.equal(third.claimed, true);
     assert.equal(third.task!.id, refactorId, "refactor row still claimable under kind filter");
+  });
+});
+
+// ─── Suite C: apply_curriculum_task — success path ───────────────────────
+
+describe("apply_curriculum_task — success path", () => {
+  test("C1: success=true, no linked candidate → verified, no promote", async () => {
+    const projectId = newProject();
+    const cpId = await insertThrowawayCheckpoint(projectId, {
+      stepLabel: "c1-cp",
+      status: "committed",
+    });
+    const taskId = await insertThrowawayCurriculumTask(projectId, {
+      kind: "refactor",
+      targetPath: "c1",
+    });
+
+    const pulled = await pullCurriculumTask({
+      project_id: projectId,
+      session_id: "s32-c1",
+    });
+    assert.equal(pulled.claimed, true);
+    assert.equal(pulled.task!.id, taskId);
+
+    const result = await applyCurriculumTask({
+      task_id: taskId,
+      success: true,
+      checkpoint_id: cpId,
+      bypass_verification_gate: true,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.gate_clear, true);
+    assert.ok(result.result, "result payload present on success");
+    assert.equal(result.result!.applied_status, "verified");
+    assert.equal(result.result!.linked_checkpoint_id, cpId);
+    assert.equal(result.result!.promoted_candidate_id, null, "no candidate link → no promote");
+    assert.equal(result.result!.promoted_skill_id, null);
+    assert.equal(result.result!.promoted_at, null);
+  });
+
+  test("C2: success=true with linked candidate → atomic promote (verified_at === promoted_at === skill.created_at)", async () => {
+    const projectId = newProject();
+    const candId = await insertThrowawaySkillCandidate(projectId, {
+      frequency: 5,
+      state: "mined",
+      proposedName: `c2-skill-${Date.now()}`,
+      proposedSteps: [
+        { step: 1, action: "noop", purpose: "atomic-tx proof seed" },
+      ],
+    });
+    const cpId = await insertThrowawayCheckpoint(projectId, {
+      stepLabel: "c2-cp",
+      status: "committed",
+    });
+    const taskId = await insertThrowawayCurriculumTask(projectId, {
+      kind: "refactor",
+      targetPath: `skill_candidate:c2-${candId}`,
+      linkedCandidateId: candId,
+    });
+
+    await pullCurriculumTask({ project_id: projectId, session_id: "s32-c2" });
+
+    const result = await applyCurriculumTask({
+      task_id: taskId,
+      success: true,
+      checkpoint_id: cpId,
+      description: "S32 C2 atomic-tx proof",
+      bypass_verification_gate: true,
+    });
+
+    assert.equal(result.ok, true);
+    assert.ok(result.result, "result payload present");
+    assert.equal(result.result!.applied_status, "verified");
+    assert.equal(result.result!.promoted_candidate_id, candId);
+    assert.ok(result.result!.promoted_skill_id, "skill row minted");
+    assert.ok(result.result!.promoted_at, "promoted_at stamped");
+
+    // ATOMIC-TX PROOF: all three timestamps must be IDENTICAL.
+    // PostgreSQL's now() returns transaction-start time, constant within
+    // a single SQL transaction. Inside apply_curriculum_task's tx:
+    //   * curriculum_tasks.verified_at        = now()  (012:316)
+    //   * skill_candidates.updated_at         = now()  (012:318 promote fn)
+    //   * agent_skills.created_at             = now()  (table default)
+    // All three evaluate the SAME now(), so equality is exact.
+    // NOTE: skill_candidates has NO `promoted_at` column — only updated_at.
+    const [{ data: task }, { data: cand }, { data: skill }] = await Promise.all([
+      supabase
+        .from("curriculum_tasks")
+        .select("verified_at")
+        .eq("id", taskId)
+        .single(),
+      supabase
+        .from("skill_candidates")
+        .select("updated_at, state, promoted_skill_id")
+        .eq("id", candId)
+        .single(),
+      supabase
+        .from("agent_skills")
+        .select("created_at, name")
+        .eq("id", result.result!.promoted_skill_id!)
+        .single(),
+    ]);
+
+    assert.ok(task && cand && skill, "all three rows readable");
+    assert.equal(cand!.state, "promoted", "candidate flipped to promoted");
+    assert.equal(cand!.promoted_skill_id, result.result!.promoted_skill_id);
+    assert.equal(
+      task!.verified_at,
+      cand!.updated_at,
+      `task.verified_at (${task!.verified_at}) must equal candidate.updated_at (${cand!.updated_at})`,
+    );
+    assert.equal(
+      cand!.updated_at,
+      skill!.created_at,
+      `candidate.updated_at (${cand!.updated_at}) must equal skill.created_at (${skill!.created_at})`,
+    );
+    // The RPC also returns promoted_at = now() — must equal the others.
+    assert.equal(
+      result.result!.promoted_at,
+      task!.verified_at,
+      `RPC-returned promoted_at (${result.result!.promoted_at}) must equal task.verified_at (${task!.verified_at})`,
+    );
+  });
+
+  test("C3: verification gate present, bypass=false → handler returns ok:false (does NOT throw)", async () => {
+    const projectId = newProject();
+    const cpId = await insertThrowawayCheckpoint(projectId, {
+      stepLabel: "c3-cp",
+      status: "committed",
+    });
+    const taskId = await insertThrowawayCurriculumTask(projectId, {
+      kind: "refactor",
+      targetPath: "c3",
+    });
+    await pullCurriculumTask({ project_id: projectId, session_id: "s32-c3" });
+
+    await setPending({
+      reason: "S32-C3 test gate",
+      file: "tests/curriculum-consumer.test.ts",
+      raised_at: new Date().toISOString(),
+    });
+
+    try {
+      const result = await applyCurriculumTask({
+        task_id: taskId,
+        success: true,
+        checkpoint_id: cpId,
+        bypass_verification_gate: false,
+      });
+      assert.equal(result.ok, false, "gate-blocked apply returns ok:false");
+      assert.equal(result.gate_clear, false);
+      assert.match(result.reason ?? "", /verification gate/i);
+      assert.equal(result.result, null, "no RPC result when gate blocked");
+    } finally {
+      await clearPending();
+    }
+
+    // Task must still be 'pulled' — no SQL mutation when gate blocks.
+    const { data: row } = await supabase
+      .from("curriculum_tasks")
+      .select("status, verified_at")
+      .eq("id", taskId)
+      .single();
+    assert.equal(row!.status, "pulled", "status unchanged when gate blocked");
+    assert.equal(row!.verified_at, null, "verified_at NOT stamped");
+  });
+
+  test("C4: linked candidate with NULL proposed_steps → atomic rollback (no skill minted, task stays pulled)", async () => {
+    const projectId = newProject();
+    const candId = await insertThrowawaySkillCandidate(projectId, {
+      frequency: 5,
+      state: "mined",
+      proposedName: `c4-name-set-${Date.now()}`,
+      proposedSteps: null, // ← the abort trigger (012_sleep_learning.sql:295)
+    });
+    const cpId = await insertThrowawayCheckpoint(projectId, {
+      stepLabel: "c4-cp",
+      status: "committed",
+    });
+    const taskId = await insertThrowawayCurriculumTask(projectId, {
+      kind: "refactor",
+      targetPath: `skill_candidate:c4-${candId}`,
+      linkedCandidateId: candId,
+    });
+    await pullCurriculumTask({ project_id: projectId, session_id: "s32-c4" });
+
+    const result = await applyCurriculumTask({
+      task_id: taskId,
+      success: true,
+      checkpoint_id: cpId,
+      bypass_verification_gate: true,
+    });
+
+    // Handler catches the RPC error and surfaces it as ok:false with reason.
+    assert.equal(result.ok, false, "RPC abort surfaces as ok:false");
+    assert.equal(result.gate_clear, true, "gate was clear (this isn't a gate block)");
+    assert.ok(result.reason, "abort reason present");
+    assert.match(
+      result.reason!,
+      /proposed_name\/steps|missing/i,
+      `reason should mention NULL proposed_name/steps; got: ${result.reason}`,
+    );
+    assert.equal(result.result, null);
+
+    // ATOMIC ROLLBACK: task stays pulled, no skill row created, candidate stays mined.
+    // (skill_candidates has no promoted_at column — just state + promoted_skill_id.)
+    const [{ data: task }, { data: cand }] = await Promise.all([
+      supabase
+        .from("curriculum_tasks")
+        .select("status, verified_at, linked_checkpoint_id")
+        .eq("id", taskId)
+        .single(),
+      supabase
+        .from("skill_candidates")
+        .select("state, promoted_skill_id")
+        .eq("id", candId)
+        .single(),
+    ]);
+    assert.equal(task!.status, "pulled", "task stays pulled on aborted tx");
+    assert.equal(task!.verified_at, null, "verified_at NOT stamped on aborted tx");
+    assert.equal(cand!.state, "mined", "candidate stays mined on aborted tx");
+    assert.equal(cand!.promoted_skill_id, null);
+
+    const { data: skills } = await supabase
+      .from("agent_skills")
+      .select("id")
+      .eq("project_id", projectId);
+    assert.equal((skills ?? []).length, 0, "no agent_skills row created on aborted tx");
   });
 });
