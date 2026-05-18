@@ -4,12 +4,14 @@ import { getSleepLearnerStatus } from "../sleep/daemon.js";
 import { getCurriculumStatus } from "../curriculum/daemon.js";
 import { getCompactorStatus } from "../trajectory/daemon.js";
 import { getTelemetryPrunerStatus } from "../telemetry/pruner.js";
+import { getGraduationStatus } from "../graduation/daemon.js";
 
 type DaemonName =
   | "sleep_learner"
   | "curriculum_scanner"
   | "trajectory_compactor"
-  | "telemetry_pruner";
+  | "telemetry_pruner"
+  | "graduation_scanner";
 
 export type DashboardInput = {
   window_hours?: number;
@@ -44,7 +46,8 @@ function rollupFor(rows: Row[], sinceMs: number): Rollup {
       const mined = typeof p.mined === "number" ? p.mined : 0;
       const queued = typeof p.queued === "number" ? p.queued : 0;
       const deleted = typeof p.deleted === "number" ? p.deleted : 0;
-      itemsProcessed += compacted + mined + queued + deleted;
+      const proposed = typeof p.proposed === "number" ? p.proposed : 0;
+      itemsProcessed += compacted + mined + queued + deleted + proposed;
     } else if (r.event_type === "run_errored") {
       errors++;
     } else if (r.event_type === "task_outcome") {
@@ -78,6 +81,7 @@ export async function systemDashboardHandler(input: DashboardInput) {
     curriculum_scanner: getCurriculumStatus(),
     trajectory_compactor: getCompactorStatus(),
     telemetry_pruner: getTelemetryPrunerStatus(),
+    graduation_scanner: getGraduationStatus(),
   };
 
   const now = Date.now();
@@ -85,7 +89,7 @@ export async function systemDashboardHandler(input: DashboardInput) {
   const windowStart = now - windowHours * 3600_000;
   const daemons: Record<string, unknown> = {};
 
-  for (const d of ["sleep_learner", "curriculum_scanner", "trajectory_compactor", "telemetry_pruner"] as const) {
+  for (const d of ["sleep_learner", "curriculum_scanner", "trajectory_compactor", "telemetry_pruner", "graduation_scanner"] as const) {
     if (input.daemon && input.daemon !== d) continue;
     const daemonRows = rows.filter((r) => r.daemon === d);
     const r1h = rollupFor(daemonRows, oneHourAgo);
@@ -136,6 +140,7 @@ function compactLive(snap: Record<string, unknown>): string {
     "candidates_mined_total", "queued_total",
     "verified_total", "rejected_total", "auto_promotions_total",
     "last_run_deleted",
+    "proposed_total", "last_run_proposed",
   ];
   const parts: string[] = [];
   for (const k of pick) {
@@ -154,7 +159,7 @@ function compactLive(snap: Record<string, unknown>): string {
 
 export function renderDashboardMarkdown(result: DashboardResult): string {
   const now = Date.now();
-  const order = ["sleep_learner", "curriculum_scanner", "trajectory_compactor", "telemetry_pruner"] as const;
+  const order = ["sleep_learner", "curriculum_scanner", "trajectory_compactor", "telemetry_pruner", "graduation_scanner"] as const;
   const D = result.daemons as Record<string, any>;
   const lines: string[] = [];
 

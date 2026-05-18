@@ -7,6 +7,7 @@ import { getCompactorStatus } from "../trajectory/daemon.js";
 import { getSleepLearnerStatus } from "../sleep/daemon.js";
 import { getCurriculumStatus } from "../curriculum/daemon.js";
 import { getTelemetryPrunerStatus } from "../telemetry/pruner.js";
+import { getGraduationStatus } from "../graduation/daemon.js";
 import { VERSION } from "../version.js";
 
 // Per-daemon health derivation thresholds. Names use the user-mandated
@@ -207,6 +208,7 @@ type HealthReport = {
   sleep_learner: ReturnType<typeof getSleepLearnerStatus> & { derived: DerivedBlock };
   curriculum_scanner: ReturnType<typeof getCurriculumStatus> & { derived: DerivedBlock };
   telemetry_pruner: ReturnType<typeof getTelemetryPrunerStatus> & { derived: DerivedBlock };
+  graduation_scanner: ReturnType<typeof getGraduationStatus> & { derived: DerivedBlock };
   policy_enforcement: {
     cache_path: string;
     cache_present: boolean;
@@ -375,6 +377,7 @@ export async function checkSystemHealth(): Promise<HealthReport> {
     curriculum_scanner: [],
     trajectory_compactor: [],
     telemetry_pruner: [],
+    graduation_scanner: [],
   };
   try {
     const { data: telemetryRows, error: telemetryErr } = await supabase
@@ -406,6 +409,7 @@ export async function checkSystemHealth(): Promise<HealthReport> {
   const currSnap = getCurriculumStatus();
   const trajSnap = getCompactorStatus();
   const prunerSnap = getTelemetryPrunerStatus();
+  const graduSnap = getGraduationStatus();
 
   const uptimeSec = process.uptime();
   const sleepDerived = deriveDaemonStatus({
@@ -436,6 +440,13 @@ export async function checkSystemHealth(): Promise<HealthReport> {
     intervalMs: prunerSnap.interval_ms,
     lastRunAtIso: prunerSnap.last_run_at ?? null,
   });
+  const graduDerived = deriveDaemonStatus({
+    enabled: graduSnap.enabled,
+    events: byDaemon.graduation_scanner,
+    uptimeSec,
+    intervalMs: graduSnap.interval_ms,
+    lastRunAtIso: graduSnap.last_run_at ?? null,
+  });
 
   // Worst-of rollup: daemon derivation can only WORSEN overall, never improve it.
   // Preserves any degraded/down already set by supabase/ollama checks above.
@@ -445,6 +456,7 @@ export async function checkSystemHealth(): Promise<HealthReport> {
     currDerived.status,
     trajDerived.status,
     prunerDerived.status,
+    graduDerived.status,
   ]);
 
   const orchestrator = buildOrchestratorSnapshot(advisoryHook);
@@ -469,6 +481,7 @@ export async function checkSystemHealth(): Promise<HealthReport> {
     sleep_learner: { ...sleepSnap, derived: sleepDerived },
     curriculum_scanner: { ...currSnap, derived: currDerived },
     telemetry_pruner: { ...prunerSnap, derived: prunerDerived },
+    graduation_scanner: { ...graduSnap, derived: graduDerived },
     policy_enforcement: policy,
     orchestrator,
     summary,
