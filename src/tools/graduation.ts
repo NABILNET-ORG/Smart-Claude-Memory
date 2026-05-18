@@ -19,6 +19,7 @@
 //   - listGraduationCandidates (Task 8) — enumeration for the human curator
 //     UI / Orchestrator audit.
 
+import { z } from "zod";
 import { supabase } from "../supabase.js";
 
 // ─── composeGlobalRationale ───────────────────────────────────────────────
@@ -342,3 +343,72 @@ export async function listGraduationCandidates(
 
   return { count: results.length, results };
 }
+
+// ─── MCP InputShape exports (used by src/index.ts) ────────────────────────
+// Same pattern as src/tools/curriculum.ts — Zod `.shape` style so the MCP
+// server.tool() registration call can consume them directly. Single source
+// of truth — no Zod inlined in index.ts.
+
+export const listGraduationCandidatesInputShape = {
+  project_id: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Restrict to a single project namespace. Omit to scan all projects (multi-tenant)."),
+  state: z
+    .enum(["proposed", "composed", "approved", "rejected"])
+    .optional()
+    .describe("Filter by lifecycle state. Omit for all states."),
+  k: z
+    .number()
+    .int()
+    .positive()
+    .max(50)
+    .optional()
+    .describe("Max rows to return. Default 10, hard cap 50."),
+  offset: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe("Pagination offset. Default 0."),
+};
+
+export const composeGlobalRationaleInputShape = {
+  graduation_id: z.number().int().positive().describe("skill_graduations.id under review."),
+  verdict: z
+    .enum(["pass", "fail"])
+    .describe("Cross-Project Test verdict from the Orchestrator's LLM compose call."),
+  evidence: z
+    .string()
+    .min(1)
+    .describe("LLM's evidence body (≤120 words) — what is universal vs project-specific."),
+  global_rationale: z
+    .string()
+    .nullable()
+    .describe("If verdict='pass', the Sovereign-Vetting-grade rationale string (>=10 chars). Coerced to null when verdict='fail'."),
+  model: z
+    .string()
+    .min(1)
+    .describe("Compose-time model identifier (e.g., 'orchestrator:claude-opus-4-7'). Recorded for audit."),
+};
+
+export const confirmPromotionInputShape = {
+  graduation_id: z
+    .number()
+    .int()
+    .positive()
+    .describe("skill_graduations.id to promote. Must be at state='composed' with rationale length >=10."),
+};
+
+export const rejectGraduationInputShape = {
+  graduation_id: z
+    .number()
+    .int()
+    .positive()
+    .describe("skill_graduations.id to reject. Must be at state='proposed' or 'composed'."),
+  reason: z
+    .string()
+    .min(1)
+    .describe("Human-curator rejection reason. Persisted to rejection_reason for audit."),
+};
