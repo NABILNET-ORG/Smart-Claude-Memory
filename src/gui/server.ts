@@ -21,7 +21,8 @@
 //   POST /api/graduations/:id/reject        — rejectGraduation
 
 import http from "node:http";
-import { URL } from "node:url";
+import path from "node:path";
+import { URL, fileURLToPath } from "node:url";
 import {
   listGraduationCandidates as defaultList,
   composeGlobalRationale as defaultCompose,
@@ -365,7 +366,15 @@ async function readJsonBody(req: http.IncomingMessage): Promise<Record<string, u
 // Lets `npm run gui` boot the dashboard without the MCP stdio server.
 // Useful when an operator wants to curate graduations from a browser with
 // the MCP server NOT running (e.g. an offline review pass).
-if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, "/")}`) {
+//
+// Cross-platform guard: compare both sides as fs paths (resolves spaces /
+// drive-letter casing / triple-slash drift between `file:///c:/...` and
+// raw `process.argv[1]` on Windows — SCM-S37 regression fix).
+const isStandaloneEntry =
+  Boolean(process.argv[1]) &&
+  path.resolve(fileURLToPath(import.meta.url)) ===
+    path.resolve(process.argv[1] as string);
+if (isStandaloneEntry) {
   startGuiServer({
     token: process.env.SCM_GUI_TOKEN ?? null,
   })
