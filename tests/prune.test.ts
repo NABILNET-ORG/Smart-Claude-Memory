@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { listFileOriginsForProject, deleteChunksForFile } from "../src/supabase.js";
 import { pruneMemory } from "../src/tools/prune.js";
-import { insertThrowawayChunkForFile, uniqueProjectId } from "./fixtures/prune.js";
+import { insertThrowawayChunkForFile, tmpRepoFile, uniqueProjectId } from "./fixtures/prune.js";
 
 describe("listFileOriginsForProject", () => {
   const projectId = uniqueProjectId();
@@ -111,5 +111,47 @@ describe("pruneMemory — inline:* filter (regression-killer)", () => {
       survivors.includes(inlineOrigin),
       "inline:* row MUST survive — silent wipe would lose save_memory state",
     );
+  });
+});
+
+describe("pruneMemory — skipped reasons", () => {
+  test("T5: file still on disk is skipped as still_on_disk", async () => {
+    const projectId = uniqueProjectId();
+    const tmp = await tmpRepoFile("alive-content");
+    after(async () => {
+      await deleteChunksForFile(projectId, tmp.path);
+      await tmp.cleanup();
+    });
+    await insertThrowawayChunkForFile(projectId, tmp.path, "alive-chunk");
+
+    const result = await pruneMemory({
+      explicit_paths: [tmp.path],
+      project_id: projectId,
+      confirm: true,
+    });
+
+    assert.equal(result.candidates.length, 1);
+    const c = result.candidates[0];
+    assert.equal(c.skipped_reason, "still_on_disk");
+    assert.equal(c.exists_on_disk, true);
+
+    const survivors = await listFileOriginsForProject(projectId);
+    assert.ok(survivors.includes(tmp.path), "still-on-disk row must NOT be deleted");
+  });
+
+  test("T6: file_origin with no DB rows is skipped as not_in_db", async () => {
+    const projectId = uniqueProjectId();
+    const ghost = `/tmp/never-stored-${randomUUID()}.md`;
+
+    const result = await pruneMemory({
+      explicit_paths: [ghost],
+      project_id: projectId,
+      confirm: true,
+    });
+
+    assert.equal(result.candidates.length, 1);
+    const c = result.candidates[0];
+    assert.equal(c.skipped_reason, "not_in_db");
+    assert.equal(c.chunk_count, 0);
   });
 });
