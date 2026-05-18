@@ -263,3 +263,82 @@ export async function rejectGraduation(
   }
   return { ok: false, reason: "invalid_state_transition" };
 }
+
+// ─── listGraduationCandidates ─────────────────────────────────────────────
+// Enumeration surface for human curators / Orchestrator audit. Filterable by
+// state and project_id with offset/limit pagination. Phase A omits the
+// source_skill_name join (deferred to Phase B — the human UI surface that
+// will consume this handler hasn't shipped yet, so embedding the name now
+// adds a JOIN cost without a consumer).
+
+export type ListGraduationCandidatesInput = {
+  project_id?: string;
+  state?: "proposed" | "composed" | "approved" | "rejected";
+  k?: number;
+  offset?: number;
+};
+
+export type GraduationListRow = {
+  id: number;
+  project_id: string;
+  source_skill_id: number;
+  state: "proposed" | "composed" | "approved" | "rejected";
+  frequency_at_propose: number;
+  success_rate_at_propose: number;
+  age_days_at_propose: number;
+  proposed_global_rationale: string | null;
+  cross_project_verdict: "pass" | "fail" | null;
+  decided_at: string | null;
+  created_at: string;
+};
+
+export type ListGraduationCandidatesOutput = {
+  count: number;
+  results: GraduationListRow[];
+};
+
+const LIST_DEFAULT_LIMIT = 10;
+const LIST_MAX_LIMIT = 50;
+
+export async function listGraduationCandidates(
+  input: ListGraduationCandidatesInput = {},
+): Promise<ListGraduationCandidatesOutput> {
+  const limit = Math.min(Math.max(input.k ?? LIST_DEFAULT_LIMIT, 1), LIST_MAX_LIMIT);
+  const offset = Math.max(input.offset ?? 0, 0);
+
+  let query = supabase
+    .from("skill_graduations")
+    .select(
+      "id, project_id, source_skill_id, state, frequency_at_propose, success_rate_at_propose, age_days_at_propose, proposed_global_rationale, cross_project_verdict, decided_at, created_at",
+    )
+    .order("created_at", { ascending: false });
+
+  if (input.project_id !== undefined) {
+    query = query.eq("project_id", input.project_id);
+  }
+  if (input.state !== undefined) {
+    query = query.eq("state", input.state);
+  }
+  query = query.range(offset, offset + limit - 1);
+
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(`listGraduationCandidates: ${error.message}`);
+  }
+
+  const results = (data ?? []).map((r) => ({
+    id: Number(r.id),
+    project_id: r.project_id as string,
+    source_skill_id: Number(r.source_skill_id),
+    state: r.state as GraduationListRow["state"],
+    frequency_at_propose: Number(r.frequency_at_propose),
+    success_rate_at_propose: Number(r.success_rate_at_propose),
+    age_days_at_propose: Number(r.age_days_at_propose),
+    proposed_global_rationale: (r.proposed_global_rationale as string | null) ?? null,
+    cross_project_verdict: (r.cross_project_verdict as GraduationListRow["cross_project_verdict"]) ?? null,
+    decided_at: (r.decided_at as string | null) ?? null,
+    created_at: r.created_at as string,
+  }));
+
+  return { count: results.length, results };
+}

@@ -17,6 +17,7 @@ import {
   composeGlobalRationale,
   confirmPromotion,
   rejectGraduation,
+  listGraduationCandidates,
 } from "../src/tools/graduation.js";
 
 const createdProjectIds: string[] = [];
@@ -567,4 +568,56 @@ test("D3: IDEMPOTENCY — second reject on rejected row → ok:false, original r
     "first rejection reason",
     "first reason must be preserved — M7 does NOT overwrite (diverges from M5)",
   );
+});
+
+// ─── Suite E: listGraduationCandidates enumeration ───────────────────────
+
+test("E1: empty project → {count:0, results:[]}", async () => {
+  const pid = newProject();
+  const result = await listGraduationCandidates({ project_id: pid });
+  assert.equal(result.count, 0);
+  assert.deepEqual(result.results, []);
+});
+
+test("E2: state filter returns only matching rows", async () => {
+  const pid = newProject();
+  const sk1 = await insertThrowawaySkill(pid, {
+    frequencyUsed: 20,
+    successRate: 0.95,
+    ageDaysOverride: 30,
+  });
+  const sk2 = await insertThrowawaySkill(pid, {
+    frequencyUsed: 20,
+    successRate: 0.95,
+    ageDaysOverride: 30,
+  });
+  await insertThrowawayGraduation(pid, sk1, { state: "proposed" });
+  const g2 = await insertThrowawayGraduation(pid, sk2, {
+    state: "rejected",
+    rejectionReason: "test",
+  });
+
+  const proposed = await listGraduationCandidates({ project_id: pid, state: "proposed" });
+  assert.equal(proposed.count, 1);
+  assert.equal(proposed.results[0]?.state, "proposed");
+
+  const rejected = await listGraduationCandidates({ project_id: pid, state: "rejected" });
+  assert.equal(rejected.count, 1);
+  assert.equal(rejected.results[0]?.id, g2);
+  assert.equal(rejected.results[0]?.state, "rejected");
+});
+
+test("E3: project isolation — graduations from project P1 don't surface for P2", async () => {
+  const p1 = newProject();
+  const p2 = newProject();
+  const sk1 = await insertThrowawaySkill(p1, {
+    frequencyUsed: 20,
+    successRate: 0.95,
+    ageDaysOverride: 30,
+  });
+  await insertThrowawayGraduation(p1, sk1, { state: "proposed" });
+
+  const result = await listGraduationCandidates({ project_id: p2 });
+  assert.equal(result.count, 0);
+  assert.deepEqual(result.results, []);
 });
