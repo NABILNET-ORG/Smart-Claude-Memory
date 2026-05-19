@@ -318,7 +318,9 @@ Verified by [scripts/e2e-incremental-test.ts](scripts/e2e-incremental-test.ts), 
 
 ---
 
-## Install (3 steps, ~5 minutes)
+## Bootstrap (3-step setup, ~5 minutes)
+
+> Resolves the `#bootstrap` anchor referenced from the [Install](#install) section above. This is the **post-install** setup ritual — apply once per new Supabase project.
 
 ### 1. Install the plugin from the marketplace
 
@@ -342,7 +344,7 @@ SUPABASE_SECRET_KEY=<service-role-key>
 SUPABASE_POOLER_URL=postgres://postgres:<password>@<pooler-host>:6543/postgres
 ```
 
-Then call `init_project()` from Claude Code. The plugin **auto-applies all 18 schema migrations** to your empty DB on the first call, verifies your Ollama models are pulled, and reports `overall: pending → healthy` within a few minutes. Zero manual `npm run schema`, zero hand-edited settings.
+Then call `init_project()` from Claude Code. The plugin **auto-applies all 21 schema migrations** (through `scripts/020_knowledge_graph.sql`) to your empty DB on the first call, verifies your Ollama models are pulled, and reports `overall: pending → healthy` within a few minutes. Zero manual `npm run schema`, zero hand-edited settings.
 
 ### Optional env vars
 
@@ -369,6 +371,151 @@ Then free up context by archiving the originals:
 npm run backup                                              # dry run
 npx tsx scripts/backup-and-remove.ts --confirm-delete       # zip + delete
 ```
+
+---
+
+## Usage — every command you'll actually run
+
+The plugin has **two surfaces**: MCP tools you invoke **inside a Claude Code session**, and CLI commands you run **from your shell**. Below is the canonical command cheat sheet, grouped by who you are and what you're doing.
+
+### Quick command reference (CLI)
+
+Every command runs from the repo root. None require sudo. None create permanent state outside `~/.claude-memory/` and your Supabase project.
+
+| Command | What it does | When you'd run it |
+|---|---|---|
+| `npm install` | Resolve dependencies | Once after clone / pull |
+| `npm run build` | `lint:boundaries` → `tsc` → `copy:gui` chain — produces `dist/` (the artefact `npm publish` ships) | Before publishing or before running `npm start` |
+| `npm run dev` | Run the MCP server via `tsx` (no compile step, fast iteration) | Editing TypeScript and want hot-feedback |
+| `npm run start` | Run the **compiled** MCP server (`node dist/index.js`) | Reproducing what an npm consumer sees |
+| `npm run gui` | Boot the Sovereign Command Center dashboard at `http://127.0.0.1:7788/` (loopback only) | Visual triage of M7 graduations + M8.1 knowledge graph |
+| `npm run test` | Run the full 246-case hermetic suite (no live Supabase / Ollama required) | Before committing, before publishing |
+| `npm run lint:boundaries` | Statically asserts `src/sleep/**`, `src/curriculum/**`, `src/graduation/**` contain NO LLM imports (Single Brain Boundary) | Runs automatically in `build`; useful standalone after touching those subsystems |
+| `npm run copy:gui` | Mirror `src/gui/public/` → `dist/gui/public/` via `fs.cpSync` (zero-dep) | Runs automatically in `build`; useful if you edit GUI assets and want them in `dist/` without a full rebuild |
+| `npm run schema` | Apply pending SQL migrations to your Supabase pooler URL (idempotent — re-runs are no-ops) | Manual recovery only — `init_project` does this automatically on first boot |
+| `npm run backup` | Dry-run scan + zip of every `.md` file in `MEMORY_ROOTS`, written to `~/.claude-memory/backups/` | Before deleting any `.md` you've already indexed |
+| `npm run smoke:m4` | End-to-end smoke for M4 transactional checkpoints | Sanity check after touching `src/transactions/` |
+| `npm run smoke:m5-rollback` / `smoke:m5-stale` / `smoke:m5-consumer` | Smoke each M5 curriculum signal-source | After touching `src/curriculum/` |
+| `npm run smoke:m7` | Smoke the full M7 skill graduation lifecycle (propose → compose → confirm/reject) | After touching `src/graduation/` |
+
+### Quick command reference (MCP — inside Claude Code)
+
+Every MCP tool is invoked the same way: type the tool name with arguments inside your Claude Code chat. Claude routes the call through the MCP server. **All 50 tools are documented in the [Toolbox](#toolbox).** The most-used invocations:
+
+```text
+init_project()                                          # boot — readiness + auto-migrate
+check_system_health()                                   # Supabase + Ollama + 6 daemons status
+search_memory({ query: "...", k: 10 })                  # dual-scope semantic search
+search_memory({ query: "...", metadata_filter: { type: "DECISION" } })   # typed filter
+save_memory({ content: "...", metadata: { type: "DECISION" } })          # project-scoped
+save_memory({ content: "...", metadata: { type: "PATTERN", is_global: true, global_rationale: "..." } })   # GLOBAL vault
+list_global_patterns({ metadata_filter: { type: "PATTERN" } })           # browse GLOBAL deterministically
+manage_backlog({ action: "add", title: "..." })
+manage_backlog({ action: "list" })
+manage_backlog({ action: "session_end" })                                # wrap-up ritual
+delegate_task({ ... })                                                   # offload research >100 lines
+sync_artefacts()                                                         # regen README progress + ARCH file-tree
+```
+
+### Daily workflows — by what you're trying to do
+
+**"Boot a new session in an existing project":**
+1. Open Claude Code in the project directory.
+2. Paste the [Golden Startup Prompt](#-the-golden-startup-prompt) as your first message.
+3. Claude runs `init_project()` → `search_memory({ query: "Active Backlog" })` and reports state.
+
+**"Index a new note I just wrote":**
+1. Save the `.md` somewhere under `MEMORY_ROOTS`.
+2. From Claude: `sync_local_memory()` (incremental — only changed files re-embed).
+3. Verify: `search_memory({ query: "<a phrase from the note>" })`.
+
+**"Capture an architectural decision":**
+```
+save_memory({
+  content: "SCM-S<N>-D<i> — <decision> ... \n\nRationale: ...",
+  metadata: { type: "DECISION" }
+})
+```
+The `SCM-S<N>-D<i>` prefix is the project convention from [CLAUDE.md](CLAUDE.md). DECISIONs are project-scoped by default.
+
+**"Promote a universal pattern to GLOBAL":**
+1. Run the Cross-Project Test: *"if this project were deleted tomorrow, would this still be a gold-standard reference for others?"*
+2. If yes:
+   ```
+   save_memory({
+     content: "PATTERN: ...",
+     metadata: {
+       type: "PATTERN",
+       is_global: true,
+       global_rationale: "Universal because ... (one or two sentences)"
+     },
+     project_id: "GLOBAL"
+   })
+   ```
+3. Verify it landed: `list_global_patterns({ limit: 5 })` — your row should be at the top.
+
+**"Triage skill graduations in the browser":**
+1. Terminal: `npm run gui` → opens `http://127.0.0.1:7788/`.
+2. Browse `/api/graduations?state=proposed` for the queue, click a row to compose, approve/reject from the drawer.
+3. The knowledge-graph panel below renders the typed nodes from `kg_nodes` + edges from `kg_edges` (60 nodes default, force-directed SVG).
+
+**"End a session cleanly":**
+```
+manage_backlog({ action: "session_end" })
+```
+- Archives `done` tasks atomically.
+- Regenerates README "Recent Progress" + ARCHITECTURE auto file-tree.
+- Returns a `next_session_command_markdown` block — **paste it verbatim as your final chat message** so the operator can copy it into the next session.
+
+### Knowledge Graph operations (M8.1, v2.2.0)
+
+Read-only inspection from Claude Code:
+
+```text
+list_kg_nodes({ k: 60, type: "DECISION" })                          # latest 60 DECISION nodes
+list_kg_nodes({ k: 60, label_prefix: "src/" })                      # prefix filter
+list_kg_edges({ k: 120 })
+kg_hybrid_search({ query: "GUI refactor", k: 10 })                  # vector + graph fusion
+```
+
+Curated upsert (manual, e.g., backfilling a typed node from an old chunk):
+
+```text
+kg_upsert_node({ type: "FILE", label: "src/gui/server.ts", properties: { ... }, source_chunk_id: 12901 })
+kg_upsert_edge({ source_id: 42, target_id: 99, type: "DEPENDS_ON", confidence: 0.95 })
+```
+
+Both upserts are idempotent (UNIQUE on `(project_id, type, label)` for nodes; full key for edges).
+
+### Environment variables (full reference)
+
+Set in your project's `.env` file or your shell. Documented checks live in `src/tools/setup.ts` and surface in `init_project()`.
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `SUPABASE_URL` | ✅ | — | `https://<project-ref>.supabase.co` |
+| `SUPABASE_SECRET_KEY` | ✅ | — | `sb_secret_*` service-role key (bypasses RLS) |
+| `SUPABASE_POOLER_URL` | ✅ | — | IPv4-reachable pooler URL — `init_project`'s auto-migration loop uses this |
+| `OLLAMA_HOST` | — | `http://localhost:11434` | Ollama endpoint |
+| `OLLAMA_EMBED_MODEL` | — | `nomic-embed-text` | Embedding model |
+| `EMBED_DIM` | — | `768` | Embedding vector dimension (must match the model) |
+| `MEMORY_ROOTS` | — | (empty) | Semicolon-separated folders to sync |
+| `SCM_GUI_PORT` | — | `7788` | GUI dashboard port (loopback only) |
+| `SCM_GUI_HOST` | — | `127.0.0.1` | GUI host — change ONLY if you understand the threat model (service-role key lives in this process) |
+| `SCM_GUI_TOKEN` | — | (none) | Optional bearer token gating `/api/*` mutation routes |
+| `OBS_ERR_RATE_DEGRADED_DEFAULT` / `_DOWN_DEFAULT` / `OBS_STALENESS_MULTIPLIER_DEFAULT` | — | `0.20` / `0.50` / `2.0` | Per-daemon health-derivation thresholds |
+| `TELEMETRY_PRUNER_INTERVAL_MS` / `_RETENTION_DAYS` | — | `21600000` (6h) / `30` | `telemetry_pruner` cadence + retention window |
+| `GRAPH_EXTRACTOR_INTERVAL_MS` / `_BATCH` | — | `120000` (2m) / `10` | M8.1 knowledge-graph daemon cadence + per-tick batch |
+
+### Quick troubleshooting
+
+| Symptom | First check |
+|---|---|
+| `init_project` returns `not_ready` with env miss | Set the listed variable; re-run |
+| `npm run schema` fails `ENETUNREACH` | You're using `db.<ref>.supabase.co` (IPv6-only). Switch to the **pooler URL** (`aws-1-<region>.pooler.supabase.com:6543`) |
+| `npm run gui` fails `EADDRINUSE :7788` | Another GUI process is bound. Set `SCM_GUI_PORT=7789` or stop the holder |
+| `check_system_health` shows daemon `pending` | Within 15-min grace window after MCP boot. Re-check after one daemon interval |
+| Tests fail in `tests/migrations.test.ts` | A new SQL migration lacks an idempotency guard (`OR REPLACE` / `IF NOT EXISTS`) — fix the migration, not the test |
 
 ---
 
