@@ -2,6 +2,8 @@ import { resolve } from "node:path";
 import { currentProjectId } from "../project.js";
 import { updateLocalReadme, updateProjectArchitecture } from "./backlog.js";
 import { VERSION } from "../version.js";
+import { checkTaskBudget } from "../budget/gate.js";
+import { BudgetExceededError } from "../budget/types.js";
 
 // ─── delegate_task: canonical sub-agent prompt builder (v1.1.0) ──────────
 //
@@ -33,6 +35,12 @@ type DelegateArgs = {
   synthesis_word_limit?: number;
   self_heal?: boolean;
   max_healing_attempts?: number;
+  // SCM-S39-D1: Agentic Resource Manager. When task_id is provided AND
+  // SCM_BUDGET_ENFORCEMENT_MODE != off, this call increments the task's
+  // subagent_depth counter; in enforce mode, exceeding the cap throws
+  // BudgetExceededError before the worker prompt is built. Omitting
+  // task_id preserves legacy ungated behavior.
+  task_id?: string;
 };
 
 function buildWorkerPrompt(args: DelegateArgs): string {
@@ -152,6 +160,26 @@ export async function delegateTask(args: DelegateArgs) {
   if (!args.instructions || !args.instructions.trim()) {
     throw new Error("delegate_task requires non-empty 'instructions'.");
   }
+  // SCM-S39-D1: gate subagent_depth BEFORE building the prompt so an
+  // enforce-mode block aborts cheaply. checkTaskBudget short-circuits when
+  // mode=off (zero DB write); callers without task_id skip the gate entirely.
+  let budget_decision: Awaited<ReturnType<typeof checkTaskBudget>> | null = null;
+  if (args.task_id) {
+    try {
+      budget_decision = await checkTaskBudget(args.task_id, "subagent_depth", 1);
+    } catch (e) {
+      if (e instanceof BudgetExceededError) {
+        return {
+          action: "delegate_task",
+          version: VERSION,
+          ok: false,
+          reason: "budget_exceeded",
+          decision: e.decision,
+        } as const;
+      }
+      throw e;
+    }
+  }
   const prompt = buildWorkerPrompt(args);
   const description = args.title.length <= 40 ? args.title : args.title.slice(0, 37) + "...";
   const runGate = args.run_gate !== false;
@@ -169,6 +197,7 @@ export async function delegateTask(args: DelegateArgs) {
     allow_rollback: args.allow_rollback !== false,
     synthesis_word_limit: args.synthesis_word_limit ?? 220,
     prompt,
+    budget_decision,
     usage_hint:
       "Copy the 'prompt' field into the Agent tool call as the 'prompt' parameter. Use subagent_type: 'general-purpose' unless a specialized agent fits better. The worker will self-heal compile failures locally (analyze_regression → minimal fix → re-gate, up to max_healing_attempts) before falling back to rollback. After the sub-agent returns its synthesis, call sync_artefacts to refresh README + project_file_architecture.md.",
   };

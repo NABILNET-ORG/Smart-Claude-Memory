@@ -13,6 +13,8 @@
 import { z } from "zod";
 import { supabase } from "../supabase.js";
 import { currentProjectId } from "../project.js";
+import { checkTaskBudget } from "../budget/gate.js";
+import { BudgetExceededError } from "../budget/types.js";
 
 // ─── list_skill_candidates ────────────────────────────────────────────────
 
@@ -138,6 +140,23 @@ export const composeSkillCandidateInputShape = {
         "Actions must be verbatim-executable by an agent — no abstractions, no commentary. " +
         "Derived from the cluster_summaries of the mined candidate.",
     ),
+  // SCM-S39-D1: optional Agentic Resource Manager hooks. The persistence
+  // itself doesn't touch an LLM, but the upstream Orchestrator just drafted
+  // the proposed_name + proposed_steps via its own Anthropic call — so
+  // this is the audit point where those tokens get accounted. Caller can
+  // pass an estimate; default is 1000.
+  task_id: z
+    .string()
+    .uuid()
+    .optional()
+    .describe("Optional Agentic Resource Manager task_id from start_task. Omit for legacy ungated behavior."),
+  anthropic_tokens_used: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .default(1000)
+    .describe("Caller's estimate of Orchestrator tokens spent drafting proposed_name + proposed_steps. Default 1000."),
 };
 
 const composeSkillCandidateSchema = z.object(composeSkillCandidateInputShape);
@@ -155,6 +174,26 @@ export async function composeSkillCandidate(
   args: ComposeSkillCandidateInput,
 ): Promise<ComposeSkillCandidateResult> {
   const parsed = composeSkillCandidateSchema.parse(args);
+
+  // SCM-S39-D1: gate anthropic_tokens against the active task. No-op
+  // when task_id omitted or SCM_BUDGET_ENFORCEMENT_MODE=off.
+  if (parsed.task_id) {
+    try {
+      await checkTaskBudget(
+        parsed.task_id,
+        "anthropic_tokens",
+        parsed.anthropic_tokens_used ?? 1000,
+      );
+    } catch (e) {
+      if (e instanceof BudgetExceededError) {
+        throw new Error(
+          `compose_skill_candidate refused: budget exceeded (${e.decision.axis} ` +
+            `total=${e.decision.total} cap=${e.decision.cap})`,
+        );
+      }
+      throw e;
+    }
+  }
 
   const { data, error } = await supabase
     .from("skill_candidates")

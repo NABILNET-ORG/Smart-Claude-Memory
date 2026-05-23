@@ -5,6 +5,8 @@ import { execFileSync } from "node:child_process";
 import { captionImage, embed } from "../ollama.js";
 import { upsertChunks, md5 } from "../supabase.js";
 import { currentProjectId } from "../project.js";
+import { checkTaskBudget } from "../budget/gate.js";
+import { BudgetExceededError } from "../budget/types.js";
 
 // Formats Moondream's llama.cpp runner accepts natively.
 const NATIVE_IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg"]);
@@ -58,11 +60,31 @@ export async function indexImage(args: {
   caption_prompt?: string;
   project_id?: string;
   vision_model?: string;
+  // SCM-S39-D1: optional Agentic Resource Manager task_id. When provided
+  // AND mode != off, the worker-tier captionImage call is gated against
+  // ollama_calls before the actual Ollama generate.
+  task_id?: string;
 }) {
   const projectId = args.project_id ?? currentProjectId;
   const abs = resolve(args.image_path);
   const info = await stat(abs);
   if (!info.isFile()) throw new Error(`Not a file: ${abs}`);
+
+  // SCM-S39-D1: gate ollama_calls. Runs BEFORE format conversion so a
+  // budget-blocked call doesn't pay the ffmpeg cost.
+  if (args.task_id) {
+    try {
+      await checkTaskBudget(args.task_id, "ollama_calls", 1);
+    } catch (e) {
+      if (e instanceof BudgetExceededError) {
+        throw new Error(
+          `index_image refused: budget exceeded (${e.decision.axis} ` +
+            `total=${e.decision.total} cap=${e.decision.cap})`,
+        );
+      }
+      throw e;
+    }
+  }
 
   const fmt = await detectFormat(abs);
   let toCaption = abs;

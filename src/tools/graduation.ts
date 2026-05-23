@@ -21,6 +21,8 @@
 
 import { z } from "zod";
 import { supabase } from "../supabase.js";
+import { checkTaskBudget } from "../budget/gate.js";
+import { BudgetExceededError } from "../budget/types.js";
 
 // ─── composeGlobalRationale ───────────────────────────────────────────────
 
@@ -30,6 +32,11 @@ export type ComposeGlobalRationaleInput = {
   evidence: string;
   global_rationale: string | null;
   model: string;
+  // SCM-S39-D1: optional Agentic Resource Manager hooks. Audit point for
+  // the Orchestrator's upstream Anthropic call that drafted evidence +
+  // rationale. Omitting task_id preserves legacy ungated behavior.
+  task_id?: string;
+  anthropic_tokens_used?: number;
 };
 
 export type ComposeGlobalRationaleOutput =
@@ -39,6 +46,28 @@ export type ComposeGlobalRationaleOutput =
 export async function composeGlobalRationale(
   input: ComposeGlobalRationaleInput,
 ): Promise<ComposeGlobalRationaleOutput> {
+  // SCM-S39-D1: gate anthropic_tokens against the active task. Runs BEFORE
+  // input-shape validation because budget exhaustion should refuse the
+  // call regardless of payload validity — preserves quota even on bad
+  // input retries. No-op when task_id omitted.
+  if (input.task_id) {
+    try {
+      await checkTaskBudget(
+        input.task_id,
+        "anthropic_tokens",
+        input.anthropic_tokens_used ?? 1000,
+      );
+    } catch (e) {
+      if (e instanceof BudgetExceededError) {
+        return {
+          ok: false,
+          reason: "budget_exceeded",
+          state_unchanged: true,
+        };
+      }
+      throw e;
+    }
+  }
   // Step 1: Input validation (client-side; cheap, no DB round-trip on bad shapes).
   if (input.verdict !== "pass" && input.verdict !== "fail") {
     return {
