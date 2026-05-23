@@ -4,7 +4,7 @@ import path from "node:path";
 
 export const SOVEREIGN_CONSTITUTION_TEMPLATE = `---
 
-## Sovereign Memory Protocol (v2.1.7)
+## Sovereign Memory Protocol (v2.1.8)
 
 Binds repo to SCM. Rules below override generic boot prompts on conflict.
 
@@ -29,6 +29,9 @@ Binds repo to SCM. Rules below override generic boot prompts on conflict.
 
 **[Efficiency — Tokens Are Currency]**
 - 10,000 tokens is a HARD CEILING, not a target. Target context size is 2,000 - 3,000 tokens. Every token must justify its existence. Efficiency = Intelligence.
+
+**[Resource Manager — Budgets Are Structural]**
+- The token ceiling is enforced at runtime by \`src/budget/gate.ts\` — NOT by prose. Every LLM-touching call site MUST route through \`checkTaskBudget\` (Orchestrator tasks) or \`checkDaemonBudget\` (setInterval daemons). Direct LLM calls outside the gate are a v2.1.8 violation. Per-task and per-daemon surfaces are STRUCTURALLY decoupled: daemons have no parent task and use rolling-hour buckets; tasks have explicit start/end lifecycles. Enforcement mode (\`SCM_BUDGET_ENFORCEMENT_MODE\`: off|warn|enforce) is the single switch governing both surfaces.
 
 **[Foundation First — No Broken Windows]**
 - **HALT on Broken Foundation.** Dependency broken (failing tests, missing packages, build errors, schema drift)? HALT the new feature. Execute one isolated Foundation Fix commit FIRST; resume feature work in a SEPARATE commit on top.
@@ -218,7 +221,7 @@ export async function ensureSovereignConstitution(
  * Current canonical constitution version. Bumped in lock-step with the
  * SOVEREIGN_CONSTITUTION_TEMPLATE body.
  */
-export const CANONICAL_CONSTITUTION_VERSION = "v2.1.7";
+export const CANONICAL_CONSTITUTION_VERSION = "v2.1.8";
 
 /**
  * SHA-256 hex digests of the canonical block body for each previously-shipped
@@ -234,6 +237,7 @@ export const KNOWN_CANONICAL_HASHES: Record<string, string> = {
   "v2.1.5": "4da4a326b4e3b81331038d439d31539157615550615bba51241ea6804931ca85",
   "v2.1.6": "d35abf40d62c1878c1c49cadeb9bd47e1c849a4c01865ec4e6b4be551ec552fe",
   "v2.1.7": "14b4564dccc5a05e79b98a85c1d8ab8f16629b35144e678cde9ea8b807fc9099",
+  "v2.1.8": "453bf797b22a8e9babf3ad6f74a2dd5c2059ea5becae1252e8c169e800463c54",
 };
 
 export type UpgradeConstitutionOptions = {

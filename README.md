@@ -2,9 +2,9 @@
 
 # Smart Claude Memory
 
-![Smart Claude Memory v2.2.1 Master Schematic](docs/assets/schematic.png)
+![Smart Claude Memory v2.2.2 Master Schematic](docs/assets/schematic.png)
 
-*Master schematic — the definitive visual reference for the Smart Claude Memory v2.2.x production baseline (v2.2.1 = docs-only patch on the v2.2.0 surface).*
+*Master schematic — the definitive visual reference for the Smart Claude Memory v2.2.x production baseline (v2.2.2 adds the Agentic Resource Manager — see [ARCHITECTURE.md §4.12](ARCHITECTURE.md#412-agentic-resource-manager-agentic-os-2026--mission-9--scm-s39-d1)).*
 
 **Hybrid cloud-local memory for Claude — semantic retrieval instead of context bloat.**
 
@@ -205,7 +205,7 @@ search_memory({ query: "auth flow", project_id: "acme-api" })
 | `confirm_promotion` | Graduation | **HUMAN-GATED PROMOTION TO GLOBAL** — the sole `is_global=true` mint path outside of `save_memory({is_global:true})`. Calls the `apply_graduation` SQL RPC: atomic INSERT of a GLOBAL `agent_skills` clone + UPDATE `state='approved'` in ONE transaction. PostgreSQL `now()` collapses `graduation.decided_at === new_skill.created_at` to the microsecond (C4 atomic-tx proof). Source skill UNTOUCHED. |
 | `reject_graduation` | Graduation | M7 veto. TS-only UPDATE `WHERE state IN ('proposed','composed')`. Diverges from `reject_curriculum_task`: a second reject on an already-rejected row returns `ok:false` (reason='invalid_state_transition') instead of silently overwriting — GLOBAL rejection reasons carry audit weight. |
 
-### Full tool roster — 50 MCP tools by domain (v2.2.0)
+### Full tool roster — 55 MCP tools by domain (v2.2.2)
 
 The table above documents the canonical headline surface. The complete roster, grouped by subsystem, follows. Each tool is registered in [src/index.ts](src/index.ts) and consumed via the MCP `tools/list` + `tools/call` protocol.
 
@@ -400,7 +400,7 @@ Every command runs from the repo root. None require sudo. None create permanent 
 
 ### Quick command reference (MCP — inside Claude Code)
 
-Every MCP tool is invoked the same way: type the tool name with arguments inside your Claude Code chat. Claude routes the call through the MCP server. **All 50 tools are documented in the [Toolbox](#toolbox).** The most-used invocations:
+Every MCP tool is invoked the same way: type the tool name with arguments inside your Claude Code chat. Claude routes the call through the MCP server. **All 55 tools are documented in the [Toolbox](#toolbox).** The most-used invocations:
 
 ```text
 init_project()                                          # boot — readiness + auto-migrate
