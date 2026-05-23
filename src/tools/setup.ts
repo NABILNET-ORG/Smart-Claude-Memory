@@ -24,6 +24,13 @@ import {
   type UpgradeConstitutionResult,
 } from "./sovereign-constitution.js";
 import {
+  startGuiServer,
+  computeProjectPort,
+  type StartedGuiServer,
+} from "../gui/server.js";
+import { spawn } from "node:child_process";
+import net from "node:net";
+import {
   auditBloat,
   type BloatAudit,
   type SovereignPurgeRecommendation,
@@ -31,6 +38,135 @@ import {
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const mcpEntryPoint = resolve(packageRoot, "dist", "index.js").replace(/\\/g, "/");
+
+// ─── v2.1.9 GUI Auto-Start ────────────────────────────────────────────────
+// init_project lights up a deterministic per-project GUI on a port hashed
+// from the project_id. Idempotent: if the port is already bound (this MCP
+// process OR an external one), we skip the spawn AND skip the browser open
+// so the operator doesn't get a popup every boot. Universal — works for any
+// workspace; never assumes a specific project name.
+
+let _guiInstance: StartedGuiServer | null = null;
+
+function probePort(port: number, host = "127.0.0.1", timeoutMs = 500): Promise<boolean> {
+  return new Promise<boolean>((resolveProbe) => {
+    const socket = new net.Socket();
+    let done = false;
+    const settle = (v: boolean): void => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      socket.destroy();
+      resolveProbe(v);
+    };
+    const timer = setTimeout(() => settle(false), timeoutMs);
+    socket.once("connect", () => settle(true));
+    socket.once("error", () => settle(false));
+    socket.connect(port, host);
+  });
+}
+
+function openBrowserDetached(url: string): void {
+  try {
+    const platform = process.platform;
+    if (platform === "win32") {
+      // `start "" "<url>"` opens the default browser; first quoted arg is the
+      // window title (required when the URL itself is quoted on Windows).
+      const child = spawn("cmd", ["/c", "start", "", url], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      child.unref();
+    } else if (platform === "darwin") {
+      spawn("open", [url], { detached: true, stdio: "ignore" }).unref();
+    } else {
+      spawn("xdg-open", [url], { detached: true, stdio: "ignore" }).unref();
+    }
+  } catch {
+    /* best-effort — browser open never blocks init_project */
+  }
+}
+
+export type GuiAutoStartResult = {
+  status: "started" | "already_running_internal" | "already_running_external" | "error" | "disabled";
+  url: string;
+  port: number;
+  project_id: string;
+  browser_opened: boolean;
+  message: string;
+  error?: string;
+};
+
+export async function maybeAutoStartGui(projectId: string): Promise<GuiAutoStartResult> {
+  if (process.env.SCM_GUI_AUTOSTART === "off") {
+    const port = computeProjectPort(projectId);
+    return {
+      status: "disabled",
+      url: `http://127.0.0.1:${port}/`,
+      port,
+      project_id: projectId,
+      browser_opened: false,
+      message: "Auto-start disabled via SCM_GUI_AUTOSTART=off",
+    };
+  }
+
+  const port = computeProjectPort(projectId);
+  const url = `http://127.0.0.1:${port}/`;
+
+  // (a) Already started in this MCP process → reuse, no popup.
+  if (_guiInstance && _guiInstance.port === port) {
+    return {
+      status: "already_running_internal",
+      url: _guiInstance.url,
+      port: _guiInstance.port,
+      project_id: projectId,
+      browser_opened: false,
+      message: `Already serving on ${_guiInstance.url} (this process).`,
+    };
+  }
+
+  // (b) Another process owns the port → reuse, no popup (anti-fatigue).
+  const externalAlive = await probePort(port);
+  if (externalAlive) {
+    return {
+      status: "already_running_external",
+      url,
+      port,
+      project_id: projectId,
+      browser_opened: false,
+      message: `Already serving on ${url} (external process). Skipping browser open.`,
+    };
+  }
+
+  // (c) Bind in-process + open browser exactly once.
+  try {
+    _guiInstance = await startGuiServer({
+      port,
+      projectId,
+      token: process.env.SCM_GUI_TOKEN ?? null,
+    });
+    openBrowserDetached(_guiInstance.url);
+    return {
+      status: "started",
+      url: _guiInstance.url,
+      port: _guiInstance.port,
+      project_id: projectId,
+      browser_opened: true,
+      message: `Started on ${_guiInstance.url} for project '${projectId}'.`,
+    };
+  } catch (err) {
+    return {
+      status: "error",
+      url,
+      port,
+      project_id: projectId,
+      browser_opened: false,
+      message: `Failed to start GUI on port ${port}.`,
+      error: (err as Error).message,
+    };
+  }
+}
 
 type CheckStatus = "ok" | "warn" | "missing" | "partial" | "not_ready";
 
@@ -507,6 +643,7 @@ export async function initProject(args: {
   sovereign_constitution: SovereignConstitutionResult;
   bloat_audit: BloatAudit;
   migrations: MigrationsBlock;
+  gui_auto_start: GuiAutoStartResult;
   recommendations?: Array<HydrateRecommendation | SovereignPurgeRecommendation>;
 }> {
   const ws = resolve(args.workspace ?? process.cwd());
@@ -735,6 +872,21 @@ export async function initProject(args: {
   // Sovereign Taxonomy, and the delegation threshold from CLAUDE.md.
   const capabilities: Capabilities = buildCapabilities(slugify(currentProjectId));
 
+  // v2.1.9 GUI Auto-Start — deterministic port hashed from project_id.
+  // Universal: same workspace → same port across MCP restarts; different
+  // workspaces → different ports automatically. Never spawns a duplicate
+  // browser tab when the port is already bound.
+  const guiAutoStart = await maybeAutoStartGui(slugify(currentProjectId));
+  // Print a clickable link to stderr so the operator sees it in the terminal.
+  // stderr (not stdout) — stdout is the MCP JSON-RPC channel.
+  try {
+    process.stderr.write(
+      `[scm-gui] ${guiAutoStart.status}: ${guiAutoStart.url} (project: ${guiAutoStart.project_id})\n`,
+    );
+  } catch {
+    /* never block init_project on a stderr write */
+  }
+
   const result: {
     action: "init_project";
     workspace: string;
@@ -749,6 +901,7 @@ export async function initProject(args: {
     sovereign_constitution: SovereignConstitutionResult;
     bloat_audit: BloatAudit;
     migrations: MigrationsBlock;
+    gui_auto_start: GuiAutoStartResult;
     recommendations?: Array<HydrateRecommendation | SovereignPurgeRecommendation>;
   } = {
     action: "init_project",
@@ -764,6 +917,7 @@ export async function initProject(args: {
     sovereign_constitution: sovereignConstitution,
     bloat_audit: bloatAudit,
     migrations: migrationsResult.block,
+    gui_auto_start: guiAutoStart,
   };
   if (recommendations.length > 0) {
     result.recommendations = recommendations;

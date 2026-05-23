@@ -24,6 +24,8 @@ import http from "node:http";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { URL, fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+import { currentProjectId, slugify } from "../project.js";
 import {
   listGraduationCandidates as defaultList,
   composeGlobalRationale as defaultCompose,
@@ -75,6 +77,21 @@ const MIME_TYPES: Record<string, string> = {
 
 export const GUI_VERSION = "1.0.0";
 
+// v2.1.9 — Deterministic per-project port. Hashes the project_id into a
+// stable port in [PROJECT_PORT_RANGE_START, PROJECT_PORT_RANGE_START+SIZE).
+// Same project_id → same port across MCP restarts, machines, time. Different
+// projects → different ports (collisions are theoretical but the range is
+// 1000-wide so practical collisions need 2 projects with same SHA-256 head).
+// Universal — adapts to ANY workspace via its derived project_id.
+export const PROJECT_PORT_RANGE_START = 7790;
+export const PROJECT_PORT_RANGE_SIZE = 1000;
+
+export function computeProjectPort(projectId: string): number {
+  const digest = createHash("sha256").update(projectId, "utf8").digest();
+  const u32 = digest.readUInt32LE(0);
+  return PROJECT_PORT_RANGE_START + (u32 % PROJECT_PORT_RANGE_SIZE);
+}
+
 export type GuiHandlers = {
   listGraduationCandidates: (input: ListGraduationCandidatesInput) => Promise<unknown>;
   composeGlobalRationale: (input: ComposeGlobalRationaleInput) => Promise<unknown>;
@@ -111,11 +128,11 @@ function clampInt(raw: string | null, def: number, min: number, max: number): nu
   return i;
 }
 
-function resolveProjectId(raw: string | null): string {
+function resolveProjectId(raw: string | null, fallback: string): string {
   if (raw && raw.trim().length > 0) return raw;
   const env = process.env.SMART_CLAUDE_MEMORY_PROJECT_ID;
   if (env && env.trim().length > 0) return env;
-  return "claude-memory";
+  return fallback;
 }
 
 export interface GuiServerOptions {
@@ -123,11 +140,59 @@ export interface GuiServerOptions {
   host?: string;
   token?: string | null;
   handlers?: GuiHandlers;
+  /**
+   * v2.1.9 — Project namespace this GUI is serving. Used as (a) the universal
+   * fallback for resolveProjectId when neither URL nor env supplies one, and
+   * (b) the branding text injected into the index.html header. Omit → derive
+   * from cwd via slugify(currentProjectId). NEVER hardcoded.
+   */
+  projectId?: string;
+}
+
+function htmlEscape(s: string): string {
+  return s.replace(/[&<>"']/g, (ch) =>
+    ch === "&"
+      ? "&amp;"
+      : ch === "<"
+        ? "&lt;"
+        : ch === ">"
+          ? "&gt;"
+          : ch === '"'
+            ? "&quot;"
+            : "&#39;",
+  );
+}
+
+/**
+ * v2.1.9 — Inject project branding into the dashboard HTML at serve time so
+ * the header carries the live project_id without requiring any frontend code
+ * changes. Pure string replacement, idempotent (markers are uncommon enough
+ * that re-injection won't compound).
+ */
+export function injectProjectBranding(html: string, projectId: string): string {
+  const safe = htmlEscape(projectId);
+  const headInject =
+    `  <meta name="scm-project-id" content="${safe}" />\n` +
+    `  <script>window.__SCM_PROJECT_ID=${JSON.stringify(projectId)};</script>\n` +
+    `</head>`;
+  let out = html.replace("</head>", headInject);
+  const brandMarker = `<span class="accent">M7 GRADUATIONS</span></h1>`;
+  if (out.includes(brandMarker)) {
+    out = out.replace(
+      brandMarker,
+      `<span class="accent">M7 GRADUATIONS</span><span class="sep">//</span>` +
+        `<span class="accent" data-scm-project-id>PROJECT · ${safe.toUpperCase()}</span></h1>`,
+    );
+  }
+  return out;
 }
 
 export function createGuiServer(opts: GuiServerOptions = {}): http.Server {
   const handlers = opts.handlers ?? DEFAULT_HANDLERS;
   const token = opts.token ?? null;
+  // Universal default: derive from cwd when caller didn't wire a project_id.
+  // ZERO hardcoded names — every workspace gets its own slug.
+  const serverProjectId = opts.projectId ?? slugify(currentProjectId);
 
   return http.createServer(async (req, res) => {
     // Defense-in-depth headers. The dashboard is same-origin, no third-party
@@ -160,7 +225,7 @@ export function createGuiServer(opts: GuiServerOptions = {}): http.Server {
       }
 
       if (method === "GET" && path === "/") {
-        return serveStatic(res, "/index.html");
+        return serveStatic(res, "/index.html", serverProjectId);
       }
 
       if (method === "GET" && path === "/api/health") {
@@ -168,6 +233,7 @@ export function createGuiServer(opts: GuiServerOptions = {}): http.Server {
           ok: true,
           service: "scm-gui",
           version: GUI_VERSION,
+          project_id: serverProjectId,
         });
       }
 
@@ -202,7 +268,7 @@ export function createGuiServer(opts: GuiServerOptions = {}): http.Server {
       }
 
       if (method === "GET" && path === "/api/graph") {
-        const projectId = resolveProjectId(url.searchParams.get("project_id"));
+        const projectId = resolveProjectId(url.searchParams.get("project_id"), serverProjectId);
         const nodeLimit = clampInt(
           url.searchParams.get("node_limit"),
           GRAPH_NODE_LIMIT_DEFAULT,
@@ -333,7 +399,7 @@ export function createGuiServer(opts: GuiServerOptions = {}): http.Server {
       // is attempted as a file from PUBLIC_DIR. serveStatic itself 404s if
       // the file is missing or escapes the public sandbox.
       if (method === "GET" && !path.startsWith("/api/")) {
-        return serveStatic(res, path);
+        return serveStatic(res, path, serverProjectId);
       }
 
       sendJson(res, 404, { ok: false, reason: "not_found", path });
@@ -349,13 +415,34 @@ export interface StartedGuiServer {
   host: string;
   port: number;
   url: string;
+  project_id: string;
   close: () => Promise<void>;
 }
 
+/**
+ * Resolve the listen port with this precedence:
+ *   1. Explicit opts.port
+ *   2. SCM_GUI_PORT env override
+ *   3. Deterministic hash of project_id (universal, per-project, stable)
+ *   4. Legacy default 7788 (only when no project_id is wired at all)
+ */
+function resolveListenPort(opts: GuiServerOptions): number {
+  if (typeof opts.port === "number" && Number.isFinite(opts.port)) return opts.port;
+  const env = process.env.SCM_GUI_PORT;
+  if (env) {
+    const n = Number(env);
+    if (Number.isFinite(n)) return n;
+  }
+  const pid = opts.projectId ?? slugify(currentProjectId);
+  if (pid && pid.length > 0) return computeProjectPort(pid);
+  return 7788;
+}
+
 export async function startGuiServer(opts: GuiServerOptions = {}): Promise<StartedGuiServer> {
-  const port = opts.port ?? Number(process.env.SCM_GUI_PORT ?? "7788");
+  const port = resolveListenPort(opts);
   const host = opts.host ?? process.env.SCM_GUI_HOST ?? "127.0.0.1";
-  const server = createGuiServer(opts);
+  const resolvedProjectId = opts.projectId ?? slugify(currentProjectId);
+  const server = createGuiServer({ ...opts, projectId: resolvedProjectId });
   await new Promise<void>((resolve, reject) => {
     const onErr = (err: Error): void => {
       server.off("listening", onListen);
@@ -376,6 +463,7 @@ export async function startGuiServer(opts: GuiServerOptions = {}): Promise<Start
     host,
     port: actualPort,
     url: `http://${host}:${actualPort}/`,
+    project_id: resolvedProjectId,
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.close((err) => (err ? reject(err) : resolve()));
@@ -400,6 +488,7 @@ function sendJson(res: http.ServerResponse, status: number, body: unknown): void
 async function serveStatic(
   res: http.ServerResponse,
   reqPath: string,
+  projectId?: string,
 ): Promise<void> {
   // URI-decode so paths like /style%2Ecss still resolve; fall back to raw
   // path if decoding throws (e.g. malformed percent-encoding).
@@ -426,6 +515,18 @@ async function serveStatic(
     const buf = await readFile(abs);
     const ext = path.extname(abs).toLowerCase();
     const mime = MIME_TYPES[ext] ?? "application/octet-stream";
+    // v2.1.9 — inject project branding into the dashboard HTML at serve time.
+    // Other assets (CSS/JS/fonts/images) pass through untouched.
+    if (ext === ".html" && projectId) {
+      const html = injectProjectBranding(buf.toString("utf8"), projectId);
+      const body = Buffer.from(html, "utf8");
+      res.writeHead(200, {
+        "Content-Type": mime,
+        "Content-Length": body.byteLength,
+      });
+      res.end(body);
+      return;
+    }
     res.writeHead(200, {
       "Content-Type": mime,
       "Content-Length": buf.byteLength,
@@ -470,9 +571,12 @@ const isStandaloneEntry =
 if (isStandaloneEntry) {
   startGuiServer({
     token: process.env.SCM_GUI_TOKEN ?? null,
+    projectId: slugify(currentProjectId),
   })
     .then((s) => {
-      process.stderr.write(`[scm-gui] listening on ${s.url}\n`);
+      process.stderr.write(
+        `[scm-gui] listening on ${s.url} (project: ${s.project_id})\n`,
+      );
     })
     .catch((err: Error) => {
       process.stderr.write(`[scm-gui] failed to start: ${err.message}\n`);
