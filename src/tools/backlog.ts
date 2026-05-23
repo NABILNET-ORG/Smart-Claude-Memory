@@ -89,7 +89,13 @@ const ARCH_HIDDEN_ALLOWLIST = new Set([
   ".claude",
 ]);
 
-const ARCH_MAX_DEPTH = 3;
+// Scanner depth — bumped from 3 to 5 so the auto-generated Mermaid tree
+// reaches inside two-level nested subsystems (e.g. src/gui/public/{...},
+// docs/session-reports/, scripts/sql-fixtures/). Depth 3 leaves the leaf
+// files of any third-level directory invisible after they get added as
+// flat nodes only when the parent is reached; depth 5 lets the renderer
+// emit them with their own subtree node, which is what Living Docs needs.
+const ARCH_MAX_DEPTH = 5;
 const ARCH_MAX_CHILDREN = 25;
 
 type ArchNode = {
@@ -254,19 +260,6 @@ export async function updateLocalReadme(projectId: string): Promise<{
     }
 
     const archived = await listArchive(projectId, { limit: 5 });
-    if (archived.length === 0) {
-      return {
-        ok: true,
-        path: readmePath,
-        updated: false,
-        warning: "No archived tasks yet; nothing to write.",
-      };
-    }
-
-    const bullets = archived
-      .map((t) => `* [DONE] ${t.title} (archived at ${t.archived_at.slice(0, 10)}).`)
-      .join("\n");
-    const newSection = `${PROGRESS_HEADER}\n\n${bullets}`;
 
     let current = "";
     try {
@@ -275,24 +268,40 @@ export async function updateLocalReadme(projectId: string): Promise<{
       // README may not exist yet; we'll create one.
     }
 
-    let updated: string;
-    const start = current.indexOf(PROGRESS_HEADER);
-    if (start >= 0) {
-      // Find the next markdown heading at level 1-3 after our section, or EOF.
-      const tail = current.slice(start + PROGRESS_HEADER.length);
-      const nextHeading = tail.match(/\n#{1,3}\s+\S/);
-      const sectionEnd =
-        nextHeading && nextHeading.index !== undefined
-          ? start + PROGRESS_HEADER.length + nextHeading.index
-          : current.length;
-      updated = current.slice(0, start) + newSection + current.slice(sectionEnd);
-    } else if (current.trim()) {
-      updated = current.trimEnd() + "\n\n" + newSection + "\n";
-    } else {
-      updated = newSection + "\n";
+    let updated = current;
+
+    // Refresh the Recent-Progress block only when there are archived tasks
+    // to report. Skipping this branch on empty archive prevents synthesising
+    // an empty progress section — but the architecture Mermaid block below
+    // ALWAYS runs so the file-tree stays in lock-step with the filesystem.
+    if (archived.length > 0) {
+      const bullets = archived
+        .map((t) => `* [DONE] ${t.title} (archived at ${t.archived_at.slice(0, 10)}).`)
+        .join("\n");
+      const newSection = `${PROGRESS_HEADER}\n\n${bullets}`;
+
+      const start = updated.indexOf(PROGRESS_HEADER);
+      if (start >= 0) {
+        // Find the next markdown heading at level 1-3 after our section, or EOF.
+        const tail = updated.slice(start + PROGRESS_HEADER.length);
+        const nextHeading = tail.match(/\n#{1,3}\s+\S/);
+        const sectionEnd =
+          nextHeading && nextHeading.index !== undefined
+            ? start + PROGRESS_HEADER.length + nextHeading.index
+            : updated.length;
+        updated = updated.slice(0, start) + newSection + updated.slice(sectionEnd);
+      } else if (updated.trim()) {
+        updated = updated.trimEnd() + "\n\n" + newSection + "\n";
+      } else {
+        updated = newSection + "\n";
+      }
     }
 
-    // Inject or refresh the architecture Mermaid block in README too.
+    // ALWAYS inject or refresh the architecture Mermaid block — Living-Docs
+    // hygiene must reflect filesystem reality even when no tasks were
+    // archived this session. Previously this call was unreachable on an
+    // empty archive due to an early return, which let the README's file-tree
+    // diagram drift away from the actual project shape.
     updated = await injectMermaidIntoReadme(updated, projectId);
 
     await writeFile(readmePath, updated, "utf8");
