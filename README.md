@@ -641,54 +641,6 @@ scripts/
 
 ---
 
-## npm scripts
-
-| Command | Purpose |
-|---|---|
-| `npm run build` | Three-step chain: `lint:boundaries` → `tsc` → `copy:gui`. Compiles TypeScript and mirrors `src/gui/public/` → `dist/gui/public/` for the modular dashboard (v2.2.0). |
-| `npm run lint:boundaries` | Boundary Invariant #1 fence — scans `src/sleep`, `src/curriculum`, `src/graduation` for forbidden LLM imports / endpoints. Runs first in `build`. |
-| `npm run copy:gui` | Zero-dep mirror of `src/gui/public/` → `dist/gui/public/` via `fs.cpSync` (no `cpx` / `fs-extra` introduced). Idempotent. |
-| `npm run dev` | Run the MCP server via `tsx` (no build step) |
-| `npm run start` | Run the compiled MCP server (`node dist/index.js`) |
-| `npm run gui` | Boot the Sovereign Command Center dashboard standalone on `127.0.0.1:7788` (`tsx src/gui/server.ts`). Cross-platform ESM entry-point guard (SCM-S37-P1). |
-| `npm run test` | Full hermetic suite via `node --test` — 246/246 as of v2.2.0 (stubbed Supabase + Ollama; no live infra needed) |
-| `npm run schema` | Apply `001_schema.sql` (or pass `-- <file>` for another) |
-| `npm run backup` | Dry-run backup of all `.md` in `MEMORY_ROOTS` |
-| `npm run smoke:m4` / `smoke:m5-rollback` / `smoke:m5-stale` / `smoke:m5-consumer` / `smoke:m7` | End-to-end smoke flows per milestone — exercise checkpoints (M4), rollback signals + stale-candidate triage + curriculum consumer (M5), and human-gated graduation (M7). |
-
----
-
-## Design decisions worth knowing
-
-- **Embedding model is load-bearing.** `EMBED_DIM` must match the model's output. Swapping `nomic-embed-text` (768) for `mxbai-embed-large` (1024) means dropping and rebuilding the `embedding` column. Don't mix dimensions.
-- **Service-role key, no RLS.** The MCP server runs locally with no user context; it uses `sb_secret_*` which bypasses RLS. If you expose this server to untrusted callers, add RLS plus a `user_id` column.
-- **Chunking is heading-aware, not token-aware.** Sections split on `##` / `###`; long sections slide-window at `CHUNK_SIZE` with `CHUNK_OVERLAP`. Good enough for most prose; swap in a tokenizer-driven chunker if you're indexing code.
-- **Sync is incremental by default.** Unchanged files are skipped via `file_hash` comparison; no embedding calls, no writes. Pass `force: true` to re-embed everything. Chunks are flushed in 100-row batches to minimize Supabase round-trips.
-- **Orphans are reported by `sync_local_memory` and pruned by `prune_memory`.** Files removed from disk stay in the DB and show up in `orphan_files`. To clean them, call `prune_memory({ explicit_paths: [...], confirm: true })` — wildcards are rejected, `inline:*` synthetic origins from `save_memory` are always skipped, `project_id='GLOBAL'` is refused, and every confirmed delete writes a forensic manifest to `~/.claude-memory/prune-backups/<stamp>-<project>/manifest.json`. The manifest is the archive — reversal is a re-sync away. This reconciles with the "Archive, never delete" rule (SCM-S17-D1): that rule bans content mutation of immutable HNSW-indexed rows, not row-lifecycle reaping of confirmed orphans.
-- **Version is a single source of truth.** [src/version.ts](src/version.ts) reads `version` from `package.json` via `createRequire(import.meta.url)` and re-exports it. The MCP server registration in [src/index.ts](src/index.ts), the `check_system_health` orchestrator block, and the `delegate_task` response envelope all import that one constant — no hard-coded literals anywhere. Bumping `package.json` propagates through the next build with zero drift between `npm view` and what the tool surface reports.
-- **Policy hydration is bulk + idempotent.** [src/tools/batch-freeze-patterns.ts](src/tools/batch-freeze-patterns.ts) accepts globs or a markdown rule file, scans only the section under an exact `## Frozen Patterns` heading, strips backticks/list markers, and writes through the shared loader at [src/tools/frozen-cache.ts](src/tools/frozen-cache.ts). Cache entries are now `{ pattern, source, added_at }` objects (legacy strings are lazily migrated on read), all writes go through `<file>.tmp` + `rename`, and dedup is first-writer-wins on trimmed pattern equality — so re-running against the same rule file is a no-op. The `source` field is what powers smart-scout suppression.
-
----
-
-## Security
-
-- `.env` is git-ignored. Never commit it.
-- Rotate `SUPABASE_SECRET_KEY` and your database password anytime they touch a log, a terminal history, or a chat transcript.
-- The backup script writes unencrypted `.zip` files to `backups/` (also git-ignored). If your notes are sensitive, encrypt the archive before uploading anywhere.
-
----
-
-## License
-
-MIT. See [LICENSE](LICENSE).
-
----
-
-## Developer
-
-Built and maintained by **[NABILNET.AI](https://nabilnet.ai)**.
-
-For inquiries, integrations, or sovereign-grade Claude Code tooling, visit [nabilnet.ai](https://nabilnet.ai).
 
 ### 🗺️ File Architecture
 
@@ -1090,3 +1042,52 @@ flowchart TD
   n196["tsconfig.json"]
   n0 --> n196
 ```
+
+## npm scripts
+
+| Command | Purpose |
+|---|---|
+| `npm run build` | Three-step chain: `lint:boundaries` → `tsc` → `copy:gui`. Compiles TypeScript and mirrors `src/gui/public/` → `dist/gui/public/` for the modular dashboard (v2.2.0). |
+| `npm run lint:boundaries` | Boundary Invariant #1 fence — scans `src/sleep`, `src/curriculum`, `src/graduation` for forbidden LLM imports / endpoints. Runs first in `build`. |
+| `npm run copy:gui` | Zero-dep mirror of `src/gui/public/` → `dist/gui/public/` via `fs.cpSync` (no `cpx` / `fs-extra` introduced). Idempotent. |
+| `npm run dev` | Run the MCP server via `tsx` (no build step) |
+| `npm run start` | Run the compiled MCP server (`node dist/index.js`) |
+| `npm run gui` | Boot the Sovereign Command Center dashboard standalone on `127.0.0.1:7788` (`tsx src/gui/server.ts`). Cross-platform ESM entry-point guard (SCM-S37-P1). |
+| `npm run test` | Full hermetic suite via `node --test` — 246/246 as of v2.2.0 (stubbed Supabase + Ollama; no live infra needed) |
+| `npm run schema` | Apply `001_schema.sql` (or pass `-- <file>` for another) |
+| `npm run backup` | Dry-run backup of all `.md` in `MEMORY_ROOTS` |
+| `npm run smoke:m4` / `smoke:m5-rollback` / `smoke:m5-stale` / `smoke:m5-consumer` / `smoke:m7` | End-to-end smoke flows per milestone — exercise checkpoints (M4), rollback signals + stale-candidate triage + curriculum consumer (M5), and human-gated graduation (M7). |
+
+---
+
+## Design decisions worth knowing
+
+- **Embedding model is load-bearing.** `EMBED_DIM` must match the model's output. Swapping `nomic-embed-text` (768) for `mxbai-embed-large` (1024) means dropping and rebuilding the `embedding` column. Don't mix dimensions.
+- **Service-role key, no RLS.** The MCP server runs locally with no user context; it uses `sb_secret_*` which bypasses RLS. If you expose this server to untrusted callers, add RLS plus a `user_id` column.
+- **Chunking is heading-aware, not token-aware.** Sections split on `##` / `###`; long sections slide-window at `CHUNK_SIZE` with `CHUNK_OVERLAP`. Good enough for most prose; swap in a tokenizer-driven chunker if you're indexing code.
+- **Sync is incremental by default.** Unchanged files are skipped via `file_hash` comparison; no embedding calls, no writes. Pass `force: true` to re-embed everything. Chunks are flushed in 100-row batches to minimize Supabase round-trips.
+- **Orphans are reported by `sync_local_memory` and pruned by `prune_memory`.** Files removed from disk stay in the DB and show up in `orphan_files`. To clean them, call `prune_memory({ explicit_paths: [...], confirm: true })` — wildcards are rejected, `inline:*` synthetic origins from `save_memory` are always skipped, `project_id='GLOBAL'` is refused, and every confirmed delete writes a forensic manifest to `~/.claude-memory/prune-backups/<stamp>-<project>/manifest.json`. The manifest is the archive — reversal is a re-sync away. This reconciles with the "Archive, never delete" rule (SCM-S17-D1): that rule bans content mutation of immutable HNSW-indexed rows, not row-lifecycle reaping of confirmed orphans.
+- **Version is a single source of truth.** [src/version.ts](src/version.ts) reads `version` from `package.json` via `createRequire(import.meta.url)` and re-exports it. The MCP server registration in [src/index.ts](src/index.ts), the `check_system_health` orchestrator block, and the `delegate_task` response envelope all import that one constant — no hard-coded literals anywhere. Bumping `package.json` propagates through the next build with zero drift between `npm view` and what the tool surface reports.
+- **Policy hydration is bulk + idempotent.** [src/tools/batch-freeze-patterns.ts](src/tools/batch-freeze-patterns.ts) accepts globs or a markdown rule file, scans only the section under an exact `## Frozen Patterns` heading, strips backticks/list markers, and writes through the shared loader at [src/tools/frozen-cache.ts](src/tools/frozen-cache.ts). Cache entries are now `{ pattern, source, added_at }` objects (legacy strings are lazily migrated on read), all writes go through `<file>.tmp` + `rename`, and dedup is first-writer-wins on trimmed pattern equality — so re-running against the same rule file is a no-op. The `source` field is what powers smart-scout suppression.
+
+---
+
+## Security
+
+- `.env` is git-ignored. Never commit it.
+- Rotate `SUPABASE_SECRET_KEY` and your database password anytime they touch a log, a terminal history, or a chat transcript.
+- The backup script writes unencrypted `.zip` files to `backups/` (also git-ignored). If your notes are sensitive, encrypt the archive before uploading anywhere.
+
+---
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+---
+
+## Developer
+
+Built and maintained by **[NABILNET.AI](https://nabilnet.ai)**.
+
+For inquiries, integrations, or sovereign-grade Claude Code tooling, visit [nabilnet.ai](https://nabilnet.ai).

@@ -104,15 +104,24 @@ Before any non-trivial edit (multi-file refactor, new feature, architectural cha
 - **Synthesis Only.** 2-paragraph back. Compiler errors ≤1 sentence each. No raw code/logs unless user asks.
 - **Orchestrator Mode.** `SMART_CLAUDE_MEMORY_ORCHESTRATOR_MODE` set → direct Write/Edit/Bash forbidden in main session. Hard-blocked by `md-policy.py`.
 
-### Wrap-Up Ritual (5 atomic steps)
+### Wrap-Up Ritual (6 atomic steps)
 
 **Triggers:** (1) context >50% OR (2) explicit user command. Task completion alone is NOT a trigger.
 
-0. **Living Docs Sync.** `manage_backlog({ action: "session_end" })` FIRST. Verify `readme_sync.updated === true` AND `architecture_sync.updated === true`. Apply Active Memory Hygiene to MEMORY.md.
-1. **Report.** Write `docs/session-reports/SESSION-N-REPORT.md`: changes, hurdles+solutions, DECISION IDs.
-2. **Commit.** `session: wrap-up Session [N]`. Never end with uncommitted work.
-3. **Numbering.** N = highest existing `SESSION-N-REPORT.md` + 1.
-4. **Next-Session Command** (final output, exact format):
+0. **Pre-Flight Content Audit (BLOCKING — added in v2.2.1 / SCM-S38-F1).** BEFORE invoking `manage_backlog({ action: "session_end" })`, the agent MUST manually cross-check the TEXTUAL content of `README.md` and `ARCHITECTURE.md` against current project reality. The auto-sync **only refreshes the file-tree Mermaid block** — it does NOT detect content drift. Required checks (at minimum):
+
+   - **Version numbers** in every banner, badge, caption, header, and §Version History row match `package.json.version`. Grep for the prior version string to catch stragglers.
+   - **Tech-stack descriptions** (tool count, milestone surfaces, dependency lists, supported runtimes) match the actual source state — e.g., `grep -c '^server.tool(' src/index.ts` for the tool count; the migration count via `ls scripts/0*.sql | wc -l`.
+   - **Cross-link anchors** resolve to real headings (no broken `[Bootstrap](#bootstrap)`-style dead links anywhere in the README).
+   - **Feature/scope claims** match implementation — milestone sections describe what is actually shipped, not what was intended.
+
+   If ANY drift is found, FIX the docs first via direct `Edit`, then return to this step. **Closing a session with drifted docs is forbidden** — `session_end` is not allowed to mask textual drift behind a fresh Mermaid file-tree regen. This rule exists because `session_end` shipped v2.2.0 with a README that claimed 23 tools (actual: 50), a dead `#bootstrap` anchor, and a CHANGELOG that stopped at v2.0.1 — the audit step caught zero of it because no audit step existed.
+
+1. **Living Docs Sync.** `manage_backlog({ action: "session_end" })` SECOND (after step 0 passes). Verify `readme_sync.updated === true` AND `architecture_sync.updated === true`. Apply Active Memory Hygiene to MEMORY.md.
+2. **Report.** Write `docs/session-reports/SESSION-N-REPORT.md`: changes, hurdles+solutions, DECISION IDs.
+3. **Commit.** `session: wrap-up Session [N]`. Never end with uncommitted work.
+4. **Numbering.** N = highest existing `SESSION-N-REPORT.md` + 1.
+5. **Next-Session Command** (final output, exact format):
 
 ```
 🚀 NEXT SESSION START COMMAND (Copy-Paste)

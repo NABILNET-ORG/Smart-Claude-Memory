@@ -1,13 +1,13 @@
-# Smart Claude Memory — System Architecture (v2.1.0)
+# Smart Claude Memory — System Architecture (v2.2.1)
 
 **Developer:** [NABILNET.AI](https://nabilnet.ai)
 
-> **Stable baseline:** v2.1.0 — bundles Architecture Guard + Automatic Session Handoff, the Typed Retrieval layer (Sovereign Taxonomy on `memory_chunks.metadata`, GIN-indexed metadata filter, strict project_id-first isolation), the Global Knowledge Vault + Multi-IDE layer (reserved `'GLOBAL'` project_id with dual-scope retrieval, `init_project` Capabilities Header, `docs/IDE-INTEGRATION.md` for Cursor / Windsurf / Cline), and the GLOBAL Vault UX layer (browse-only `list_global_patterns` MCP tool with tiered output, full JSONB `metadata_filter`, offset/limit pagination, zero embedding cost; `init_project.capabilities.global_scope` extended with `browse_tool` + `browse_args`).
-> This document is the single source of truth for the system's structure and control flow. The marker-bounded Mermaid block in §5 is refreshed automatically by `sync_artefacts` after every worker success; the other diagrams are hand-maintained.
+> **Stable baseline:** v2.2.1 — the cumulative production surface across Sessions 22–38. Bundles the v2.1.x foundations (Architecture Guard + Automatic Session Handoff, the Typed Retrieval layer with GIN-indexed JSONB `metadata_filter` on `memory_chunks.metadata`, the Global Knowledge Vault + Multi-IDE layer with dual-scope retrieval and `init_project.capabilities`, the GLOBAL Vault UX layer with browse-only `list_global_patterns`) AND the v2.2.0 Agentic OS expansion: **M3 Sleep Learning** (Orchestrator-curated stub promotion under Single Brain mandate); **M4 Transactional Workflows** (`workflow_checkpoints` + `terminal_committed_checkpoint` recursive-CTE + replay via M2 `get_trajectory_summary`); **M5 Autonomous Curriculum** (deterministic queuer daemon, atomic `apply_curriculum_task` auto-promote, NO generative AI in `src/curriculum/**`); **M6 Observability & Telemetry** (`daemon_telemetry` event-sourcing + `system_dashboard` 24h rollups + per-daemon derived health + 30-day retention pruner); **M7 Skill Graduation** (human-gated 3-state lifecycle, atomic `apply_graduation` clone-to-GLOBAL, Boundary Invariant #1 extension to `src/graduation/**`); **M8.1 Hybrid-RAG Knowledge Graph** (`kg_nodes` + `kg_edges` schema, deterministic `graph_extractor` daemon, 5 MCP tools, force-directed SVG Command Center verified at 60 nodes / 0 overlaps in Session 37 Visual QA); **M8.2 Modular GUI** (replaces 703-line `DASHBOARD_HTML` monolith with operator-authored `src/gui/public/{index.html,style.css,app.js}` served via zero-dep `serveStatic` + `import.meta.url`-resolved `PUBLIC_DIR` + `fs.cpSync` build copy + URI-decoded `path.relative` traversal guard + Google-Fonts-scoped CSP relaxation — promoted to GLOBAL Knowledge Vault as `SCM-S38-P1`). **v2.2.1 patches docs-only** — restores 1:1 alignment between the npm registry README and the v2.2.0 reality (Bootstrap anchor repair, migration count 18→21, comprehensive `## Usage` reference, 50-tool roster subtable, ARCH §4.10 + §4.11 added), removes two never-functional `smoke:m8-*` scripts, AND repairs the Living-Docs auto-sync bug (`ARCH_MAX_DEPTH` 3→5 + `updateLocalReadme` no longer early-returns on empty archive). **Surface:** 50 MCP tools · 21 schema migrations through `020_knowledge_graph.sql` · 246/246 tests across 21 files · zero new runtime dependencies across the entire v2.0.1 → v2.2.1 arc.
+> This document is the single source of truth for the system's structure and control flow. The marker-bounded Mermaid block in §5 is refreshed automatically by `manage_backlog({action:'session_end'})` (which now ALWAYS injects the file-tree regardless of archive state, post-Session 38 foundation fix) and by `sync_artefacts` after every worker success; the other diagrams are hand-maintained.
 
-![Smart Claude Memory v2.1.0 Master Schematic](docs/assets/schematic.png)
+![Smart Claude Memory v2.2.1 Master Schematic](docs/assets/schematic.png)
 
-*Master schematic — the definitive visual reference for the Smart Claude Memory v2.1.0 production baseline.*
+*Master schematic — the definitive visual reference for the Smart Claude Memory v2.2.x production baseline (v2.2.1 = docs-only + foundation-fix patch on the v2.2.0 surface).*
 
 ---
 
@@ -840,7 +840,17 @@ flowchart LR
 
 ### 4.11 Modular GUI Subsystem (Agentic OS 2026 — Mission 8.2 / SCM-S38-D1)
 
-**Goal.** Replace the monolithic 703-line `DASHBOARD_HTML` template string at `src/gui/static.ts` with a modular static-asset surface (`src/gui/public/{index.html,style.css,app.js}`) served by a small, secure, dependency-free HTTP server. The dashboard's HTML/CSS/JS now diff cleanly file-by-file, ship with per-asset Content-Type and Cache-Control headers, and survive operator-authored CSP reasoning per resource — without introducing a single new runtime dependency (no Express, no Koa, no `mime`, no `cpx`, no `fs-extra`).
+**Goal.** Replace the monolithic 703-line `DASHBOARD_HTML` template string at `src/gui/static.ts` (deleted in M8.2) with a modular static-asset surface (`src/gui/public/{index.html,style.css,app.js}`) served by a small, secure, dependency-free HTTP server. The dashboard's HTML/CSS/JS now diff cleanly file-by-file, ship with per-asset `Content-Type` headers, and survive operator-authored CSP reasoning per resource — without introducing a single new runtime dependency (no Express, no Koa, no `mime`, no `cpx`, no `fs-extra`).
+
+**Structure (`src/gui/public/` — operator-authored, never compiled, never bundled).**
+
+| File | Size | Purpose |
+|---|---|---|
+| `index.html` | 12.4 kB | Semantic markup for the Sovereign Command Center dashboard. Loads `style.css` + `app.js` as relative same-origin refs, plus the Google Fonts CSS for JetBrains Mono. Contains all dashboard panels: M7 graduation queue, M8.1 force-directed knowledge-graph SVG (`#graph-svg`), filter controls, detail drawer (`#graph-detail`). |
+| `style.css` | 48.7 kB | Full visual surface — tokens, panels, drawers, tables, the M8.1 graph chrome, responsive breakpoints. Zero JS dependencies; pure CSS variables + grid. |
+| `app.js` | 40.9 kB | Client-side rendering — fetches `/api/graduations` + `/api/graph`, renders the queue, runs the deterministic force-directed simulator (60 nodes, 0 overlaps target), wires the detail drawer, the type/label-prefix filters, and the compose/approve/reject mutations. Uses ES module syntax against the same-origin API only — no external endpoints. |
+
+The build copy step is the single mechanism that propagates these assets into the published tarball — `scripts/copy-gui-public.ts` (40 lines, zero deps) mirrors `src/gui/public/` → `dist/gui/public/` via `fs.cpSync(src, dest, { recursive: true, force: true })` chained after `tsc` in the `npm run build` pipeline. The published v2.2.x npm tarball ships all three files at exactly the same bytes that the operator authored.
 
 **Three architectural mandates.**
 
