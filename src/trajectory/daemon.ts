@@ -10,6 +10,10 @@ import { supabase } from "../supabase.js";
 import { emit } from "../telemetry/emit.js";
 import { stripTrajectory } from "./stripper.js";
 import { summarizeTrajectory } from "./summarizer.js";
+// SCM-S39-D1: daemon-tier budget gate. This is the ONLY daemon that
+// touches an LLM (summarizeTrajectory → ollama.generate), so it is the
+// only daemon under the daemon-budget contract today.
+import { checkDaemonBudget } from "../budget/gate.js";
 
 const DEFAULT_INTERVAL_MS = 600_000;
 const DEFAULT_BATCH = 25;
@@ -222,6 +226,33 @@ async function tick(): Promise<void> {
   const __tStart = Date.now();
   void emit({ daemon: "trajectory_compactor", event: "run_started" });
   try {
+    // SCM-S39-D1: gate ollama_calls against the rolling-hour bucket
+    // BEFORE entering the batch loop. checkDaemonBudget short-circuits
+    // to 'allow' when SCM_BUDGET_ENFORCEMENT_MODE=off (no DB write).
+    // When 'block', skip the entire tick and emit a run_skipped_budget
+    // telemetry row — daemons NEVER throw out of setInterval ticks
+    // because that would orphan the .unref()'d process error handler.
+    const gate = await checkDaemonBudget(
+      "trajectory_compactor",
+      "ollama_calls",
+      state.batch,
+    );
+    if (gate.decision === "block") {
+      void emit({
+        daemon: "trajectory_compactor",
+        event: "run_skipped_budget",
+        payload: {
+          axis: "ollama_calls",
+          delta: state.batch,
+          total_in_hour: gate.total,
+          cap: gate.cap,
+          hour_bucket: gate.hour_bucket ?? "",
+          duration_ms: Date.now() - __tStart,
+        },
+      });
+      state.lastRunAt = new Date().toISOString();
+      return;
+    }
     const result = await runCompactionOnce({ limit: state.batch });
     state.lastRunCompacted = result.compacted;
     state.lastRunSkipped = result.skipped;

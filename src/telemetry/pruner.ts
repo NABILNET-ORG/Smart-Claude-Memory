@@ -42,6 +42,12 @@ function resolveConfig(): { intervalMs: number; retentionDays: number } {
 // One-shot prune. Exposed for smoke tests + manual invocation. Always returns
 // a structured outcome — never throws, since callers (tick + smoke tests)
 // must observe error counts deterministically.
+//
+// SCM-S39-D1: now also prunes the three append-only ARM tables on the
+// same retention. budget_tasks itself is intentionally NOT pruned — task
+// rows are audit-grade and persistent, like memory_chunks. The per-task
+// event log, the daemon event log, and the rotated daemon buckets all
+// fall under the same TELEMETRY_PRUNER_RETENTION_DAYS window.
 export async function runPruneOnce(
   opts: { retentionDays?: number } = {},
 ): Promise<{ deleted: number; errored: number; duration_ms: number }> {
@@ -49,17 +55,38 @@ export async function runPruneOnce(
   const retentionDays = opts.retentionDays ?? state.retentionDays;
   const cutoffIso = new Date(Date.now() - retentionDays * 86_400_000).toISOString();
   try {
-    // Supabase .delete() with .lt() + { count: 'exact' } returns the row count
-    // PostgreSQL deleted. The predicate uses the only natural axis (created_at);
-    // we accept seqscan until volume warrants a dedicated index (see spec).
-    const { error, count } = await supabase
-      .from("daemon_telemetry")
-      .delete({ count: "exact" })
-      .lt("created_at", cutoffIso);
-    if (error) {
-      return { deleted: 0, errored: 1, duration_ms: Date.now() - t0 };
-    }
-    return { deleted: count ?? 0, errored: 0, duration_ms: Date.now() - t0 };
+    // Four parallel DELETEs — each scoped to its natural time axis.
+    // count:'exact' on each so we can aggregate the total for telemetry.
+    const [telemetryRes, taskEventRes, daemonEventRes, daemonBucketRes] =
+      await Promise.all([
+        supabase
+          .from("daemon_telemetry")
+          .delete({ count: "exact" })
+          .lt("created_at", cutoffIso),
+        supabase
+          .from("budget_task_events")
+          .delete({ count: "exact" })
+          .lt("ts", cutoffIso),
+        supabase
+          .from("daemon_budget_events")
+          .delete({ count: "exact" })
+          .lt("ts", cutoffIso),
+        supabase
+          .from("daemon_budget_buckets")
+          .delete({ count: "exact" })
+          .lt("hour_bucket", cutoffIso),
+      ]);
+    const errored =
+      (telemetryRes.error ? 1 : 0) +
+      (taskEventRes.error ? 1 : 0) +
+      (daemonEventRes.error ? 1 : 0) +
+      (daemonBucketRes.error ? 1 : 0);
+    const deleted =
+      (telemetryRes.count ?? 0) +
+      (taskEventRes.count ?? 0) +
+      (daemonEventRes.count ?? 0) +
+      (daemonBucketRes.count ?? 0);
+    return { deleted, errored, duration_ms: Date.now() - t0 };
   } catch {
     return { deleted: 0, errored: 1, duration_ms: Date.now() - t0 };
   }
