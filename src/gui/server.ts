@@ -40,6 +40,11 @@ import {
   type ListKgNodesInput,
   type ListKgEdgesInput,
 } from "../tools/kg.js";
+// SCM-S39-D1 (v2.2.2): /api/budget surface.
+import {
+  getDaemonBudget as defaultGetDaemonBudget,
+  getTaskBudget as defaultGetTaskBudget,
+} from "../tools/budget.js";
 
 // Static asset root — resolves to src/gui/public when tsx-running directly
 // (npm run gui) and to dist/gui/public after `tsc` builds. The build step
@@ -164,6 +169,19 @@ export function createGuiServer(opts: GuiServerOptions = {}): http.Server {
           service: "scm-gui",
           version: GUI_VERSION,
         });
+      }
+
+      // SCM-S39-D1: Agentic Resource Manager surface for the GUI ticker.
+      // Always returns the daemon-budget current-hour rollup; if task_id is
+      // passed, also returns that task's burn state.
+      if (method === "GET" && path === "/api/budget") {
+        const taskId = url.searchParams.get("task_id");
+        const daemons = await defaultGetDaemonBudget({});
+        let task: unknown = null;
+        if (taskId && taskId.trim().length > 0) {
+          task = await defaultGetTaskBudget({ task_id: taskId.trim() });
+        }
+        return sendJson(res, 200, { ok: true, mode: daemons.mode, daemons: daemons.rows, task });
       }
 
       if (method === "GET" && path === "/api/graduations") {

@@ -34,6 +34,40 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
       }
     }
 
+    // SCM-S39-D1 (v2.2.2): Agentic Resource Manager ticker. Polls /api/budget
+    // on the same cadence as health/graduations and renders the worst-of
+    // daemon burn ratio in the header tele row.
+    async function loadBudget() {
+      const el = document.getElementById('tele-budget');
+      if (!el) return;
+      const r = await jsonFetch('/api/budget');
+      if (!r.ok || !r.body || !Array.isArray(r.body.daemons)) {
+        el.textContent = '—';
+        el.className = 'v';
+        return;
+      }
+      const mode = r.body.mode || 'off';
+      if (mode === 'off') {
+        el.textContent = 'off';
+        el.className = 'v muted';
+        el.parentElement && el.parentElement.setAttribute('title',
+          'Agentic Resource Manager — SCM_BUDGET_ENFORCEMENT_MODE=off');
+        return;
+      }
+      let worst = 0;
+      let worstDaemon = '—';
+      for (const row of r.body.daemons) {
+        const ratio = typeof row.burn_ratio === 'number' ? row.burn_ratio : 0;
+        if (ratio > worst) { worst = ratio; worstDaemon = row.daemon; }
+      }
+      const pct = Math.round(worst * 100);
+      el.textContent = pct + '%';
+      el.className = 'v ' + (worst >= 1 ? 'err' : worst >= 0.8 ? 'accent' : 'ok');
+      el.parentElement && el.parentElement.setAttribute('title',
+        'Agentic Resource Manager — mode=' + mode +
+        ' · worst burn: ' + worstDaemon + ' ' + pct + '%');
+    }
+
     function makeEl(tag, opts) {
       const el = document.createElement(tag);
       if (opts && opts.cls) el.className = opts.cls;
@@ -153,11 +187,15 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
       loadGraduations();
     });
 
-    $('#refresh').addEventListener('click', () => { loadHealth(); loadGraduations(); });
+    $('#refresh').addEventListener('click', () => { loadHealth(); loadGraduations(); loadBudget(); });
 
     loadHealth();
     loadGraduations();
+    loadBudget();
     /* auto-refresh interval is now driven by Settings (see initSettings) */
+    // Expose loadBudget so the Settings polling loop (initSettings/applyAutoRefresh)
+    // can include it in the tick set without re-declaring the IIFE scope.
+    window.SCM_LOAD_BUDGET = loadBudget;
 
     // ─── Knowledge Graph Panel (M8.1 Phase 2) ────────────────────────────
     // Interactive 2.5D viewport: live force-directed sim, draggable nodes,
