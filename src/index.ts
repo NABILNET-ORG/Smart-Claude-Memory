@@ -90,6 +90,18 @@ import {
   listKgEdges,
   listKgEdgesInputShape,
 } from "./tools/kg.js";
+import {
+  startTask,
+  startTaskInputShape,
+  endTask,
+  endTaskInputShape,
+  getTaskBudget,
+  getTaskBudgetInputShape,
+  getDaemonBudget,
+  getDaemonBudgetInputShape,
+  resetDaemonBudgetTool,
+  resetDaemonBudgetInputShape,
+} from "./tools/budget.js";
 import { startCompactor } from "./trajectory/daemon.js";
 import { startSleepLearner } from "./sleep/daemon.js";
 import { startCurriculumDaemon } from "./curriculum/daemon.js";
@@ -860,7 +872,7 @@ server.tool(
 
 server.tool(
   "delegate_task",
-  "Orchestrator pattern (v1.1.0 — Autonomous Self-Healing): emit a canonical worker sub-agent prompt for a task. Natural-language triggers: 'delegate this', 'spawn a worker', 'send to sub-agent', 'offload this task'. The returned 'prompt' field plugs into the Agent tool — every delegation carries the contract: do the work → refactor_guard({action:'gate'}) → if red, diagnose via analyze_regression against backups and fix locally (up to max_healing_attempts), re-gate → rollback only if healing exhausts → return a 2-paragraph synthesis with strict no-raw-content caps. Keeps the Orchestrator's context clean of failed-compile churn.",
+  "Orchestrator pattern (v1.1.0 — Autonomous Self-Healing): emit a canonical worker sub-agent prompt for a task. Natural-language triggers: 'delegate this', 'spawn a worker', 'send to sub-agent', 'offload this task'. The returned 'prompt' field plugs into the Agent tool — every delegation carries the contract: do the work → refactor_guard({action:'gate'}) → if red, diagnose via analyze_regression against backups and fix locally (up to max_healing_attempts), re-gate → rollback only if healing exhausts → return a 2-paragraph synthesis with strict no-raw-content caps. Keeps the Orchestrator's context clean of failed-compile churn. Pass optional task_id (from start_task) to gate subagent_depth via the Agentic Resource Manager.",
   {
     title: z.string().min(1),
     instructions: z.string().min(1),
@@ -871,6 +883,7 @@ server.tool(
     self_heal: z.boolean().optional(),
     max_healing_attempts: z.number().int().positive().max(5).optional(),
     synthesis_word_limit: z.number().int().positive().max(1000).optional(),
+    task_id: z.string().uuid().optional(),
   },
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await delegateTask(args), null, 2) }],
@@ -885,6 +898,53 @@ server.tool(
   },
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await syncArtefacts(args), null, 2) }],
+  }),
+);
+
+// ─── Agentic Resource Manager (SCM-S39-D1, v2.2.2) ────────────────────────
+
+server.tool(
+  "start_task",
+  "Open a budget task for the Agentic Resource Manager. Returns task_id + frozen_caps (immutable for the task's lifetime). Pass the task_id to delegate_task, compose_skill_candidate, compose_global_rationale, and index_image to gate their LLM-touching paths. Caps default to env (SCM_TASK_CAP_*) or hard-coded fallbacks (100000 anthropic_tokens / 50 ollama_calls / 2 subagent_depth). Enforcement scales with SCM_BUDGET_ENFORCEMENT_MODE (off|warn|enforce).",
+  startTaskInputShape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await startTask(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "end_task",
+  "Close a budget task. Returns the task's final usage counters and per-axis burn ratios. Call at the natural end of an Orchestrator workflow (typically as part of manage_backlog({action:'session_end'})) so the burn metrics flow into the system_dashboard rollup.",
+  endTaskInputShape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await endTask(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "get_task_budget",
+  "Inspect a budget task's current state — frozen caps, counters, burn ratios. Read-only; safe to call any time. Returns {ok:false, reason:'not_found'} when the task_id is unknown.",
+  getTaskBudgetInputShape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await getTaskBudget(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "get_daemon_budget",
+  "Inspect current-hour daemon budget buckets. Returns rows per (daemon, axis) with total_in_hour, cap, and burn_ratio. Omit `daemon` to enumerate all daemons under the contract. Useful for the GUI ticker and for diagnostics when a daemon stops processing (system_dashboard's run_skipped_budget events corroborate).",
+  getDaemonBudgetInputShape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await getDaemonBudget(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "reset_daemon_budget",
+  "Operator-only escape hatch. Zeroes the current-hour bucket for one (daemon, axis). Requires confirm:true. The reset is audited in daemon_budget_events. Use sparingly — the rolling-hour design naturally rotates within an hour, so resets are appropriate only when an operator has manually retuned a daemon's behavior mid-hour.",
+  resetDaemonBudgetInputShape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await resetDaemonBudgetTool(args), null, 2) }],
   }),
 );
 
