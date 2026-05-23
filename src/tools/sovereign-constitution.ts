@@ -4,7 +4,7 @@ import path from "node:path";
 
 export const SOVEREIGN_CONSTITUTION_TEMPLATE = `---
 
-## Sovereign Memory Protocol (v2.1.9)
+## Sovereign Memory Protocol (v2.1.10)
 
 Binds repo to SCM. Rules below override generic boot prompts on conflict.
 
@@ -89,14 +89,17 @@ Archive, never delete — vectors keep source recoverable.
 
 Surgically clean MEMORY.md every session wrap-up. Keep only "Current Focus" and "Pending Tasks". Archive everything else.
 
-### Context Window Governance (v2.1.9)
+### Context Window Governance (v2.1.10)
 
-Two complementary rules govern when \`manage_backlog({ action: "session_end" })\` is allowed to run:
+Three complementary rules govern \`manage_backlog({ action: "session_end" })\`:
 
-- **Premature wrap REJECTED.** SCM refuses \`session_end\` when \`context_pct < 50\` unless \`force: true\` is passed. Rationale: wrapping a half-empty session burns the prompt cache (5-minute TTL) and forces a fresh-boot cold-read of every architectural artefact for trivial follow-up gains. Enforced runtime in \`src/tools/backlog.ts\` (see \`SESSION_END_MIN_CONTEXT_PCT\`); the response carries \`{ refused: true, context_pct, threshold_pct }\` and SCM does NOT proceed.
-- **Wrap PROMPTED at >= 50%.** Once context utilization crosses 50%, the Orchestrator MUST proactively suggest \`manage_backlog({ action: "session_end", context_pct: <pct> })\` to the user before starting the next non-trivial task. Above the threshold the prompt-cache miss of a fresh boot is amortized against the work already in context.
-- **Wiring.** The Orchestrator passes \`context_pct\` (0..100, whole or fractional) from its own view of the conversation window. SCM does NOT infer context utilization itself — it only enforces the threshold and surfaces the refused/threshold metadata. Pass nothing → gate is skipped (back-compat).
-- **Override.** \`{ force: true }\` is the documented bypass for intentional small-session wrap-ups (e.g. a 5-minute hotfix where a fresh next-session boot is the correct economic call).
+- **Agent autonomy FORBIDDEN below 50%.** When \`context_pct < 50\`, the Agent is forbidden from autonomously triggering OR suggesting \`session_end\`. No "I'm wrapping up now," no "shall we close this session?" prompts, no preemptive handover ritual — none of it. Continue execution until either the user requests closure or context crosses the 50% mark. Rationale: wrapping a half-empty session burns the 5-minute prompt cache and forces a fresh-boot cold-read of every architectural artefact for trivial gains. Structurally enforced in \`src/tools/backlog.ts\` (see \`SESSION_END_MIN_CONTEXT_PCT\`): when \`context_pct < 50 && force !== true\`, SCM refuses with \`{ refused: true, context_pct, threshold_pct }\`.
+- **User-explicit request ALWAYS honored (bypass).** If the human user explicitly asks to end the session — "wrap up," "end session," "let's call it," "session_end now," any synonym — the Agent MUST comply immediately. Pass \`{ force: true, context_pct: <pct> }\` to bypass the structural gate. The 50% rule is for AGENT-initiated wraps only; user-initiated wraps are unconditional. The Agent does NOT second-guess, does NOT negotiate, does NOT suggest waiting until 50% — it executes.
+- **Agent MUST prompt at >= 50%.** Once context utilization crosses 50%, the Agent MUST proactively suggest \`manage_backlog({ action: "session_end", context_pct: <pct> })\` to the user before starting the next non-trivial task. Above 50% the prompt-cache miss of a fresh boot is amortized against the work already in context, so the suggestion becomes economically correct.
+
+**Wiring.** The Agent passes \`context_pct\` (0..100, whole or fractional) from its own view of the conversation window — SCM does NOT infer context utilization itself. Pass nothing → gate is skipped (back-compat with pre-v2.1.9 callers).
+
+**Override semantics.** \`{ force: true }\` is RESERVED for the user-explicit-request path. The Agent does NOT set \`force: true\` of its own volition — that would re-enable autonomous wraps and defeat the whole rule. If a user request arrives below 50%, set \`force: true\` AND record the user's literal phrase in \`notes\` for audit. Any other use of \`force: true\` is a v2.1.10 violation.
 
 ### Active Retriever Protocol
 
@@ -230,7 +233,7 @@ export async function ensureSovereignConstitution(
  * Current canonical constitution version. Bumped in lock-step with the
  * SOVEREIGN_CONSTITUTION_TEMPLATE body.
  */
-export const CANONICAL_CONSTITUTION_VERSION = "v2.1.9";
+export const CANONICAL_CONSTITUTION_VERSION = "v2.1.10";
 
 /**
  * SHA-256 hex digests of the canonical block body for each previously-shipped
@@ -248,6 +251,7 @@ export const KNOWN_CANONICAL_HASHES: Record<string, string> = {
   "v2.1.7": "14b4564dccc5a05e79b98a85c1d8ab8f16629b35144e678cde9ea8b807fc9099",
   "v2.1.8": "453bf797b22a8e9babf3ad6f74a2dd5c2059ea5becae1252e8c169e800463c54",
   "v2.1.9": "1965461840b43c5c81ba4a9c0c0d57aa071a5d6cd16df14a947117538150f07c",
+  "v2.1.10": "2fe020f8ef8eebff59d94d8cb6f9abf71b4a58ee07d1942ab870c2c6dc0e4185",
 };
 
 export type UpgradeConstitutionOptions = {
