@@ -29,8 +29,23 @@ export type BacklogAction =
     }
   | { action: "prune_done"; project_id?: string }
   | { action: "archive_list"; project_id?: string; limit?: number }
-  | { action: "session_end"; project_id?: string }
+  | {
+      action: "session_end";
+      project_id?: string;
+      /**
+       * v2.1.9 Context Window Governance. The Orchestrator passes its current
+       * context-window utilization (0..100). When `< 50` and `force !== true`,
+       * session_end is REFUSED — wrapping a half-empty session wastes the
+       * prompt cache. Omit to skip the threshold gate entirely (back-compat).
+       */
+      context_pct?: number;
+      /** v2.1.9 override — bypass the context_pct < 50 gate (small-session hotfix wrap-ups). */
+      force?: boolean;
+    }
   | { action: "backfill_archive_chunks"; project_id?: string; dry_run?: boolean };
+
+/** v2.1.9 Context Window Governance — wrap-up threshold (percent). */
+export const SESSION_END_MIN_CONTEXT_PCT = 50;
 
 /** Lowest priority number wins (1 = highest). Ties broken by oldest-first. */
 function pickNextTask(rows: BacklogRow[]): BacklogRow | null {
@@ -590,6 +605,27 @@ export async function manageBacklog(args: BacklogAction) {
     }
 
     case "session_end": {
+      // v2.1.9 Context Window Governance — refuse premature wrap-ups.
+      // Wrapping a half-empty session wastes the prompt cache and forces a
+      // fresh boot for trivial gains. Fires BEFORE the pendingGate check
+      // because it's a cheap in-memory comparison (no Supabase round-trip).
+      const force = args.force === true;
+      const ctxPct = typeof args.context_pct === "number" ? args.context_pct : null;
+      if (!force && ctxPct !== null && ctxPct < SESSION_END_MIN_CONTEXT_PCT) {
+        return {
+          action: "session_end",
+          refused: true,
+          reason:
+            `Context utilization is ${ctxPct.toFixed(1)}% (below the ` +
+            `${SESSION_END_MIN_CONTEXT_PCT}% wrap-up threshold). Wrapping a half-empty session ` +
+            `wastes the prompt cache and forces a fresh boot for trivial gains. ` +
+            `Pass {force: true} to override (small-session hotfix), or continue work until >= ` +
+            `${SESSION_END_MIN_CONTEXT_PCT}%.`,
+          context_pct: ctxPct,
+          threshold_pct: SESSION_END_MIN_CONTEXT_PCT,
+        };
+      }
+
       // BINDING GATE: refuse session_end when a manual-test verification is
       // still pending. Handover artefacts should only be written after the
       // user confirms the last edit is good.

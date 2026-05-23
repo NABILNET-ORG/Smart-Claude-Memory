@@ -652,6 +652,9 @@ server.tool(
     limit: z.number().int().positive().max(200).optional(),
     dry_run: z.boolean().optional(),
     project_id: projectIdSchema,
+    // v2.1.9 Context Window Governance — only consulted when action='session_end'.
+    context_pct: z.number().min(0).max(100).optional(),
+    force: z.boolean().optional(),
   },
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await manageBacklog(args as never), null, 2) }],

@@ -4,7 +4,7 @@ import path from "node:path";
 
 export const SOVEREIGN_CONSTITUTION_TEMPLATE = `---
 
-## Sovereign Memory Protocol (v2.1.8)
+## Sovereign Memory Protocol (v2.1.9)
 
 Binds repo to SCM. Rules below override generic boot prompts on conflict.
 
@@ -88,6 +88,15 @@ Archive, never delete — vectors keep source recoverable.
 ### Active Memory Hygiene
 
 Surgically clean MEMORY.md every session wrap-up. Keep only "Current Focus" and "Pending Tasks". Archive everything else.
+
+### Context Window Governance (v2.1.9)
+
+Two complementary rules govern when \`manage_backlog({ action: "session_end" })\` is allowed to run:
+
+- **Premature wrap REJECTED.** SCM refuses \`session_end\` when \`context_pct < 50\` unless \`force: true\` is passed. Rationale: wrapping a half-empty session burns the prompt cache (5-minute TTL) and forces a fresh-boot cold-read of every architectural artefact for trivial follow-up gains. Enforced runtime in \`src/tools/backlog.ts\` (see \`SESSION_END_MIN_CONTEXT_PCT\`); the response carries \`{ refused: true, context_pct, threshold_pct }\` and SCM does NOT proceed.
+- **Wrap PROMPTED at >= 50%.** Once context utilization crosses 50%, the Orchestrator MUST proactively suggest \`manage_backlog({ action: "session_end", context_pct: <pct> })\` to the user before starting the next non-trivial task. Above the threshold the prompt-cache miss of a fresh boot is amortized against the work already in context.
+- **Wiring.** The Orchestrator passes \`context_pct\` (0..100, whole or fractional) from its own view of the conversation window. SCM does NOT infer context utilization itself — it only enforces the threshold and surfaces the refused/threshold metadata. Pass nothing → gate is skipped (back-compat).
+- **Override.** \`{ force: true }\` is the documented bypass for intentional small-session wrap-ups (e.g. a 5-minute hotfix where a fresh next-session boot is the correct economic call).
 
 ### Active Retriever Protocol
 
@@ -221,7 +230,7 @@ export async function ensureSovereignConstitution(
  * Current canonical constitution version. Bumped in lock-step with the
  * SOVEREIGN_CONSTITUTION_TEMPLATE body.
  */
-export const CANONICAL_CONSTITUTION_VERSION = "v2.1.8";
+export const CANONICAL_CONSTITUTION_VERSION = "v2.1.9";
 
 /**
  * SHA-256 hex digests of the canonical block body for each previously-shipped
@@ -238,6 +247,7 @@ export const KNOWN_CANONICAL_HASHES: Record<string, string> = {
   "v2.1.6": "d35abf40d62c1878c1c49cadeb9bd47e1c849a4c01865ec4e6b4be551ec552fe",
   "v2.1.7": "14b4564dccc5a05e79b98a85c1d8ab8f16629b35144e678cde9ea8b807fc9099",
   "v2.1.8": "453bf797b22a8e9babf3ad6f74a2dd5c2059ea5becae1252e8c169e800463c54",
+  "v2.1.9": "1965461840b43c5c81ba4a9c0c0d57aa071a5d6cd16df14a947117538150f07c",
 };
 
 export type UpgradeConstitutionOptions = {
