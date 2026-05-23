@@ -1269,36 +1269,32 @@ flowchart TD
   n156 --> n182
   n183["trajectory-summarizer.test.ts"]
   n156 --> n183
-  n184["tmp-verify/"]
+  n184[".env.example"]
   n0 --> n184
-  n185["verify-livingdocs-fix.ts"]
-  n184 --> n185
-  n186[".env.example"]
+  n185[".gitignore"]
+  n0 --> n185
+  n186["ARCHITECTURE.md"]
   n0 --> n186
-  n187[".gitignore"]
+  n187["CHANGELOG.md"]
   n0 --> n187
-  n188["ARCHITECTURE.md"]
+  n188["CLAUDE.md"]
   n0 --> n188
-  n189["CHANGELOG.md"]
+  n189["LICENSE"]
   n0 --> n189
-  n190["CLAUDE.md"]
+  n190["marketplace.json"]
   n0 --> n190
-  n191["LICENSE"]
+  n191["package-lock.json"]
   n0 --> n191
-  n192["marketplace.json"]
+  n192["package.json"]
   n0 --> n192
-  n193["package-lock.json"]
+  n193["project_file_architecture.md"]
   n0 --> n193
-  n194["package.json"]
+  n194["README.md"]
   n0 --> n194
-  n195["project_file_architecture.md"]
+  n195["smart-claude-memory-mcp-2.2.1.tgz"]
   n0 --> n195
-  n196["README.md"]
+  n196["tsconfig.json"]
   n0 --> n196
-  n197["smart-claude-memory-mcp-2.2.1.tgz"]
-  n0 --> n197
-  n198["tsconfig.json"]
-  n0 --> n198
 ```
 
 <!-- MEMORY:ARCH:END -->
