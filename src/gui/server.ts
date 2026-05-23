@@ -42,6 +42,10 @@ import {
   type ListKgNodesInput,
   type ListKgEdgesInput,
 } from "../tools/kg.js";
+import {
+  getClusterGraphSuper,
+  getClusterGraphDrill,
+} from "../clustering/clusters.js";
 // SCM-S39-D1 (v2.2.2): /api/budget surface.
 import {
   getDaemonBudget as defaultGetDaemonBudget,
@@ -267,6 +271,37 @@ export function createGuiServer(opts: GuiServerOptions = {}): http.Server {
         return sendJson(res, 200, result);
       }
 
+      // M8.3 Task 4 — semantic clustering view. level=super returns Super
+      // Node graph (one node per supernode, cross-supernode kg_edge weights
+      // aggregated); level=drill returns members of one supernode (or a
+      // nested community view when the supernode has > 200 members).
+      if (method === "GET" && path === "/api/graph/clusters") {
+        const projectId = resolveProjectId(url.searchParams.get("project_id"), serverProjectId);
+        const level = url.searchParams.get("level") ?? "super";
+        try {
+          if (level === "super") {
+            const payload = await getClusterGraphSuper(projectId);
+            return sendJson(res, payload.ok ? 200 : 500, payload);
+          }
+          if (level === "drill") {
+            const raw = url.searchParams.get("supernode_id");
+            const snId = raw === null ? NaN : Number(raw);
+            if (!Number.isInteger(snId) || snId < 0) {
+              return sendJson(res, 400, {
+                ok: false,
+                reason: "level=drill requires integer supernode_id >= 0",
+              });
+            }
+            const payload = await getClusterGraphDrill(projectId, snId);
+            return sendJson(res, payload.ok ? 200 : 500, payload);
+          }
+          return sendJson(res, 400, { ok: false, reason: `unknown level: ${level}` });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          return sendJson(res, 500, { ok: false, reason: msg });
+        }
+      }
+
       if (method === "GET" && path === "/api/graph") {
         const projectId = resolveProjectId(url.searchParams.get("project_id"), serverProjectId);
         const nodeLimit = clampInt(
@@ -456,6 +491,20 @@ export async function startGuiServer(opts: GuiServerOptions = {}): Promise<Start
     server.once("listening", onListen);
     server.listen(port, host);
   });
+
+  // v2.1.10 EADDRINUSE-safe post-startup error guard. Any error fired AFTER
+  // the initial 'listening' handshake (rare — e.g., a downstream socket
+  // explosion or a kernel-level port revocation) must NOT crash the MCP
+  // stdio loop. Log to stderr and let the server keep serving whatever it
+  // can. The MCP server's tool surface is independent of GUI liveness.
+  server.on("error", (err: Error) => {
+    try {
+      process.stderr.write(`[scm-gui] post-startup error (non-fatal): ${err.message}\n`);
+    } catch {
+      /* even stderr can fail — never throw */
+    }
+  });
+
   const addr = server.address();
   const actualPort = typeof addr === "object" && addr ? addr.port : port;
   return {

@@ -108,6 +108,16 @@ import { startCurriculumDaemon } from "./curriculum/daemon.js";
 import { startGraduationDaemon } from "./graduation/daemon.js";
 import { startTelemetryPruner } from "./telemetry/pruner.js";
 import { startGraphExtractor } from "./graph/daemon.js";
+// M8.3 Task 4 — clustering daemon + tool surface (SCM-S41-D7).
+import { startClusteringScanner } from "./clustering/daemon.js";
+import {
+  listSupernodes,
+  listSupernodesInputShape,
+  listClusterMembers,
+  listClusterMembersInputShape,
+  triggerClustering,
+  triggerClusteringInputShape,
+} from "./clustering/clusters.js";
 import { ensureSchema, startKeepAlive, writeFrozenPatternsCache } from "./supabase.js";
 import { currentProjectId } from "./project.js";
 import { VERSION } from "./version.js";
@@ -177,6 +187,13 @@ startTelemetryPruner();
 // reference nodes/edges via src/graph/extractor.ts. Pure deterministic
 // extractor — ZERO generative AI. .unref()'d so it never blocks process exit.
 startGraphExtractor();
+
+// M8.3 clustering_scanner (SCM-S41-D5/D7). Per-project round-robin:
+// kg_nodes.embedding → k-means → kg_knn_pairs → per-supernode Louvain →
+// bulk UPSERT into kg_node_clusters. ARM-gated (delta=0 registers the
+// daemon in daemon_budget_buckets). .unref()'d. Universal — discovers
+// projects via SELECT DISTINCT project_id FROM kg_nodes; never hardcoded.
+startClusteringScanner();
 
 // Export the current frozen_features snapshot to the shared cache file so
 // hooks/md-policy.py can read it without hitting Supabase per tool call.
@@ -948,6 +965,35 @@ server.tool(
   resetDaemonBudgetInputShape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await resetDaemonBudgetTool(args), null, 2) }],
+  }),
+);
+
+// ─── M8.3 Task 4 — Clustering tool surface (SCM-S41-D7) ────────────────
+
+server.tool(
+  "list_supernodes",
+  "Operator-facing browse of M8.3 Super Nodes (coarse K-Means clusters over kg_nodes.embedding). One row per (project, supernode_id) with node_count + the 3 most-frequent labels for display + computed_at. Reads the kg_supernodes view. Natural-language triggers: 'list clusters', 'show super nodes', 'what clusters exist'. Pagination via limit (<=500) + offset.",
+  listSupernodesInputShape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await listSupernodes(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "list_cluster_members",
+  "Drill into one Super Node: list the kg_nodes inside it, each with its Louvain community_id. Pass community_id to narrow further to a single fine cluster. Powers the GUI 'drill' view. Pagination via limit (<=500) + offset.",
+  listClusterMembersInputShape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await listClusterMembers(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "trigger_clustering",
+  "Manually run the clustering scanner for one project right now (bypasses the 30-min daemon interval). Useful after a bulk import. Pass force:true to bypass the dirty-check (re-cluster even if no changes detected). Returns the same RunProjectResult shape as the daemon emits, plus a triggered_at timestamp.",
+  triggerClusteringInputShape,
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await triggerClustering(args), null, 2) }],
   }),
 );
 
