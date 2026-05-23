@@ -3,7 +3,8 @@ export type DaemonName =
   | "curriculum_scanner"
   | "trajectory_compactor"
   | "telemetry_pruner"
-  | "graduation_scanner";
+  | "graduation_scanner"
+  | "clustering_scanner";
 export type EventType =
   | "run_started"
   | "run_ended"
@@ -62,6 +63,19 @@ export type GraduationEndedPayload = {
   [extra: string]: unknown;
 };
 
+// M8.3 (SCM-S41-D5) clustering_scanner: tick-level rollup for system_dashboard.
+// `clustered` = rows UPSERTed into kg_node_clusters this tick; `skipped` =
+// not_dirty / no_embeddings paths; `errored` = pipeline exception count.
+// `project_id` is null on idle ticks (no projects discovered yet).
+export type ClusteringEndedPayload = {
+  project_id: string | null;
+  clustered: number;
+  skipped: number;
+  errored: number;
+  duration_ms: number;
+  [extra: string]: unknown;
+};
+
 export type RunErroredPayload = {
   error_message: string;
   duration_ms: number;
@@ -87,6 +101,7 @@ export type MetricEvent =
   | { daemon: "trajectory_compactor";  event: "run_ended";    payload: TrajectoryEndedPayload }
   | { daemon: "telemetry_pruner";      event: "run_ended";    payload: TelemetryPrunerEndedPayload }
   | { daemon: "graduation_scanner";    event: "run_ended";    payload: GraduationEndedPayload }
+  | { daemon: "clustering_scanner";    event: "run_ended";    payload: ClusteringEndedPayload }
   | { daemon: "curriculum_scanner";    event: "task_outcome"; payload: CurriculumDeltaPayload }
   | { daemon: DaemonName;              event: "run_errored";  payload: RunErroredPayload }
   | { daemon: DaemonName;              event: "run_skipped_budget"; payload: RunSkippedBudgetPayload };
