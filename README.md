@@ -642,7 +642,7 @@ scripts/
 ---
 
 
-### 🗺️ File Architecture
+## 🗺️ File Architecture
 
 _Auto-synced at 2026-05-23T06:03:21.927Z for `smart-claude-memory`._
 

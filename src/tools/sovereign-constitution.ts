@@ -4,7 +4,7 @@ import path from "node:path";
 
 export const SOVEREIGN_CONSTITUTION_TEMPLATE = `---
 
-## Sovereign Memory Protocol (v2.1.6)
+## Sovereign Memory Protocol (v2.1.7)
 
 Binds repo to SCM. Rules below override generic boot prompts on conflict.
 
@@ -106,15 +106,24 @@ Before any non-trivial edit (multi-file refactor, new feature, architectural cha
 - **Synthesis Only.** 2-paragraph back. Compiler errors ≤1 sentence each. No raw code/logs unless user asks.
 - **Orchestrator Mode.** \`SMART_CLAUDE_MEMORY_ORCHESTRATOR_MODE\` set → direct Write/Edit/Bash forbidden in main session. Hard-blocked by \`md-policy.py\`.
 
-### Wrap-Up Ritual (5 atomic steps)
+### Wrap-Up Ritual (6 atomic steps)
 
 **Triggers:** (1) context >50% OR (2) explicit user command. Task completion alone is NOT a trigger.
 
-0. **Living Docs Sync.** \`manage_backlog({ action: "session_end" })\` FIRST. Verify \`readme_sync.updated === true\` AND \`architecture_sync.updated === true\`. Apply Active Memory Hygiene to MEMORY.md.
-1. **Report.** Write \`docs/session-reports/SESSION-N-REPORT.md\`: changes, hurdles+solutions, DECISION IDs.
-2. **Commit.** \`session: wrap-up Session [N]\`. Never end with uncommitted work.
-3. **Numbering.** N = highest existing \`SESSION-N-REPORT.md\` + 1.
-4. **Next-Session Command** (final output, exact format):
+0. **Pre-Flight Content Audit (BLOCKING — added in v2.1.7 / SCM-S38-F1).** BEFORE invoking \`manage_backlog({ action: "session_end" })\`, the agent MUST manually cross-check the TEXTUAL content of \`README.md\` and \`ARCHITECTURE.md\` against current project reality. The auto-sync **only refreshes the file-tree Mermaid block** — it does NOT detect content drift. Required checks (at minimum):
+
+   - **Version numbers** in every banner, badge, caption, header, and §Version History row match \`package.json.version\`. Grep for the prior version string to catch stragglers.
+   - **Tech-stack descriptions** (tool count, milestone surfaces, dependency lists, supported runtimes) match the actual source state — count tools and migrations from the actual code, not from memory.
+   - **Cross-link anchors** resolve to real headings (no broken \`[Section](#section)\`-style dead links).
+   - **Feature/scope claims** match implementation — milestone sections describe what is actually shipped, not what was intended.
+
+   If ANY drift is found, FIX the docs first via direct \`Edit\`, then return to this step. **Closing a session with drifted docs is forbidden** — \`session_end\` is not allowed to mask textual drift behind a fresh Mermaid file-tree regen.
+
+1. **Living Docs Sync.** \`manage_backlog({ action: "session_end" })\` SECOND (after step 0 passes). Verify \`readme_sync.updated === true\` AND \`architecture_sync.updated === true\`. Apply Active Memory Hygiene to MEMORY.md.
+2. **Report.** Write \`docs/session-reports/SESSION-N-REPORT.md\`: changes, hurdles+solutions, DECISION IDs.
+3. **Commit.** \`session: wrap-up Session [N]\`. Never end with uncommitted work.
+4. **Numbering.** N = highest existing \`SESSION-N-REPORT.md\` + 1.
+5. **Next-Session Command** (final output, exact format):
 
 \`\`\`
 🚀 NEXT SESSION START COMMAND (Copy-Paste)
@@ -209,7 +218,7 @@ export async function ensureSovereignConstitution(
  * Current canonical constitution version. Bumped in lock-step with the
  * SOVEREIGN_CONSTITUTION_TEMPLATE body.
  */
-export const CANONICAL_CONSTITUTION_VERSION = "v2.1.6";
+export const CANONICAL_CONSTITUTION_VERSION = "v2.1.7";
 
 /**
  * SHA-256 hex digests of the canonical block body for each previously-shipped
@@ -224,6 +233,7 @@ export const CANONICAL_CONSTITUTION_VERSION = "v2.1.6";
 export const KNOWN_CANONICAL_HASHES: Record<string, string> = {
   "v2.1.5": "4da4a326b4e3b81331038d439d31539157615550615bba51241ea6804931ca85",
   "v2.1.6": "d35abf40d62c1878c1c49cadeb9bd47e1c849a4c01865ec4e6b4be551ec552fe",
+  "v2.1.7": "14b4564dccc5a05e79b98a85c1d8ab8f16629b35144e678cde9ea8b807fc9099",
 };
 
 export type UpgradeConstitutionOptions = {

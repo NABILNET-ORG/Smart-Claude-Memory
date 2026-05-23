@@ -2,7 +2,7 @@
 
 ---
 
-## Sovereign Memory Protocol (v2.1.6)
+## Sovereign Memory Protocol (v2.1.7)
 
 Binds repo to SCM. Rules below override generic boot prompts on conflict.
 
