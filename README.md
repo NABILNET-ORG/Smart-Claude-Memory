@@ -692,7 +692,7 @@ For inquiries, integrations, or sovereign-grade Claude Code tooling, visit [nabi
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-05-23T05:38:35.748Z for `smart-claude-memory`._
+_Auto-synced at 2026-05-23T06:03:21.927Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
