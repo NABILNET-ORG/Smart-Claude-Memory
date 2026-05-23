@@ -107,11 +107,18 @@ export function deriveDaemonStatus(input: DeriveDaemonStatusInput): DerivedBlock
     // Cold-boot grace: within the grace window, no `run_ended` events yet is
     // expected (the daemon may simply not have ticked once). Past the window,
     // this becomes a real `down` signal as before.
+    //
+    // Long-interval daemons (e.g. telemetry_pruner with a 6h tick) need the
+    // grace to scale with their cadence — otherwise the static 15-min floor
+    // expires hours before the first scheduled run and the daemon reports
+    // `down` despite running correctly. Effective grace is the larger of the
+    // static floor and `intervalMs * 1.1` (10% headroom above one full tick).
     const uptimeMs = uptimeSec * 1000;
-    if (uptimeMs < graceMs) {
+    const effectiveGraceMs = Math.max(graceMs, Math.round(intervalMs * 1.1));
+    if (uptimeMs < effectiveGraceMs) {
       return {
         status: "pending",
-        reason: `within ${Math.round(graceMs / 60_000)}min grace window (uptime=${Math.round(uptimeMs / 1000)}s); awaiting first run_ended`,
+        reason: `within ${Math.round(effectiveGraceMs / 60_000)}min grace window (uptime=${Math.round(uptimeMs / 1000)}s); awaiting first run_ended`,
         error_rate_1h: 0,
         staleness_ms: null,
         last_run_ended_at: null,

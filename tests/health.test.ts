@@ -53,6 +53,33 @@ describe("deriveDaemonStatus — pending state (grace window)", () => {
     });
     assert.notEqual(result.status, "pending");
   });
+
+  // SCM-S39-F1 — long-interval daemons (telemetry_pruner: 6h) must keep
+  // pending past the 15-min static grace floor because their first scheduled
+  // tick has not yet occurred. Effective grace = max(graceMs, intervalMs*1.1).
+  test("long-interval daemon stays pending past 15min floor while within interval*1.1", () => {
+    const result = deriveDaemonStatus({
+      enabled: true,
+      events: [],
+      uptimeSec: 20 * 60, // 20min — past static floor
+      intervalMs: 6 * 60 * 60 * 1000, // 6h
+      graceMs: 15 * 60 * 1000,
+    });
+    assert.equal(result.status, "pending");
+    // Effective grace ≈ 396min (6h * 1.1) — must surface in the reason.
+    assert.match(result.reason, /396min grace window/);
+  });
+
+  test("long-interval daemon flips to down once interval*1.1 has elapsed", () => {
+    const result = deriveDaemonStatus({
+      enabled: true,
+      events: [],
+      uptimeSec: 7 * 60 * 60, // 7h — past 6h * 1.1 = 6.6h
+      intervalMs: 6 * 60 * 60 * 1000, // 6h
+      graceMs: 15 * 60 * 1000,
+    });
+    assert.equal(result.status, "down");
+  });
 });
 
 describe("rollupOverall — pending does not promote past degraded", () => {
