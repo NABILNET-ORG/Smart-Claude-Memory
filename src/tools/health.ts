@@ -9,6 +9,7 @@ import { getCurriculumStatus } from "../curriculum/daemon.js";
 import { getTelemetryPrunerStatus } from "../telemetry/pruner.js";
 import { getGraduationStatus } from "../graduation/daemon.js";
 import { getGraphExtractorStatus } from "../graph/daemon.js";
+import { getClusteringScannerStatus } from "../clustering/daemon.js";
 import { VERSION } from "../version.js";
 
 // Per-daemon health derivation thresholds. Names use the user-mandated
@@ -218,6 +219,7 @@ type HealthReport = {
   telemetry_pruner: ReturnType<typeof getTelemetryPrunerStatus> & { derived: DerivedBlock };
   graduation_scanner: ReturnType<typeof getGraduationStatus> & { derived: DerivedBlock };
   graph_extractor: ReturnType<typeof getGraphExtractorStatus>;
+  clustering_scanner: ReturnType<typeof getClusteringScannerStatus> & { derived: DerivedBlock };
   policy_enforcement: {
     cache_path: string;
     cache_present: boolean;
@@ -387,6 +389,7 @@ export async function checkSystemHealth(): Promise<HealthReport> {
     trajectory_compactor: [],
     telemetry_pruner: [],
     graduation_scanner: [],
+    clustering_scanner: [],
   };
   try {
     const { data: telemetryRows, error: telemetryErr } = await supabase
@@ -419,6 +422,7 @@ export async function checkSystemHealth(): Promise<HealthReport> {
   const trajSnap = getCompactorStatus();
   const prunerSnap = getTelemetryPrunerStatus();
   const graduSnap = getGraduationStatus();
+  const clusterSnap = getClusteringScannerStatus();
 
   const uptimeSec = process.uptime();
   const sleepDerived = deriveDaemonStatus({
@@ -456,6 +460,13 @@ export async function checkSystemHealth(): Promise<HealthReport> {
     intervalMs: graduSnap.interval_ms,
     lastRunAtIso: graduSnap.last_run_at ?? null,
   });
+  const clusterDerived = deriveDaemonStatus({
+    enabled: clusterSnap.enabled,
+    events: byDaemon.clustering_scanner,
+    uptimeSec,
+    intervalMs: clusterSnap.interval_ms,
+    lastRunAtIso: clusterSnap.last_run_at ?? null,
+  });
 
   // Worst-of rollup: daemon derivation can only WORSEN overall, never improve it.
   // Preserves any degraded/down already set by supabase/ollama checks above.
@@ -466,6 +477,7 @@ export async function checkSystemHealth(): Promise<HealthReport> {
     trajDerived.status,
     prunerDerived.status,
     graduDerived.status,
+    clusterDerived.status,
   ]);
 
   const orchestrator = buildOrchestratorSnapshot(advisoryHook);
@@ -492,6 +504,7 @@ export async function checkSystemHealth(): Promise<HealthReport> {
     telemetry_pruner: { ...prunerSnap, derived: prunerDerived },
     graduation_scanner: { ...graduSnap, derived: graduDerived },
     graph_extractor: getGraphExtractorStatus(),
+    clustering_scanner: { ...clusterSnap, derived: clusterDerived },
     policy_enforcement: policy,
     orchestrator,
     summary,
