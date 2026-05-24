@@ -45,10 +45,12 @@ Both files use the `mcpServers` envelope. Stdio is the default transport; remote
       ],
       "env": {
         "SUPABASE_URL": "https://<your-ref>.supabase.co",
-        "SUPABASE_SERVICE_ROLE_KEY": "<service_role_key>",
+        "SUPABASE_SECRET_KEY": "<service_role_key>",
+        "SUPABASE_POOLER_URL": "<pooler_url_or_db_url>",
         "OLLAMA_HOST": "http://127.0.0.1:11434",
-        "EMBED_MODEL": "nomic-embed-text",
-        "EMBED_DIM": "768"
+        "OLLAMA_EMBED_MODEL": "nomic-embed-text",
+        "EMBED_DIM": "768",
+        "MEMORY_ROOTS": "<absolute_path_to_memory_root_or_repo>"
       }
     }
   }
@@ -82,10 +84,12 @@ Source: [Windsurf Cascade MCP docs](https://docs.windsurf.com/windsurf/cascade/m
       ],
       "env": {
         "SUPABASE_URL": "https://<your-ref>.supabase.co",
-        "SUPABASE_SERVICE_ROLE_KEY": "<service_role_key>",
+        "SUPABASE_SECRET_KEY": "<service_role_key>",
+        "SUPABASE_POOLER_URL": "<pooler_url_or_db_url>",
         "OLLAMA_HOST": "http://127.0.0.1:11434",
-        "EMBED_MODEL": "nomic-embed-text",
-        "EMBED_DIM": "768"
+        "OLLAMA_EMBED_MODEL": "nomic-embed-text",
+        "EMBED_DIM": "768",
+        "MEMORY_ROOTS": "<absolute_path_to_memory_root_or_repo>"
       }
     }
   }
@@ -119,10 +123,12 @@ Cline is a VS Code extension (Marketplace ID `saoudrizwan.claude-dev`, source: [
       ],
       "env": {
         "SUPABASE_URL": "https://<your-ref>.supabase.co",
-        "SUPABASE_SERVICE_ROLE_KEY": "<service_role_key>",
+        "SUPABASE_SECRET_KEY": "<service_role_key>",
+        "SUPABASE_POOLER_URL": "<pooler_url_or_db_url>",
         "OLLAMA_HOST": "http://127.0.0.1:11434",
-        "EMBED_MODEL": "nomic-embed-text",
-        "EMBED_DIM": "768"
+        "OLLAMA_EMBED_MODEL": "nomic-embed-text",
+        "EMBED_DIM": "768",
+        "MEMORY_ROOTS": "<absolute_path_to_memory_root_or_repo>"
       },
       "alwaysAllow": ["search_memory", "init_project"],
       "disabled": false

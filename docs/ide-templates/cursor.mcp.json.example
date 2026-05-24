@@ -1,0 +1,20 @@
+{
+  "_README": "Smart-Claude-Memory MCP server config for Cursor. Copy this file to <project>/.cursor/mcp.json (project-scoped) or ~/.cursor/mcp.json (global). Replace placeholders with concrete values — Cursor does NOT officially support env-var interpolation. See docs/IDE-INTEGRATION.md § Cursor for quirks and boot ritual.",
+  "mcpServers": {
+    "smart-claude-memory": {
+      "command": "node",
+      "args": [
+        "C:/absolute/path/to/Claude-Memory/dist/index.js"
+      ],
+      "env": {
+        "SUPABASE_URL": "https://<your-ref>.supabase.co",
+        "SUPABASE_SECRET_KEY": "<service_role_key>",
+        "SUPABASE_POOLER_URL": "<pooler_url_or_db_url>",
+        "OLLAMA_HOST": "http://127.0.0.1:11434",
+        "OLLAMA_EMBED_MODEL": "nomic-embed-text",
+        "EMBED_DIM": "768",
+        "MEMORY_ROOTS": "C:/absolute/path/to/notes_or_repo"
+      }
+    }
+  }
+}
