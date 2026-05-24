@@ -7,7 +7,12 @@ import {
 import { resolve, dirname, basename, relative, join, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { glob } from "glob";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+// glob v13 serves a minified ESM bundle to the `import` condition which mangles
+// named exports → static `import { glob } from "glob"` fails at runtime.
+// Force the unminified CJS resolution via createRequire (types come through fine).
+const { glob } = require("glob") as typeof import("glob");
 import { Client } from "pg";
 import { loadFrozenCache } from "./frozen-cache.js";
 import { currentProjectId, slugify } from "../project.js";

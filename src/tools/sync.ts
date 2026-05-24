@@ -3,7 +3,12 @@ import { createWriteStream } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { glob } from "glob";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+// glob v13 serves a minified ESM bundle to the `import` condition which mangles
+// named exports → static `import { glob } from "glob"` fails at runtime.
+// Force the unminified CJS resolution via createRequire (types come through fine).
+const { glob } = require("glob") as typeof import("glob");
 import archiver from "archiver";
 import { memoryRoots } from "../config.js";
 import { chunkMarkdown } from "../chunker.js";

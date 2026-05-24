@@ -2,7 +2,12 @@ import { resolve, dirname, join, basename, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { glob } from "glob";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+// glob v13 serves a minified ESM bundle to the `import` condition which mangles
+// named exports → static `import { glob } from "glob"` fails at runtime.
+// Force the unminified CJS resolution via createRequire (types come through fine).
+const { glob } = require("glob") as typeof import("glob");
 import { classifyLegacyBackup } from "./setup.js";
 import {
   setPending,
