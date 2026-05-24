@@ -1,5 +1,41 @@
 # Changelog
 
+## [2.3.0] — 2026-05-24
+
+**v2.3.0 — M8.3 Semantic Clustering (Mission 10)**
+
+Ships the full M8.3 arc started in Session 41 (Tasks 1-4: schema + kmeans + louvain + daemon + MCP tools + HTTP route) and closed in Session 42 (Suite D HTTP-route tests + `check_system_health` clustering_scanner block + GUI Cluster View toggle). MCP tools 55 → **58**. Schema migrations through `023_kg_clustering.sql`. Test files 22 → **26**. Zero new runtime dependencies.
+
+### Added
+- **`scripts/023_kg_clustering.sql`** — `kg_supernodes` (per-project K-Means centroids, K=⌊√N⌋ capped) + `kg_node_clusters` (per-node supernode + community assignment) + `kg_knn_pairs` RPC for Louvain edge fetch (SCM-S41-D1).
+- **`src/clustering/kmeans.ts`** — pure-TS spherical mini-batch K-Means with k-means++ seeding (duplicate-safe, no zero-distance loops), K=N identity branch, K-cap at √N for K-too-large, deterministic with seeded RNG. Suite A 10/10 GREEN (SCM-S41-D1).
+- **`src/clustering/louvain.ts`** — single-level Louvain community detection in pure TS via seeded mulberry32 (no `graphology` dep). Suite B 6/6 GREEN (SCM-S41-D2).
+- **`src/clustering/daemon.ts`** — `clustering_scanner` daemon: dirty-check (`kg_node_clusters` vs `kg_nodes` count), paged embedding fetch, K-Means → per-supernode subgraph → Louvain, bulk UPSERT, ARM-gated, telemetry-emitting. Suite C 8/8 GREEN against live Supabase (SCM-S41-D5).
+- **3 new MCP tools** — `list_supernodes`, `list_cluster_members`, `trigger_clustering` (SCM-S41-D7).
+- **`GET /api/graph/clusters?level=super|drill&supernode_id=N`** — flowed through the `GuiHandlers` seam in Session 42 (refactor commit `c72d187`); `level=super` returns the SuperNode graph (≤200 nodes), `level=drill` returns members of one supernode or a community-nested view when the supernode has >200 members (SCM-S41-D7).
+- **Suite D — 5 HTTP-route tests** (`tests/clustering-routes.test.ts`): D1 super ≤200, D2 drill members, D3 drill community-nested, D4 bearer-token gate parity, D5 empty-result → 200-not-500.
+- **`check_system_health.clustering_scanner`** block with `derived` health metrics (cold-boot grace, staleness, error-rate-1h) and worst-of overall rollup.
+- **GUI Cluster View** in `src/gui/public/{index.html,app.js}` — toggle button + breadcrumb + back-button + SUPER/COMMUNITY palette entries (gold/steel-blue) + log₂(node_count) radius scaling + clickable SUPER nodes drill into their members, all layered on the existing kg renderer via a payload shim.
+
+### Changed
+- **Constitution v2.1.8 → v2.1.10** — adds the **Context Window Governance** Execution Imperative with `context_pct + force` semantics. Agent autonomy forbidden below 50%; `{force:true}` reserved for user-explicit-request only (SCM-S41-D3 / SCM-S41-D6). Runtime gate enforced in `src/tools/backlog.ts`.
+- **GUI deterministic per-project port** — SHA-256(`projectId`) → stable port in `[7790, 8790)`; 3-layer idempotent auto-start (module-flag → TCP probe → bind); browser-fatigue protection (skip open when port already serving); `injectProjectBranding()` adds `PROJECT · <ID>` chip to dashboard header without any frontend changes. Hardcoded `claude-memory` fallback removed — universal (SCM-S41-D4).
+- **`DaemonName` union** extended with `clustering_scanner`; `ClusteringEndedPayload` event kind added.
+
+### Notes
+- Constitution drift `v2.1.8 → v2.1.10` is intentional on local `CLAUDE.md` (preserves Sovereign Memory Protocol body). Operators who want the canonical template can run `upgrade_constitution({force:true})`.
+- v2.2.2 CHANGELOG entry was inadvertently omitted in Session 39 — the full v2.2.2 body is documented in `ARCHITECTURE.md §6 Version History`.
+
+---
+
+## [2.2.2] — 2026-04 (backfill — entry missing from CHANGELOG at release time)
+
+**v2.2.2 — Agentic Resource Manager (Mission 9)**
+
+Structural enforcement of the *Tokens Are Currency* imperative. Adds `scripts/021_agent_budgets.sql`, `src/budget/{types,store,gate}.ts` primitives, runtime gates at all four LLM-touching call sites (`delegate_task`, `compose_skill_candidate`, `compose_global_rationale`, `index_image`) and the `trajectory_compactor` daemon. 5 new MCP tools (`start_task`, `end_task`, `get_task_budget`, `get_daemon_budget`, `reset_daemon_budget`) — roster 50 → 55. GUI `/api/budget` route + `#tele-budget` ticker. Foundation fix: `deriveDaemonStatus` cold-boot grace scales with cadence (`max(15min, interval_ms × 1.1)`). Default mode `SCM_BUDGET_ENFORCEMENT_MODE=off` ships zero behavior change for legacy operators. Full body in `ARCHITECTURE.md §6 Version History`.
+
+---
+
 ## [2.2.1] — 2026-05-19
 
 **v2.2.1 — Docs-Only Patch: Core 3 Sync + Broken-Script Fix**

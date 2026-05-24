@@ -1,13 +1,13 @@
-# Smart Claude Memory — System Architecture (v2.2.2)
+# Smart Claude Memory — System Architecture (v2.3.0)
 
 **Developer:** [NABILNET.AI](https://nabilnet.ai)
 
-> **Stable baseline:** v2.2.1 — the cumulative production surface across Sessions 22–38. Bundles the v2.1.x foundations (Architecture Guard + Automatic Session Handoff, the Typed Retrieval layer with GIN-indexed JSONB `metadata_filter` on `memory_chunks.metadata`, the Global Knowledge Vault + Multi-IDE layer with dual-scope retrieval and `init_project.capabilities`, the GLOBAL Vault UX layer with browse-only `list_global_patterns`) AND the v2.2.0 Agentic OS expansion: **M3 Sleep Learning** (Orchestrator-curated stub promotion under Single Brain mandate); **M4 Transactional Workflows** (`workflow_checkpoints` + `terminal_committed_checkpoint` recursive-CTE + replay via M2 `get_trajectory_summary`); **M5 Autonomous Curriculum** (deterministic queuer daemon, atomic `apply_curriculum_task` auto-promote, NO generative AI in `src/curriculum/**`); **M6 Observability & Telemetry** (`daemon_telemetry` event-sourcing + `system_dashboard` 24h rollups + per-daemon derived health + 30-day retention pruner); **M7 Skill Graduation** (human-gated 3-state lifecycle, atomic `apply_graduation` clone-to-GLOBAL, Boundary Invariant #1 extension to `src/graduation/**`); **M8.1 Hybrid-RAG Knowledge Graph** (`kg_nodes` + `kg_edges` schema, deterministic `graph_extractor` daemon, 5 MCP tools, force-directed SVG Command Center verified at 60 nodes / 0 overlaps in Session 37 Visual QA); **M8.2 Modular GUI** (replaces 703-line `DASHBOARD_HTML` monolith with operator-authored `src/gui/public/{index.html,style.css,app.js}` served via zero-dep `serveStatic` + `import.meta.url`-resolved `PUBLIC_DIR` + `fs.cpSync` build copy + URI-decoded `path.relative` traversal guard + Google-Fonts-scoped CSP relaxation — promoted to GLOBAL Knowledge Vault as `SCM-S38-P1`). **v2.2.1 patches docs-only** — restores 1:1 alignment between the npm registry README and the v2.2.0 reality (Bootstrap anchor repair, migration count 18→21, comprehensive `## Usage` reference, 50-tool roster subtable, ARCH §4.10 + §4.11 added), removes two never-functional `smoke:m8-*` scripts, AND repairs the Living-Docs auto-sync bug (`ARCH_MAX_DEPTH` 3→5 + `updateLocalReadme` no longer early-returns on empty archive). **v2.2.2 ships the Agentic Resource Manager** (§4.12, SCM-S39-D1) — structurally-decoupled per-task and per-daemon budget surfaces (migration `021_agent_budgets.sql`), `src/budget/{types,store,gate}.ts` primitives, runtime gates at all four LLM-touching call sites (`delegate_task`, `compose_skill_candidate`, `compose_global_rationale`, `index_image`) and the `trajectory_compactor` daemon, 5 new MCP tools, GUI `/api/budget` route + `#tele-budget` ticker, and a foundation fix that scales the daemon grace window with cadence (`max(15min, interval_ms × 1.1)`). **Surface:** 55 MCP tools · 22 schema migrations through `021_agent_budgets.sql` · 248/248 tests across 22 files · zero new runtime dependencies across the entire v2.0.1 → v2.2.2 arc.
+> **Stable baseline:** v2.2.1 — the cumulative production surface across Sessions 22–38. Bundles the v2.1.x foundations (Architecture Guard + Automatic Session Handoff, the Typed Retrieval layer with GIN-indexed JSONB `metadata_filter` on `memory_chunks.metadata`, the Global Knowledge Vault + Multi-IDE layer with dual-scope retrieval and `init_project.capabilities`, the GLOBAL Vault UX layer with browse-only `list_global_patterns`) AND the v2.2.0 Agentic OS expansion: **M3 Sleep Learning** (Orchestrator-curated stub promotion under Single Brain mandate); **M4 Transactional Workflows** (`workflow_checkpoints` + `terminal_committed_checkpoint` recursive-CTE + replay via M2 `get_trajectory_summary`); **M5 Autonomous Curriculum** (deterministic queuer daemon, atomic `apply_curriculum_task` auto-promote, NO generative AI in `src/curriculum/**`); **M6 Observability & Telemetry** (`daemon_telemetry` event-sourcing + `system_dashboard` 24h rollups + per-daemon derived health + 30-day retention pruner); **M7 Skill Graduation** (human-gated 3-state lifecycle, atomic `apply_graduation` clone-to-GLOBAL, Boundary Invariant #1 extension to `src/graduation/**`); **M8.1 Hybrid-RAG Knowledge Graph** (`kg_nodes` + `kg_edges` schema, deterministic `graph_extractor` daemon, 5 MCP tools, force-directed SVG Command Center verified at 60 nodes / 0 overlaps in Session 37 Visual QA); **M8.2 Modular GUI** (replaces 703-line `DASHBOARD_HTML` monolith with operator-authored `src/gui/public/{index.html,style.css,app.js}` served via zero-dep `serveStatic` + `import.meta.url`-resolved `PUBLIC_DIR` + `fs.cpSync` build copy + URI-decoded `path.relative` traversal guard + Google-Fonts-scoped CSP relaxation — promoted to GLOBAL Knowledge Vault as `SCM-S38-P1`). **v2.2.1 patches docs-only** — restores 1:1 alignment between the npm registry README and the v2.2.0 reality (Bootstrap anchor repair, migration count 18→21, comprehensive `## Usage` reference, 50-tool roster subtable, ARCH §4.10 + §4.11 added), removes two never-functional `smoke:m8-*` scripts, AND repairs the Living-Docs auto-sync bug (`ARCH_MAX_DEPTH` 3→5 + `updateLocalReadme` no longer early-returns on empty archive). **v2.2.2 ships the Agentic Resource Manager** (§4.12, SCM-S39-D1) — structurally-decoupled per-task and per-daemon budget surfaces (migration `021_agent_budgets.sql`), `src/budget/{types,store,gate}.ts` primitives, runtime gates at all four LLM-touching call sites (`delegate_task`, `compose_skill_candidate`, `compose_global_rationale`, `index_image`) and the `trajectory_compactor` daemon, 5 new MCP tools, GUI `/api/budget` route + `#tele-budget` ticker, and a foundation fix that scales the daemon grace window with cadence (`max(15min, interval_ms × 1.1)`). **v2.3.0 ships M8.3 Semantic Clustering** (§4.13, SCM-S41-D1…D7 + SCM-S42 carry-overs) — `scripts/023_kg_clustering.sql` (`kg_supernodes` + `kg_node_clusters`), pure-TS K-Means (`src/clustering/kmeans.ts`) + single-level Louvain (`src/clustering/louvain.ts`, no deps, seeded mulberry32), `src/clustering/daemon.ts` paged ARM-gated scanner, 3 new MCP tools (`list_supernodes`, `list_cluster_members`, `trigger_clustering`), `GET /api/graph/clusters?level=super|drill` route flowed through the `GuiHandlers` seam, dashboard Cluster View toggle with SUPER/COMMUNITY palette + drill-down, and `clustering_scanner` block in `check_system_health`. Plus governance v2.1.10 (agent-autonomy + user-explicit clauses on the context-window `session_end` gate, SCM-S41-D3/D6) and the GUI DX upgrade (deterministic per-project port + idempotent auto-start + project_id branding, SCM-S41-D4). **Surface:** 58 MCP tools · 23 schema migrations through `023_kg_clustering.sql` · 26 test files (Suite A 10/10 kmeans · Suite B 6/6 louvain · Suite C 8/8 daemon · Suite D 5/5 routes) · zero new runtime dependencies across the entire v2.0.1 → v2.3.0 arc.
 > This document is the single source of truth for the system's structure and control flow. The marker-bounded Mermaid block in §5 is refreshed automatically by `manage_backlog({action:'session_end'})` (which now ALWAYS injects the file-tree regardless of archive state, post-Session 38 foundation fix) and by `sync_artefacts` after every worker success; the other diagrams are hand-maintained.
 
-![Smart Claude Memory v2.2.2 Master Schematic](docs/assets/schematic.png)
+![Smart Claude Memory v2.3.0 Master Schematic](docs/assets/schematic.png)
 
-*Master schematic — the definitive visual reference for the Smart Claude Memory v2.2.x production baseline (v2.2.2 adds the Agentic Resource Manager — see §4.12; v2.2.1 = docs-only + foundation-fix patch on the v2.2.0 surface).*
+*Master schematic — the definitive visual reference for the Smart Claude Memory v2.3.x production baseline (v2.3.0 adds M8.3 Semantic Clustering — see §4.13; v2.2.2 added the Agentic Resource Manager — see §4.12).*
 
 ---
 
@@ -1025,7 +1025,7 @@ flowchart TD
   n11 --> n35
   n36["SESSION-34-REPORT.md"]
   n11 --> n36
-  n37["… (8 more)"]
+  n37["… (9 more)"]
   n11 --> n37
   n38["specs/"]
   n5 --> n38
@@ -1125,13 +1125,13 @@ flowchart TD
   n64 --> n85
   n86["021_agent_budgets.sql"]
   n64 --> n86
-  n87["apply-schema.ts"]
+  n87["023_kg_clustering.sql"]
   n64 --> n87
-  n88["backfill-ledger.ts"]
+  n88["apply-schema.ts"]
   n64 --> n88
-  n89["backup-and-remove.ts"]
+  n89["backfill-ledger.ts"]
   n64 --> n89
-  n90["… (31 more)"]
+  n90["… (32 more)"]
   n64 --> n90
   n91["src/"]
   n0 --> n91
@@ -1143,220 +1143,234 @@ flowchart TD
   n92 --> n94
   n95["types.ts"]
   n92 --> n95
-  n96["curriculum/"]
+  n96["clustering/"]
   n91 --> n96
-  n97["daemon.ts"]
+  n97["clusters.ts"]
   n96 --> n97
-  n98["scanner.ts"]
+  n98["daemon.ts"]
   n96 --> n98
-  n99["graduation/"]
-  n91 --> n99
-  n100["daemon.ts"]
-  n99 --> n100
-  n101["scanner.ts"]
-  n99 --> n101
-  n102["graph/"]
-  n91 --> n102
-  n103["daemon.ts"]
-  n102 --> n103
-  n104["extractor.ts"]
-  n102 --> n104
-  n105["gui/"]
-  n91 --> n105
-  n106["public/"]
-  n105 --> n106
-  n107["app.js"]
-  n106 --> n107
-  n108["index.html"]
-  n106 --> n108
-  n109["style.css"]
-  n106 --> n109
-  n110["server.ts"]
-  n105 --> n110
-  n111["lib/"]
-  n91 --> n111
-  n112["migrations.ts"]
+  n99["kmeans.ts"]
+  n96 --> n99
+  n100["louvain.ts"]
+  n96 --> n100
+  n101["curriculum/"]
+  n91 --> n101
+  n102["daemon.ts"]
+  n101 --> n102
+  n103["scanner.ts"]
+  n101 --> n103
+  n104["graduation/"]
+  n91 --> n104
+  n105["daemon.ts"]
+  n104 --> n105
+  n106["scanner.ts"]
+  n104 --> n106
+  n107["graph/"]
+  n91 --> n107
+  n108["daemon.ts"]
+  n107 --> n108
+  n109["extractor.ts"]
+  n107 --> n109
+  n110["gui/"]
+  n91 --> n110
+  n111["public/"]
+  n110 --> n111
+  n112["app.js"]
   n111 --> n112
-  n113["sleep/"]
-  n91 --> n113
-  n114["daemon.ts"]
-  n113 --> n114
-  n115["miner.ts"]
-  n113 --> n115
-  n116["telemetry/"]
+  n113["index.html"]
+  n111 --> n113
+  n114["style.css"]
+  n111 --> n114
+  n115["server.ts"]
+  n110 --> n115
+  n116["lib/"]
   n91 --> n116
-  n117["emit.ts"]
+  n117["migrations.ts"]
   n116 --> n117
-  n118["pruner.ts"]
-  n116 --> n118
-  n119["types.ts"]
-  n116 --> n119
-  n120["tools/"]
-  n91 --> n120
-  n121["backlog.ts"]
-  n120 --> n121
-  n122["batch-freeze-patterns.ts"]
-  n120 --> n122
-  n123["bloat-audit.ts"]
-  n120 --> n123
-  n124["budget.ts"]
-  n120 --> n124
-  n125["checkpoint.ts"]
-  n120 --> n125
-  n126["compact.ts"]
-  n120 --> n126
-  n127["conflict.ts"]
-  n120 --> n127
-  n128["curriculum.ts"]
-  n120 --> n128
-  n129["frozen-cache.ts"]
-  n120 --> n129
-  n130["graduation.ts"]
-  n120 --> n130
-  n131["health.ts"]
-  n120 --> n131
-  n132["hygiene.ts"]
-  n120 --> n132
-  n133["image.ts"]
-  n120 --> n133
-  n134["kg.ts"]
-  n120 --> n134
-  n135["list-global-patterns.ts"]
-  n120 --> n135
-  n136["orchestrator.ts"]
-  n120 --> n136
-  n137["policy.ts"]
-  n120 --> n137
-  n138["prune.ts"]
-  n120 --> n138
-  n139["refactor.ts"]
-  n120 --> n139
-  n140["save.ts"]
-  n120 --> n140
-  n141["search.ts"]
-  n120 --> n141
-  n142["setup.ts"]
-  n120 --> n142
-  n143["shared-schemas.ts"]
-  n120 --> n143
-  n144["skills.ts"]
-  n120 --> n144
-  n145["sleep.ts"]
-  n120 --> n145
-  n146["… (5 more)"]
-  n120 --> n146
-  n147["trajectory/"]
-  n91 --> n147
-  n148["daemon.ts"]
-  n147 --> n148
-  n149["stripper.ts"]
-  n147 --> n149
-  n150["summarizer.ts"]
-  n147 --> n150
-  n151["transactions/"]
-  n91 --> n151
-  n152["checkpoint.ts"]
-  n151 --> n152
-  n153["chunker.ts"]
-  n91 --> n153
-  n154["config.ts"]
-  n91 --> n154
-  n155["index.ts"]
-  n91 --> n155
-  n156["ollama.ts"]
+  n118["sleep/"]
+  n91 --> n118
+  n119["daemon.ts"]
+  n118 --> n119
+  n120["miner.ts"]
+  n118 --> n120
+  n121["telemetry/"]
+  n91 --> n121
+  n122["emit.ts"]
+  n121 --> n122
+  n123["pruner.ts"]
+  n121 --> n123
+  n124["types.ts"]
+  n121 --> n124
+  n125["tools/"]
+  n91 --> n125
+  n126["backlog.ts"]
+  n125 --> n126
+  n127["batch-freeze-patterns.ts"]
+  n125 --> n127
+  n128["bloat-audit.ts"]
+  n125 --> n128
+  n129["budget.ts"]
+  n125 --> n129
+  n130["checkpoint.ts"]
+  n125 --> n130
+  n131["compact.ts"]
+  n125 --> n131
+  n132["conflict.ts"]
+  n125 --> n132
+  n133["curriculum.ts"]
+  n125 --> n133
+  n134["frozen-cache.ts"]
+  n125 --> n134
+  n135["graduation.ts"]
+  n125 --> n135
+  n136["health.ts"]
+  n125 --> n136
+  n137["hygiene.ts"]
+  n125 --> n137
+  n138["image.ts"]
+  n125 --> n138
+  n139["kg.ts"]
+  n125 --> n139
+  n140["list-global-patterns.ts"]
+  n125 --> n140
+  n141["orchestrator.ts"]
+  n125 --> n141
+  n142["policy.ts"]
+  n125 --> n142
+  n143["prune.ts"]
+  n125 --> n143
+  n144["refactor.ts"]
+  n125 --> n144
+  n145["save.ts"]
+  n125 --> n145
+  n146["search.ts"]
+  n125 --> n146
+  n147["setup.ts"]
+  n125 --> n147
+  n148["shared-schemas.ts"]
+  n125 --> n148
+  n149["skills.ts"]
+  n125 --> n149
+  n150["sleep.ts"]
+  n125 --> n150
+  n151["… (5 more)"]
+  n125 --> n151
+  n152["trajectory/"]
+  n91 --> n152
+  n153["daemon.ts"]
+  n152 --> n153
+  n154["stripper.ts"]
+  n152 --> n154
+  n155["summarizer.ts"]
+  n152 --> n155
+  n156["transactions/"]
   n91 --> n156
-  n157["project-detect.ts"]
-  n91 --> n157
-  n158["project.ts"]
+  n157["checkpoint.ts"]
+  n156 --> n157
+  n158["chunker.ts"]
   n91 --> n158
-  n159["supabase.ts"]
+  n159["config.ts"]
   n91 --> n159
-  n160["verification-gate.ts"]
+  n160["index.ts"]
   n91 --> n160
-  n161["version.ts"]
+  n161["ollama.ts"]
   n91 --> n161
-  n162["tests/"]
-  n0 --> n162
-  n163["fixtures/"]
-  n162 --> n163
-  n164["m4.ts"]
-  n163 --> n164
-  n165["prune.ts"]
-  n163 --> n165
-  n166["sql_fixtures/"]
-  n162 --> n166
-  n167["006_smoke.sql"]
-  n166 --> n167
-  n168["006_verify.sql"]
-  n166 --> n168
-  n169["budget-gate.test.ts"]
-  n162 --> n169
-  n170["capabilities.test.ts"]
-  n162 --> n170
-  n171["checkpoint.test.ts"]
-  n162 --> n171
-  n172["curriculum-consumer.test.ts"]
-  n162 --> n172
-  n173["curriculum-scanner.test.ts"]
-  n162 --> n173
-  n174["graduation-daemon.test.ts"]
-  n162 --> n174
-  n175["graduation-handlers.test.ts"]
-  n162 --> n175
-  n176["graduation-scanner.test.ts"]
-  n162 --> n176
-  n177["graph-daemon.test.ts"]
-  n162 --> n177
-  n178["graph-extractor.test.ts"]
-  n162 --> n178
-  n179["gui-graph.test.ts"]
-  n162 --> n179
-  n180["gui.test.ts"]
-  n162 --> n180
-  n181["health.test.ts"]
-  n162 --> n181
-  n182["kg.test.ts"]
-  n162 --> n182
-  n183["list-global-patterns.test.ts"]
-  n162 --> n183
-  n184["migrations.test.ts"]
-  n162 --> n184
-  n185["orchestrator.test.ts"]
-  n162 --> n185
-  n186["prune.test.ts"]
-  n162 --> n186
-  n187["search-graph-rag.test.ts"]
-  n162 --> n187
-  n188["trajectory-daemon.test.ts"]
-  n162 --> n188
-  n189["trajectory-stripper.test.ts"]
-  n162 --> n189
-  n190["trajectory-summarizer.test.ts"]
-  n162 --> n190
-  n191[".env.example"]
-  n0 --> n191
-  n192[".gitignore"]
-  n0 --> n192
-  n193["ARCHITECTURE.md"]
-  n0 --> n193
-  n194["CHANGELOG.md"]
-  n0 --> n194
-  n195["CLAUDE.md"]
-  n0 --> n195
-  n196["LICENSE"]
-  n0 --> n196
-  n197["marketplace.json"]
-  n0 --> n197
-  n198["package-lock.json"]
+  n162["project-detect.ts"]
+  n91 --> n162
+  n163["project.ts"]
+  n91 --> n163
+  n164["supabase.ts"]
+  n91 --> n164
+  n165["verification-gate.ts"]
+  n91 --> n165
+  n166["version.ts"]
+  n91 --> n166
+  n167["tests/"]
+  n0 --> n167
+  n168["fixtures/"]
+  n167 --> n168
+  n169["m4.ts"]
+  n168 --> n169
+  n170["prune.ts"]
+  n168 --> n170
+  n171["sql_fixtures/"]
+  n167 --> n171
+  n172["006_smoke.sql"]
+  n171 --> n172
+  n173["006_verify.sql"]
+  n171 --> n173
+  n174["budget-gate.test.ts"]
+  n167 --> n174
+  n175["capabilities.test.ts"]
+  n167 --> n175
+  n176["checkpoint.test.ts"]
+  n167 --> n176
+  n177["clustering-daemon.test.ts"]
+  n167 --> n177
+  n178["clustering-kmeans.test.ts"]
+  n167 --> n178
+  n179["clustering-louvain.test.ts"]
+  n167 --> n179
+  n180["curriculum-consumer.test.ts"]
+  n167 --> n180
+  n181["curriculum-scanner.test.ts"]
+  n167 --> n181
+  n182["graduation-daemon.test.ts"]
+  n167 --> n182
+  n183["graduation-handlers.test.ts"]
+  n167 --> n183
+  n184["graduation-scanner.test.ts"]
+  n167 --> n184
+  n185["graph-daemon.test.ts"]
+  n167 --> n185
+  n186["graph-extractor.test.ts"]
+  n167 --> n186
+  n187["gui-graph.test.ts"]
+  n167 --> n187
+  n188["gui.test.ts"]
+  n167 --> n188
+  n189["health.test.ts"]
+  n167 --> n189
+  n190["kg.test.ts"]
+  n167 --> n190
+  n191["list-global-patterns.test.ts"]
+  n167 --> n191
+  n192["migrations.test.ts"]
+  n167 --> n192
+  n193["orchestrator.test.ts"]
+  n167 --> n193
+  n194["prune.test.ts"]
+  n167 --> n194
+  n195["search-graph-rag.test.ts"]
+  n167 --> n195
+  n196["trajectory-daemon.test.ts"]
+  n167 --> n196
+  n197["… (2 more)"]
+  n167 --> n197
+  n198[".env.example"]
   n0 --> n198
-  n199["package.json"]
+  n199[".gitignore"]
   n0 --> n199
-  n200["project_file_architecture.md"]
+  n200["ARCHITECTURE.md"]
   n0 --> n200
-  n201["README.md"]
+  n201["CHANGELOG.md"]
   n0 --> n201
-  n202["tsconfig.json"]
+  n202["CLAUDE.md"]
   n0 --> n202
+  n203["LICENSE"]
+  n0 --> n203
+  n204["marketplace.json"]
+  n0 --> n204
+  n205["package-lock.json"]
+  n0 --> n205
+  n206["package.json"]
+  n0 --> n206
+  n207["project_file_architecture.md"]
+  n0 --> n207
+  n208["README.md"]
+  n0 --> n208
+  n209["tsconfig.json"]
+  n0 --> n209
 ```
 
 <!-- MEMORY:ARCH:END -->
@@ -1377,6 +1391,7 @@ flowchart TD
 | **v1.1.4** | **Architecture Guard + Automatic Session Handoff — Core 3 audit on init_project, session-end regenerates per-section diagrams, next_session_command_markdown handoff** |
 | **v2.0.0-rc1** | **Release Candidate — bundles Typed Retrieval + Strict Project Isolation (Sovereign Taxonomy on memory_chunks.metadata, GIN(jsonb_path_ops) index, match_memory_chunks p_metadata_filter, save_memory tool with category-prompting description) AND Global Knowledge Vault + Multi-IDE (reserved 'GLOBAL' project_id, dual-scope match_memory_chunks p_include_global, save_memory metadata.is_global, init_project Capabilities Header, docs/IDE-INTEGRATION.md for Cursor/Windsurf/Cline). $0 — pure pgvector + JSONB + same Ollama infra. Originally tagged as a separate milestone but folded back into rc1 — release candidate semantics, not yet a stable major.** |
 | **v2.1.0** | **GLOBAL Vault UX — browse-only `list_global_patterns` MCP tool (tiered output: preview default + `include_content:true` opt-in; full JSONB `metadata_filter` matching `search_memory`; offset/limit pagination defaulting to 10 with `created_at DESC, id DESC`; pure SQL — zero embedding cost). `init_project.capabilities` extended: `global_scope` gains `browse_tool` + `browse_args`, `context_gathering_hints` gains a GLOBAL-browse exemplar, `protocol` bumped to `smart-claude-memory/v2.1.0`. Zero new dependencies, zero new indexes, zero new migrations — reuses the existing GIN(jsonb_path_ops) index and `pg` pool.** |
+| **v2.3.0** | **M8.3 Semantic Clustering (Mission 10, SCM-S41-D1…D7 + Session 42 carry-overs). Adds `scripts/023_kg_clustering.sql` (`kg_supernodes` + `kg_node_clusters`), pure-TS K-Means with k-means++ seeding (`src/clustering/kmeans.ts`, K=√N cap, duplicate-safe) and single-level Louvain (`src/clustering/louvain.ts`, no deps, seeded mulberry32), the `clustering_scanner` daemon (`src/clustering/daemon.ts`, paged fetch + per-supernode Louvain, ARM-gated, telemetry-emitting), 3 new MCP tools (`list_supernodes`, `list_cluster_members`, `trigger_clustering`), `GET /api/graph/clusters?level=super\|drill` flowed through the `GuiHandlers` seam (Session 42 prep refactor), dashboard Cluster View toggle with SUPER/COMMUNITY palette + log₂(node_count) sizing + drill-down + community-nested mode for supernodes >200 members, and `clustering_scanner` block in `check_system_health` with derived metrics. Plus governance v2.1.10 (agent-autonomy + user-explicit clauses on the context-window `session_end` gate, SCM-S41-D3/D6) and the GUI DX upgrade (deterministic per-project port via SHA-256 hash, idempotent auto-start with TCP probe + browser-fatigue protection, project_id branding chip in dashboard header, hardcoded `claude-memory` fallback removed, SCM-S41-D4). Test additions: Suite A 10/10 kmeans · Suite B 6/6 louvain · Suite C 8/8 daemon (live Supabase) · Suite D 5/5 HTTP routes. Surface growth: MCP tools 55 → **58** · SQL migrations through `023_kg_clustering.sql` · test files 22 → **26**. Zero new runtime dependencies.** |
 | **v2.2.2** | **Agentic Resource Manager (SCM-S39-D1, Mission 9). Structurally enforces the Sovereign Constitution's *Tokens Are Currency* imperative at runtime. Adds `scripts/021_agent_budgets.sql` with two structurally-decoupled storage surfaces: per-task (`budget_tasks` + `budget_task_events` + `v_task_budget_health`) for Orchestrator LLM lifecycles and per-daemon (`daemon_budget_buckets` + `daemon_budget_events` + `v_daemon_budget_health`) with atomic `increment_daemon_bucket` PL/pgSQL UPSERT for rolling-hour caps on `setInterval`-driven daemons. New `src/budget/{types,store,gate}.ts` primitives expose `checkTaskBudget` (throws `BudgetExceededError` on enforce-mode block) and `checkDaemonBudget` (never throws — daemons emit `run_skipped_budget` telemetry and return early). All four LLM-touching call sites wired: `delegate_task` (subagent_depth), `compose_skill_candidate` + `compose_global_rationale` (anthropic_tokens), `index_image` (ollama_calls). `trajectory_compactor` daemon gated on `ollama_calls` per rolling hour. New event kind `run_skipped_budget` + `RunSkippedBudgetPayload`. 5 new MCP tools (`start_task`, `end_task`, `get_task_budget`, `get_daemon_budget`, `reset_daemon_budget`) bringing roster 50 → 55. GUI gains `/api/budget` route + `#tele-budget` ticker + `loadBudget()` polling with mode-aware color tier (green<80%, accent>=80%, err>=100%). `telemetry_pruner` extended to also DELETE `budget_task_events`, `daemon_budget_events`, `daemon_budget_buckets` on the same retention window. Foundation fix: `deriveDaemonStatus` cold-boot grace now scales with cadence (`max(15min, interval_ms × 1.1)`), closing the false-`down` edge case where `telemetry_pruner` (6h interval) poisoned `check_system_health.overall` on every fresh boot. Constitution bumped to v2.1.8 with a new **[Resource Manager — Budgets Are Structural]** Execution Imperative codifying the gate contract. Zero new runtime dependencies. Default mode `SCM_BUDGET_ENFORCEMENT_MODE=off` ships zero behavior change for legacy operators.** |
 | **v2.2.1** | **Docs-only patch — restores 1:1 alignment between published docs and the v2.2.0 surface. README adds `## Bootstrap (3-step setup)` heading (fixes the dead `#bootstrap` anchor that previously pointed at `## Install (3 steps)`), the comprehensive `## Usage` section (CLI cheat sheet + MCP tool reference + daily workflow recipes + full env-var table + troubleshooting), the `Full tool roster — 50 MCP tools by domain` subtable. ARCHITECTURE adds §4.10 (Hybrid-RAG Knowledge Graph subsystem) and §4.11 (Modular GUI subsystem). CHANGELOG backfills entries for v2.1.0 / v2.1.1 / v2.2.0 / v2.2.1. `package.json` removes the two broken `smoke:m8-*` script references (target .ts files never existed on disk). No API change, no schema change, no MCP tool-surface change.** |
 | **v2.2.0** | **Agentic OS 2026 production baseline — multi-mission bundle covering Sessions 22–38. Adds: M3 Sleep Learning (auto-mine + Orchestrator-curated promote via `compose_skill_candidate` / `promote_skill_candidate` — Single Brain mandate, `src/sleep/proposer.ts` deleted, NOT-NULL crash-catch); M4 Transactional Workflows (§ above — `workflow_checkpoints` + `terminal_committed_checkpoint` + replay-via-`trajectory_summaries`); M5 Autonomous Curriculum (§4.7 — deterministic queuer daemon, `apply_curriculum_task` atomic M3 auto-promote, NO generative AI in `src/curriculum/**`); M6 Observability (§4.8 — `daemon_telemetry` event-sourcing + `system_dashboard` 24h rollups + `check_system_health` derived per-daemon status + `telemetry_pruner` retention); M7 Skill Graduation (§4.9 — human-gated 3-state proposal lifecycle, atomic `apply_graduation` clone-to-GLOBAL, lint-fence Boundary Invariant #1 extension); M8.1 Hybrid-RAG Knowledge Graph (§4.10 — `kg_nodes`/`kg_edges` schema, deterministic `graph_extractor` daemon, 5 MCP tools, force-directed SVG Command Center verified at 60 nodes / 0 overlaps / drawer / filter end-to-end in Session 37 Visual QA); M8.2 Modular GUI (§4.11 — replaces 703-line `DASHBOARD_HTML` monolith with `src/gui/public/{index.html,style.css,app.js}` served via zero-dep `serveStatic` + `import.meta.url`-resolved `PUBLIC_DIR` + `fs.cpSync` build copy + URI-decoded path-traversal guard + Google-Fonts-scoped CSP relaxation, GLOBAL pattern SCM-S38-P1); cross-platform ESM standalone-entry-point fix (SCM-S37-P1, GLOBAL pattern). Surface growth: MCP tools 23 → **50** · SQL migrations through `020_knowledge_graph.sql` · npm scripts include the 3-step `build` chain (`lint:boundaries && tsc && copy:gui`) · test suite **246/246** across 21 files (was ~50). Zero new runtime dependencies across the entire arc.** |
