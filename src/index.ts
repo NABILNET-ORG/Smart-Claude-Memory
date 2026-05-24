@@ -650,7 +650,7 @@ server.tool(
 
 server.tool(
   "manage_backlog",
-  "Atomic task backlog in Supabase. Natural-language triggers: 'add to backlog' / 'add task' → add; 'what's on my backlog' / 'list tasks' → list; 'mark done' / 'mark complete' → update with status:done; 'clean up done' → prune_done (archives, not deletes); 'show archive' / 'what did I finish' → archive_list; 'end session' / 'wrap up' / 'handover' → session_end (writes Progress Report to README.md, writes file-tree to project_file_architecture.md, and returns a 1-line resume prompt); 'backfill chunks' / 'backfill archive' → backfill_archive_chunks (M4 Phase B: populate archive_backlog.chunk_id for legacy rows via terminal_committed_checkpoint or a title+timestamp heuristic; dry_run=true is a pure read). Done tasks are ARCHIVED (moved to archive_backlog), never deleted.",
+  "Atomic task backlog in Supabase. Natural-language triggers: 'add to backlog' / 'add task' → add; 'what's on my backlog' / 'list tasks' → list; 'mark done' / 'mark complete' → update with status:done; 'clean up done' → prune_done (archives, not deletes); 'show archive' / 'what did I finish' → archive_list; 'end session' / 'wrap up' / 'handover' → session_end (writes Progress Report to README.md, writes file-tree to project_file_architecture.md, and returns a 1-line resume prompt); 'backfill chunks' / 'backfill archive' → backfill_archive_chunks (M4 Phase B: populate archive_backlog.chunk_id for legacy rows via terminal_committed_checkpoint or a title+timestamp heuristic; dry_run=true is a pure read). Done tasks are ARCHIVED (moved to archive_backlog), never deleted.\n\n[ZERO-AUTONOMY SESSION TERMINATION RULE — v2.1.11] The Agent is STRICTLY FORBIDDEN from calling manage_backlog({action:'session_end'}) on its own initiative — not after completing a task, not after a 'logical stopping point', not in response to its own perception of context utilization, not ever. session_end is reserved exclusively for explicit human commands such as 'end session', 'wrap up', 'handover', 'session_end now', 'close it out'. Until such a literal command arrives, the Agent leaves the session OPEN and stands ready for the next instruction. No context-percentage heuristic, prompt-cache argument, or '50% window' rationalization overrides this rule. Violation = silent loss of user agency and was the documented anti-pattern that motivated this rule.",
   {
     action: z.enum([
       "add",
@@ -669,9 +669,6 @@ server.tool(
     limit: z.number().int().positive().max(200).optional(),
     dry_run: z.boolean().optional(),
     project_id: projectIdSchema,
-    // v2.1.9 Context Window Governance — only consulted when action='session_end'.
-    context_pct: z.number().min(0).max(100).optional(),
-    force: z.boolean().optional(),
   },
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await manageBacklog(args as never), null, 2) }],

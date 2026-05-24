@@ -67,7 +67,7 @@ After major decisions / branding / universal fixes, run Cross-Project Test. Pass
 
 ### Purge Triggers
 
-Purge is NOT automatic. Trigger ONLY on: (1) Context Saturation (>10k tokens or >50% window) OR (2) Mission Completion. Active mission context MUST be preserved; legacy context MUST be offloaded to vectors.
+Purge is NOT automatic. Trigger ONLY on: (1) Context Saturation (CLAUDE.md or MEMORY.md exceeds the 10k-token measured threshold reported by `init_project.bloat_audit`) OR (2) Mission Completion. The "% of context window" heuristic is NOT a valid trigger — LLM self-reports of window utilization are unreliable. Active mission context MUST be preserved; legacy context MUST be offloaded to vectors.
 
 ### Auto-Hygiene Procedure
 
@@ -127,7 +127,7 @@ Before any non-trivial edit (multi-file refactor, new feature, architectural cha
 
 ### Wrap-Up Ritual (6 atomic steps)
 
-**Triggers:** (1) context >50% OR (2) explicit user command. Task completion alone is NOT a trigger.
+**Trigger (v2.1.11 — Zero-Autonomy Rule):** EXCLUSIVELY an explicit human command ("end session", "wrap up", "handover", "session_end now", "close it out", or any literal synonym typed by the user). The Agent is STRICTLY FORBIDDEN from invoking `manage_backlog({ action: "session_end" })` on its own. Task completion is NOT a trigger. Self-reported context utilization is NOT a trigger. The prior "context >50%" rule is REMOVED — LLM self-reports of window utilization proved unreliable and were repeatedly abused as a lazy-exit excuse. When work for a request is complete, the Agent reports the result and waits for the next instruction.
 
 0. **Pre-Flight Content Audit (BLOCKING — added in v2.2.1 / SCM-S38-F1).** BEFORE invoking `manage_backlog({ action: "session_end" })`, the agent MUST manually cross-check the TEXTUAL content of `README.md` and `ARCHITECTURE.md` against current project reality. The auto-sync **only refreshes the file-tree Mermaid block** — it does NOT detect content drift. Required checks (at minimum):
 

@@ -72,7 +72,7 @@ After major decisions / branding / universal fixes, run Cross-Project Test. Pass
 
 ### Purge Triggers
 
-Purge is NOT automatic. Trigger ONLY on: (1) Context Saturation (>10k tokens or >50% window) OR (2) Mission Completion. Active mission context MUST be preserved; legacy context MUST be offloaded to vectors.
+Purge is NOT automatic. Trigger ONLY on: (1) Context Saturation (CLAUDE.md or MEMORY.md exceeds the 10k-token measured threshold reported by \`init_project.bloat_audit\`) OR (2) Mission Completion. The "% of context window" heuristic is NOT a valid trigger — LLM self-reports of window utilization are unreliable. Active mission context MUST be preserved; legacy context MUST be offloaded to vectors.
 
 ### Auto-Hygiene Procedure
 
@@ -89,17 +89,17 @@ Archive, never delete — vectors keep source recoverable.
 
 Surgically clean MEMORY.md every session wrap-up. Keep only "Current Focus" and "Pending Tasks". Archive everything else.
 
-### Context Window Governance (v2.1.10)
+### Session Termination — Zero-Autonomy Rule (v2.1.11)
 
-Three complementary rules govern \`manage_backlog({ action: "session_end" })\`:
+**The Agent is STRICTLY FORBIDDEN from calling \`manage_backlog({ action: "session_end" })\` on its own initiative.** Not after completing a task. Not after a "logical stopping point." Not in response to its own perception of context utilization. Not ever.
 
-- **Agent autonomy FORBIDDEN below 50%.** When \`context_pct < 50\`, the Agent is forbidden from autonomously triggering OR suggesting \`session_end\`. No "I'm wrapping up now," no "shall we close this session?" prompts, no preemptive handover ritual — none of it. Continue execution until either the user requests closure or context crosses the 50% mark. Rationale: wrapping a half-empty session burns the 5-minute prompt cache and forces a fresh-boot cold-read of every architectural artefact for trivial gains. Structurally enforced in \`src/tools/backlog.ts\` (see \`SESSION_END_MIN_CONTEXT_PCT\`): when \`context_pct < 50 && force !== true\`, SCM refuses with \`{ refused: true, context_pct, threshold_pct }\`.
-- **User-explicit request ALWAYS honored (bypass).** If the human user explicitly asks to end the session — "wrap up," "end session," "let's call it," "session_end now," any synonym — the Agent MUST comply immediately. Pass \`{ force: true, context_pct: <pct> }\` to bypass the structural gate. The 50% rule is for AGENT-initiated wraps only; user-initiated wraps are unconditional. The Agent does NOT second-guess, does NOT negotiate, does NOT suggest waiting until 50% — it executes.
-- **Agent MUST prompt at >= 50%.** Once context utilization crosses 50%, the Agent MUST proactively suggest \`manage_backlog({ action: "session_end", context_pct: <pct> })\` to the user before starting the next non-trivial task. Above 50% the prompt-cache miss of a fresh boot is amortized against the work already in context, so the suggestion becomes economically correct.
+\`session_end\` is reserved EXCLUSIVELY for explicit human commands: "end session," "wrap up," "handover," "session_end now," "close it out," or any literal synonym typed by the user. Until such a command arrives, the Agent leaves the session OPEN and stands ready for the next instruction.
 
-**Wiring.** The Agent passes \`context_pct\` (0..100, whole or fractional) from its own view of the conversation window — SCM does NOT infer context utilization itself. Pass nothing → gate is skipped (back-compat with pre-v2.1.9 callers).
+**Why this rule exists.** The prior v2.1.9/v2.1.10 governance attempted to gate \`session_end\` on a \`context_pct\` parameter that the Agent self-reported. In practice, LLM self-reports of context size proved unreliable (off by ~20+ percentage points in observed Session 41 / Session 42 incidents), and the rule was repeatedly used as a "lazy exit" justification — the Agent would claim it had crossed the 50% threshold to grant itself permission to wrap. The structural gate, the \`context_pct\` argument, the \`force\` override, and the whole "50% window" prose are gone. The Agent does not get to decide when the session ends.
 
-**Override semantics.** \`{ force: true }\` is RESERVED for the user-explicit-request path. The Agent does NOT set \`force: true\` of its own volition — that would re-enable autonomous wraps and defeat the whole rule. If a user request arrives below 50%, set \`force: true\` AND record the user's literal phrase in \`notes\` for audit. Any other use of \`force: true\` is a v2.1.10 violation.
+**No exceptions, no rationalizations, no negotiation.** Task completion is not a session-end trigger. Context-percentage estimates are not a trigger. Prompt-cache economics are not a trigger. Only a literal user command is a trigger. If the work for a request is complete, the Agent reports the result and waits.
+
+**The only remaining structural gate on \`session_end\`** is the Manual Test verification gate (\`getPending()\`), which refuses \`session_end\` while a \`verification-pending.json\` flag is open. That gate protects against shipping unverified edits and is orthogonal to the autonomy rule.
 
 ### Active Retriever Protocol
 
