@@ -88,12 +88,33 @@ Surgically clean MEMORY.md every session wrap-up. Keep only "Current Focus" and 
 
 Before any non-trivial edit (multi-file refactor, new feature, architectural change, or single-file Edit > ~30 lines): `search_memory` with topic query + `metadata_filter` (`{type:'PATTERN'}` for conventions, `{type:'DECISION'}` for prior choices, `{type:'ERROR'}` for regression hot spots). Trivial edits exempt.
 
+### JIT Skill Injection — `request_skill` (M1 Skill Vault)
+
+`search_memory` retrieves **knowledge** (decisions / patterns / errors). `request_skill` retrieves **executable procedures** — ordered step recipes stored in `agent_skills`. Zero-bloat invariant: skills are NEVER preloaded; they are injected on demand for exactly the turn that needs them.
+
+**Trigger this BEFORE acting whenever:**
+- The task is a **multi-step procedure** the agent has done before (e.g. "create a PR", "open a worktree", "publish a tarball", "run a release") — query the verb-phrase or the procedure name.
+- A backlog item or user prompt **resembles a previously-completed task** — if a relevant skill exists, follow its `steps` verbatim instead of improvising.
+- A **familiar error class** appears and a previously-packaged recovery exists.
+- The agent finds itself about to write a long inline plan that duplicates a recipe the project has already canonicalized.
+
+**Do NOT call `request_skill` for:**
+- One-off edits, ad-hoc reads, or open-ended exploration — that's `search_memory` territory.
+- Trivial single-tool actions (`grep`, `cat`, single-file rename) — overhead > value.
+- After a recent failed retrieve for the same query in the same turn — assume the skill isn't packaged yet and proceed from first principles.
+
+**Usage shape:** `request_skill({ query: "<verb phrase>", k?: 3, min_similarity?: 0.5, include_global?: true })`. Default min_similarity=0.5 is a noise floor; raise to 0.7+ for stricter procedural matches. The returned `skills[*].steps` payload is consumed verbatim — do not paraphrase, do not skip steps.
+
+**Packaging the inverse direction:** after canonicalizing a procedure (≥3 steps, repeatable across sessions, demonstrably correct), call `package_skill({ name, description, steps })`. Identity is `(project_id, name)`; re-packaging the same name bumps `version` and preserves telemetry (`frequency_used`, `success_rate`, `last_invoked_at`). Cross-Project Test applies to `is_global:true` exactly as for `save_memory` GLOBAL writes.
+
 ### Tool Conventions
 
 - `init_project()` — first call; verifies env, hook, MCP, dist, Core 3 sync.
 - `sync_local_memory()` — second call; aligns vectors with notes (incremental, hash-gated).
 - `search_memory({ query, metadata_filter })` — typed; dual-scope (project + GLOBAL).
 - `save_memory({ content, metadata: { type } })` — never `is_global: true` without `global_rationale`.
+- `request_skill({ query, k?, min_similarity?, include_global? })` — JIT procedure retrieval; dual-scope; returns verbatim `steps` + bumps telemetry. Call exactly when a recipe is needed.
+- `package_skill({ name, description, steps, trigger_keywords?, is_global? })` — persist an executable recipe. Re-packaging same name bumps version, preserves telemetry.
 - `manage_backlog({ action: "session_end" })` — flushes backlog, regenerates diagrams, runs `sync_artefacts`, emits `next_session_command_markdown`.
 - Read-heavy (>3 files OR >100 lines) → `delegate_task` (2-paragraph synthesis).
 
