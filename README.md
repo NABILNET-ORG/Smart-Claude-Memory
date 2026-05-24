@@ -1096,7 +1096,7 @@ For inquiries, integrations, or sovereign-grade Claude Code tooling, visit [nabi
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-05-24T08:43:11.510Z for `smart-claude-memory`._
+_Auto-synced at 2026-05-24T09:14:08.257Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
@@ -1287,7 +1287,7 @@ flowchart TD
   n68 --> n92
   n93["backfill-ledger.ts"]
   n68 --> n93
-  n94["… (35 more)"]
+  n94["… (36 more)"]
   n68 --> n94
   n95["src/"]
   n0 --> n95
