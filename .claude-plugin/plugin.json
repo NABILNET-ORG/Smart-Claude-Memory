@@ -1,6 +1,6 @@
 {
   "name": "smart-claude-memory",
-  "version": "2.1.1",
+  "version": "2.3.0",
   "description": "Sovereign memory protocol for Claude Code — typed, dual-scope, observability-grade. Bring your own empty Supabase project; the plugin handles the rest.",
   "author": {
     "name": "NABILNET.AI",
