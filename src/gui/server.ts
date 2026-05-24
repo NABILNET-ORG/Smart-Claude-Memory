@@ -43,8 +43,11 @@ import {
   type ListKgEdgesInput,
 } from "../tools/kg.js";
 import {
-  getClusterGraphSuper,
-  getClusterGraphDrill,
+  getClusterGraphSuper as defaultGetClusterGraphSuper,
+  getClusterGraphDrill as defaultGetClusterGraphDrill,
+  type ClusterGraphSuperPayload,
+  type ClusterGraphDrillPayload,
+  type ClusterGraphFailure,
 } from "../clustering/clusters.js";
 // SCM-S39-D1 (v2.2.2): /api/budget surface.
 import {
@@ -103,6 +106,8 @@ export type GuiHandlers = {
   rejectGraduation: (input: RejectGraduationInput) => Promise<unknown>;
   listKgNodes: (input: ListKgNodesInput) => Promise<unknown>;
   listKgEdges: (input: ListKgEdgesInput) => Promise<unknown>;
+  getClusterGraphSuper: (projectId: string) => Promise<ClusterGraphSuperPayload | ClusterGraphFailure>;
+  getClusterGraphDrill: (projectId: string, supernodeId: number) => Promise<ClusterGraphDrillPayload | ClusterGraphFailure>;
 };
 
 const DEFAULT_HANDLERS: GuiHandlers = {
@@ -112,6 +117,8 @@ const DEFAULT_HANDLERS: GuiHandlers = {
   rejectGraduation: defaultReject,
   listKgNodes: defaultListKgNodes,
   listKgEdges: defaultListKgEdges,
+  getClusterGraphSuper: defaultGetClusterGraphSuper,
+  getClusterGraphDrill: defaultGetClusterGraphDrill,
 };
 
 // Knowledge Graph route parameter clamps.
@@ -280,7 +287,7 @@ export function createGuiServer(opts: GuiServerOptions = {}): http.Server {
         const level = url.searchParams.get("level") ?? "super";
         try {
           if (level === "super") {
-            const payload = await getClusterGraphSuper(projectId);
+            const payload = await handlers.getClusterGraphSuper(projectId);
             return sendJson(res, payload.ok ? 200 : 500, payload);
           }
           if (level === "drill") {
@@ -292,7 +299,7 @@ export function createGuiServer(opts: GuiServerOptions = {}): http.Server {
                 reason: "level=drill requires integer supernode_id >= 0",
               });
             }
-            const payload = await getClusterGraphDrill(projectId, snId);
+            const payload = await handlers.getClusterGraphDrill(projectId, snId);
             return sendJson(res, payload.ok ? 200 : 500, payload);
           }
           return sendJson(res, 400, { ok: false, reason: `unknown level: ${level}` });
