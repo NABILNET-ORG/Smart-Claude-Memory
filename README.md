@@ -1096,7 +1096,7 @@ For inquiries, integrations, or sovereign-grade Claude Code tooling, visit [nabi
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-05-23T14:24:41.633Z for `smart-claude-memory`._
+_Auto-synced at 2026-05-24T07:09:28.101Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
@@ -1173,7 +1173,7 @@ flowchart TD
   n11 --> n35
   n36["SESSION-34-REPORT.md"]
   n11 --> n36
-  n37["… (9 more)"]
+  n37["… (10 more)"]
   n11 --> n37
   n38["specs/"]
   n5 --> n38
@@ -1459,41 +1459,41 @@ flowchart TD
   n167 --> n178
   n179["clustering-louvain.test.ts"]
   n167 --> n179
-  n180["curriculum-consumer.test.ts"]
+  n180["clustering-routes.test.ts"]
   n167 --> n180
-  n181["curriculum-scanner.test.ts"]
+  n181["curriculum-consumer.test.ts"]
   n167 --> n181
-  n182["graduation-daemon.test.ts"]
+  n182["curriculum-scanner.test.ts"]
   n167 --> n182
-  n183["graduation-handlers.test.ts"]
+  n183["graduation-daemon.test.ts"]
   n167 --> n183
-  n184["graduation-scanner.test.ts"]
+  n184["graduation-handlers.test.ts"]
   n167 --> n184
-  n185["graph-daemon.test.ts"]
+  n185["graduation-scanner.test.ts"]
   n167 --> n185
-  n186["graph-extractor.test.ts"]
+  n186["graph-daemon.test.ts"]
   n167 --> n186
-  n187["gui-graph.test.ts"]
+  n187["graph-extractor.test.ts"]
   n167 --> n187
-  n188["gui.test.ts"]
+  n188["gui-graph.test.ts"]
   n167 --> n188
-  n189["health.test.ts"]
+  n189["gui.test.ts"]
   n167 --> n189
-  n190["kg.test.ts"]
+  n190["health.test.ts"]
   n167 --> n190
-  n191["list-global-patterns.test.ts"]
+  n191["kg.test.ts"]
   n167 --> n191
-  n192["migrations.test.ts"]
+  n192["list-global-patterns.test.ts"]
   n167 --> n192
-  n193["orchestrator.test.ts"]
+  n193["migrations.test.ts"]
   n167 --> n193
-  n194["prune.test.ts"]
+  n194["orchestrator.test.ts"]
   n167 --> n194
-  n195["search-graph-rag.test.ts"]
+  n195["prune.test.ts"]
   n167 --> n195
-  n196["trajectory-daemon.test.ts"]
+  n196["search-graph-rag.test.ts"]
   n167 --> n196
-  n197["… (2 more)"]
+  n197["… (3 more)"]
   n167 --> n197
   n198[".env.example"]
   n0 --> n198
