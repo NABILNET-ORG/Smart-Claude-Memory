@@ -215,6 +215,10 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
       const hudZoom = document.getElementById('g-hud-zoom');
       const hudPan  = document.getElementById('g-hud-pan');
       const hudTemp = document.getElementById('g-hud-temp');
+      // M8.3 — Cluster View controls. Absent in older index.html → graceful no-op.
+      const clusterToggle = document.getElementById('g-cluster-toggle');
+      const clusterBack   = document.getElementById('g-cluster-back');
+      const clusterCrumb  = document.getElementById('g-cluster-crumb');
       if (!svg || !stats || !detail || !closeBtn || !reload || !nodeInput || !edgeInput || !typeInput) {
         return;
       }
@@ -230,12 +234,15 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
 
       // SPHERE_PALETTE: highlight (top inner) · mid (sphere body) · rim (dark outer).
       // Each entry produces a radial gradient + matching aura color.
+      // SUPER/COMMUNITY are M8.3 cluster-view-only node types.
       const SPHERE_PALETTE = {
-        DECISION: { hi: '#e8fcff', mid: '#00e0ff', lo: '#003644', aura: '#00e0ff' },
-        PATTERN:  { hi: '#e8fff4', mid: '#36d399', lo: '#063826', aura: '#36d399' },
-        ERROR:    { hi: '#ffe8eb', mid: '#ff5d6b', lo: '#3b0f15', aura: '#ff5d6b' },
-        FILE:     { hi: '#fff3df', mid: '#f6ad55', lo: '#3b250a', aura: '#f6ad55' },
-        NOTE:     { hi: '#f1e8ff', mid: '#a06bff', lo: '#1e1240', aura: '#a06bff' },
+        DECISION:  { hi: '#e8fcff', mid: '#00e0ff', lo: '#003644', aura: '#00e0ff' },
+        PATTERN:   { hi: '#e8fff4', mid: '#36d399', lo: '#063826', aura: '#36d399' },
+        ERROR:     { hi: '#ffe8eb', mid: '#ff5d6b', lo: '#3b0f15', aura: '#ff5d6b' },
+        FILE:      { hi: '#fff3df', mid: '#f6ad55', lo: '#3b250a', aura: '#f6ad55' },
+        NOTE:      { hi: '#f1e8ff', mid: '#a06bff', lo: '#1e1240', aura: '#a06bff' },
+        SUPER:     { hi: '#fffae0', mid: '#ffd23a', lo: '#3f2d05', aura: '#ffd23a' },
+        COMMUNITY: { hi: '#e6f0ff', mid: '#6aa9ff', lo: '#0c1d3a', aura: '#6aa9ff' },
       };
 
       function makeSvg(name, attrs) {
@@ -252,7 +259,13 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
         return str.slice(0, n - 1) + '…';
       }
 
-      function radiusForType(type) {
+      function radiusForType(type, node) {
+        // Cluster-view nodes scale with their member count (log2) so big
+        // supernodes/communities visually dominate small ones.
+        if (type === 'SUPER' || type === 'COMMUNITY') {
+          const n = Math.max(1, Number((node && node.node_count) || 1));
+          return Math.min(28, 10 + Math.log2(n) * 2.4);
+        }
         if (type === 'DECISION') return 12;
         if (type === 'PATTERN')  return 11;
         if (type === 'ERROR')    return 11;
@@ -557,7 +570,7 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
 
       // ── Build a single node group (aura + sphere + specular highlight) ─
       function buildNodeGroup(node) {
-        const r = radiusForType(node.type);
+        const r = radiusForType(node.type, node);
         const g = makeSvg('g', {
           'class': 'node',
           'data-type': node.type == null ? '' : String(node.type),
@@ -662,7 +675,7 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
           if (!downAt) return;
           const dx = ev.clientX - downAt.x, dy = ev.clientY - downAt.y;
           downAt = null;
-          if (dx * dx + dy * dy < 25) showDetail(node);
+          if (dx * dx + dy * dy < 25) handleNodeClick(node);
         });
 
         return g;
@@ -810,23 +823,145 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
 
       closeBtn.addEventListener('click', function () { detail.hidden = true; });
 
+      // ── Cluster View state (M8.3) ──────────────────────────────────────
+      // viewMode: 'kg' (default, existing /api/graph) | 'super' | 'drill'
+      // currentSupernodeId: int when viewMode==='drill', null otherwise.
+      // The cluster routes return string IDs ("S:N", "N:M", "S:N:C:K") and
+      // edge {source,target} fields — we shim them into the kg renderer's
+      // {nodes:[{id,label,type,...}], edges:[{source_id,target_id,...}]}
+      // contract so the same render() pipeline drives both views.
+      let viewMode = 'kg';
+      let currentSupernodeId = null;
+
+      function transformClusterPayload(payload) {
+        const lvl = payload && payload.level;
+        const mode = payload && payload.mode;
+        const rawNodes = Array.isArray(payload && payload.nodes) ? payload.nodes : [];
+        const rawEdges = Array.isArray(payload && payload.edges) ? payload.edges : [];
+        const nodes = rawNodes.map((n) => {
+          if (lvl === 'super') {
+            return {
+              id: n.id, label: n.label, type: 'SUPER',
+              node_count: n.node_count,
+              supernode_id: n.supernode_id,
+              properties: { supernode_id: n.supernode_id, node_count: n.node_count },
+            };
+          }
+          if (mode === 'community-nested') {
+            return {
+              id: n.id, label: n.label, type: 'COMMUNITY',
+              node_count: n.node_count,
+              supernode_id: n.supernode_id,
+              community_id: n.community_id,
+              properties: { community_id: n.community_id, node_count: n.node_count },
+            };
+          }
+          // members: pass through with the real kg type and id mapping.
+          return {
+            id: n.id, label: n.label, type: n.type,
+            node_id: n.node_id,
+            community_id: n.community_id,
+            properties: { community_id: n.community_id, node_id: n.node_id },
+          };
+        });
+        const edges = rawEdges.map((e, i) => ({
+          id: i,
+          source_id: e.source, target_id: e.target,
+          weight: e.weight, relation: e.relation,
+        }));
+        return { nodes, edges, stats: { node_count: nodes.length, edge_count: edges.length } };
+      }
+
+      function updateClusterChrome() {
+        if (!clusterCrumb) return;
+        if (viewMode === 'kg') {
+          clusterCrumb.textContent = 'KG';
+          clusterCrumb.dataset.view = 'kg';
+          if (clusterToggle) {
+            clusterToggle.dataset.mode = 'kg';
+            clusterToggle.textContent = 'Cluster View';
+          }
+          if (clusterBack) clusterBack.hidden = true;
+        } else if (viewMode === 'super') {
+          clusterCrumb.textContent = 'Super Nodes';
+          clusterCrumb.dataset.view = 'super';
+          if (clusterToggle) {
+            clusterToggle.dataset.mode = 'super';
+            clusterToggle.textContent = 'Back to KG';
+          }
+          if (clusterBack) clusterBack.hidden = true;
+        } else if (viewMode === 'drill') {
+          clusterCrumb.textContent = 'Super #' + String(currentSupernodeId) + ' · members';
+          clusterCrumb.dataset.view = 'drill';
+          if (clusterToggle) {
+            clusterToggle.dataset.mode = 'drill';
+            clusterToggle.textContent = 'Back to KG';
+          }
+          if (clusterBack) clusterBack.hidden = false;
+        }
+      }
+
+      function setClusterMode(next, opts) {
+        viewMode = next;
+        currentSupernodeId = (opts && Object.prototype.hasOwnProperty.call(opts, 'supernodeId'))
+          ? opts.supernodeId : null;
+        const inputsDisabled = (next !== 'kg');
+        nodeInput.disabled = inputsDisabled;
+        edgeInput.disabled = inputsDisabled;
+        typeInput.disabled = inputsDisabled;
+        updateClusterChrome();
+        loadGraph();
+      }
+
+      // Cluster-aware click: in super mode, clicking a SUPER node drills into
+      // it; otherwise (and in kg/drill modes) defer to the standard detail
+      // panel via showDetail(node).
+      function handleNodeClick(node) {
+        if (viewMode === 'super' && node && node.type === 'SUPER' && node.supernode_id != null) {
+          setClusterMode('drill', { supernodeId: Number(node.supernode_id) });
+          return;
+        }
+        showDetail(node);
+      }
+
       // ── Loader ─────────────────────────────────────────────────────────
       async function loadGraph() {
-        const params = new URLSearchParams();
-        params.set('node_limit', String(nodeInput.value));
-        params.set('edge_limit', String(edgeInput.value));
-        const t = String(typeInput.value || '').trim();
-        if (t) params.set('type', t);
         stats.textContent = 'Loading…';
         try {
-          const r = await jsonFetch('/api/graph?' + params.toString());
-          const body = r.body || {};
-          if (!r.ok || body.ok === false) {
-            stats.textContent = 'Error: ' + (body.reason || r.status);
-            return;
+          let body;
+          if (viewMode === 'kg') {
+            const params = new URLSearchParams();
+            params.set('node_limit', String(nodeInput.value));
+            params.set('edge_limit', String(edgeInput.value));
+            const t = String(typeInput.value || '').trim();
+            if (t) params.set('type', t);
+            const r = await jsonFetch('/api/graph?' + params.toString());
+            body = r.body || {};
+            if (!r.ok || body.ok === false) {
+              stats.textContent = 'Error: ' + (body.reason || r.status);
+              return;
+            }
+          } else {
+            const params = new URLSearchParams();
+            params.set('level', viewMode === 'drill' ? 'drill' : 'super');
+            if (viewMode === 'drill' && currentSupernodeId != null) {
+              params.set('supernode_id', String(currentSupernodeId));
+            }
+            const r = await jsonFetch('/api/graph/clusters?' + params.toString());
+            const payload = r.body || {};
+            if (!r.ok || payload.ok === false) {
+              stats.textContent = 'Error: ' + (payload.reason || r.status);
+              return;
+            }
+            body = transformClusterPayload(payload);
+            if (viewMode === 'drill' && payload.mode === 'community-nested') {
+              stats.textContent = body.nodes.length + ' communities · nested view';
+            }
           }
           const s = body.stats || { node_count: 0, edge_count: 0 };
-          stats.textContent = s.node_count + ' nodes · ' + s.edge_count + ' edges';
+          if (!(viewMode === 'drill' && body.stats && body.nodes.some((n) => n.type === 'COMMUNITY'))) {
+            stats.textContent = s.node_count + ' nodes · ' + s.edge_count + ' edges';
+          }
           render(body);
         } catch (err) {
           stats.textContent = 'Error: ' + String(err);
@@ -834,6 +969,15 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
       }
 
       reload.addEventListener('click', loadGraph);
+      if (clusterToggle) {
+        clusterToggle.addEventListener('click', function () {
+          setClusterMode(viewMode === 'kg' ? 'super' : 'kg');
+        });
+      }
+      if (clusterBack) {
+        clusterBack.addEventListener('click', function () { setClusterMode('super'); });
+      }
+      updateClusterChrome();
       loadGraph();
     })();
 
