@@ -84,6 +84,34 @@
         <span class="ticker"><span class="blip"></span>orchestrator: claude-opus-4-7 · queue depth nominal · auto-refresh 30s</span>
       </div>
 
+      <section class="backlog-panel" id="backlog-panel">
+        <header class="backlog-header">
+          <h2>Active Backlog <span class="muted" id="backlog-total">·</span></h2>
+          <div class="backlog-controls">
+            <span class="muted" id="backlog-meta">project: <code id="backlog-project">—</code></span>
+            <button id="backlog-reload" type="button">Reload</button>
+          </div>
+        </header>
+        <div class="kanban-grid" id="kanban-grid">
+          <div class="kanban-col" data-status="todo">
+            <h3>todo <span class="kanban-count" data-kanban-count="todo">0</span></h3>
+            <ul class="kanban-list" data-kanban-list="todo"></ul>
+          </div>
+          <div class="kanban-col" data-status="in_progress">
+            <h3>in_progress <span class="kanban-count" data-kanban-count="in_progress">0</span></h3>
+            <ul class="kanban-list" data-kanban-list="in_progress"></ul>
+          </div>
+          <div class="kanban-col" data-status="blocked">
+            <h3>blocked <span class="kanban-count" data-kanban-count="blocked">0</span></h3>
+            <ul class="kanban-list" data-kanban-list="blocked"></ul>
+          </div>
+          <div class="kanban-col" data-status="done">
+            <h3>done <span class="kanban-count" data-kanban-count="done">0</span></h3>
+            <ul class="kanban-list" data-kanban-list="done"></ul>
+          </div>
+        </div>
+      </section>
+
       <main>
         <section class="lane" data-state="proposed">
           <h2>proposed <span class="count" data-count="proposed">0</span></h2>
@@ -143,34 +171,6 @@
           <span class="item err"><span class="sw"></span>Error</span>
           <span class="item fil"><span class="sw"></span>File</span>
           <span class="item not"><span class="sw"></span>Note</span>
-        </div>
-      </section>
-
-      <section class="backlog-panel" id="backlog-panel">
-        <header class="backlog-header">
-          <h2>Active Backlog <span class="muted" id="backlog-total">·</span></h2>
-          <div class="backlog-controls">
-            <span class="muted" id="backlog-meta">project: <code id="backlog-project">—</code></span>
-            <button id="backlog-reload" type="button">Reload</button>
-          </div>
-        </header>
-        <div class="kanban-grid" id="kanban-grid">
-          <div class="kanban-col" data-status="todo">
-            <h3>todo <span class="kanban-count" data-kanban-count="todo">0</span></h3>
-            <ul class="kanban-list" data-kanban-list="todo"></ul>
-          </div>
-          <div class="kanban-col" data-status="in_progress">
-            <h3>in_progress <span class="kanban-count" data-kanban-count="in_progress">0</span></h3>
-            <ul class="kanban-list" data-kanban-list="in_progress"></ul>
-          </div>
-          <div class="kanban-col" data-status="blocked">
-            <h3>blocked <span class="kanban-count" data-kanban-count="blocked">0</span></h3>
-            <ul class="kanban-list" data-kanban-list="blocked"></ul>
-          </div>
-          <div class="kanban-col" data-status="done">
-            <h3>done <span class="kanban-count" data-kanban-count="done">0</span></h3>
-            <ul class="kanban-list" data-kanban-list="done"></ul>
-          </div>
         </div>
       </section>
 

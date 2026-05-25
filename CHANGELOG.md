@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.3.1] — 2026-05-25
+
+**v2.3.1 — Post-Mega-Sprint Roll-Up: Backlog UI, KG Auto-Sync, Zero-Autonomy Governance**
+
+Patch-level release rolling up the four post-v2.3.0 commits that landed in Session 43 Part 2 (Epic F + Epic G + tech-debt hardening + v2.1.11 governance pivot) plus the Session 44 dashboard reorder. MCP tool count unchanged at **58**. Schema migrations through `024`. Test suites 26 → **28** (added `gui-backlog.test.ts` + `file-watcher-daemon.test.ts`); test count 277 → **292** across **66** node-test runs. Zero new runtime dependencies. No API breakage.
+
+### Added
+- **`GET /api/backlog?project_id=…` HTTP route** in `src/gui/server.ts` — returns `{ project_id, total, by_status, tasks[] }` shaped exactly for the dashboard Kanban; bearer-token-gated through the same `GuiHandlers` seam as `/api/graph` and `/api/graph/clusters`; emits HTTP 200 with empty arrays (never 500) when the project has no rows. 7 dedicated tests in `tests/gui-backlog.test.ts` covering shape, status partitioning, auth parity, empty-project, and project-isolation (commit `9c5adea`).
+- **Active Backlog Kanban dashboard** in `src/gui/public/{index.html,app.js,style.css}` — four-column todo / in_progress / blocked / done grid wired to `/api/backlog`, auto-refresh-aware, project-scoped header chip, count badges per lane, live priority/notes/timestamp display. First user-facing surface for the `manage_backlog` MCP tool that bypasses the chat transcript entirely (Epic F / M8).
+- **`src/sync/file-watcher.ts` — Epic G KG Auto-Sync file-watcher daemon** — `fs.watch`-based debounced ingester that mirrors `MEMORY_ROOTS` edits into `memory_chunks` without requiring an explicit `sync_local_memory` call. Daemon-allow-list-aware (no Guardian friction), ARM-budget-gated, telemetry-emitting, idempotent via content hash. 8 dedicated tests in `tests/file-watcher-daemon.test.ts` covering debounce, dedup, allow-list backfill, and error recovery (commit `6c0f625`).
+- **`scripts/024_*.sql`** — schema migration backing the file-watcher daemon's bookkeeping state. Migrations applied total **24** (up from 23 at v2.3.0). Idempotent under `npm run schema` re-runs.
+
+### Changed
+- **GUI dashboard section order** — `src/gui/public/index.html`: the Active Backlog Kanban now renders **first**, above the M7 Graduations lanes and the Knowledge Graph panel. Reasoning: backlog is the most-frequently-consulted surface during a session; surfacing it without scrolling materially reduces cognitive overhead on every dashboard load. Title bar and breadcrumb retain the M7 labelling for now (separate visual-identity decision).
+- **Constitution v2.1.10 → v2.1.11 — Zero-Autonomy Session Termination Rule.** Strips the prior `context_pct + force` semantics in `manage_backlog({action:'session_end'})` and replaces them with a single hard rule: the Agent is FORBIDDEN from invoking `session_end` on its own — only explicit human commands ("end session", "wrap up", "handover") trigger it. Removes the LLM-self-reported-context-window heuristic that proved unreliable and was repeatedly abused as a lazy-exit excuse (commit `e0eabf1`). Runtime guard is the docstring on `manage_backlog` itself plus the CLAUDE.md Wrap-Up Ritual rewrite.
+- **File-watcher daemon hardening** — post-launch tech-debt sweep tightening error-path emits so the daemon no longer produces the prior `[telemetry] insert failed` stderr noise observed in `clustering_scanner` and `file_watcher` flows. One-file refactor (`+24/-4`) preserving all daemon contracts (commit `44910c9`).
+
+### Notes
+- Verification at HEAD: `npm run build` clean (tsc + lint:boundaries + copy:gui mirroring 3 GUI files into `dist/gui/public/`), `npm test` 292/292 PASS across 66 suites, `scripts/smoke-epic-e-packaging.mjs` 27/27 PASS (tarball still boots, MCP handshake `protocolVersion: 2025-06-18`, 58 tools exposed), `npm run schema` 24/24 migrations applied.
+- No new architectural decisions saved (DECISION IDs). Session 43 Part 2 / Session 44 work was governance + feature execution on patterns already chosen at v2.3.0. The `createRequire` pattern from Epic E and the daemon-allow-list backfill pattern from Epic G are both `package_skill` / GLOBAL-promotion candidates if either recurs.
+- Constitution drift continues at v2.1.8 → v2.1.11 (intentional local customization preserving Sovereign Memory Protocol body). Operators wanting the canonical template still run `upgrade_constitution({force:true})`.
+
+---
+
 ## [2.3.0] — 2026-05-24
 
 **v2.3.0 — M8.3 Semantic Clustering (Mission 10)**
