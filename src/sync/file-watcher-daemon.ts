@@ -61,7 +61,9 @@ const WATCH_EXTENSIONS: ReadonlySet<string> = new Set([
 
 // Path fragments that should never trigger a sync (build artefacts,
 // temp dirs, repo metadata, dependency trees, the sync's own backup zips).
-const IGNORE_FRAGMENTS: readonly string[] = [
+// Precomputed lowercase — avoids re-running toLowerCase() on the constants
+// for every onChange event (the hot path on noisy file systems).
+const IGNORE_FRAGMENTS_LOWER: readonly string[] = [
   "/node_modules/",
   "\\node_modules\\",
   "/.git/",
@@ -79,6 +81,14 @@ const IGNORE_FRAGMENTS: readonly string[] = [
   ".tmp",
   ".log",
 ];
+
+// Defensive cap on pendingPaths growth. fs.watch under a runaway producer
+// (build script churning thousands of temp files per second between
+// debounce ticks) shouldn't be able to balloon module-level heap. Beyond
+// this cap, new paths are dropped from the Set — total_files_queued in
+// telemetry still ticks, and a single non-empty Set is enough to fire
+// flush(), so dropping individual entries costs us nothing.
+const MAX_PENDING_PATHS = 10000;
 
 export type SyncFn = (args: {
   project_id?: string;
@@ -142,8 +152,8 @@ const state: State = {
 
 function shouldWatchPath(absPath: string): boolean {
   const lower = absPath.toLowerCase();
-  for (const frag of IGNORE_FRAGMENTS) {
-    if (lower.includes(frag.toLowerCase())) return false;
+  for (const frag of IGNORE_FRAGMENTS_LOWER) {
+    if (lower.includes(frag)) return false;
   }
   const ext = path.extname(absPath).toLowerCase();
   if (!ext) return false;
@@ -156,8 +166,13 @@ function onChange(filename: string | null, watchedRoot: string): void {
   if (Date.now() < state.ignoreEventsUntil) return;
   const abs = path.resolve(watchedRoot, filename);
   if (!shouldWatchPath(abs)) return;
-  state.pendingPaths.add(abs);
+  // Bounded-growth guard. totalFilesQueued still ticks (telemetry is
+  // accurate); we just stop pinning new path strings on the heap once
+  // the Set is already at the runaway cap — flush() only needs Set to
+  // be non-empty to fire.
   state.totalFilesQueued++;
+  if (state.pendingPaths.size >= MAX_PENDING_PATHS) return;
+  state.pendingPaths.add(abs);
   if (state.debounceTimer) clearTimeout(state.debounceTimer);
   state.debounceTimer = setTimeout(() => {
     void flush();
@@ -286,6 +301,11 @@ export function startFileWatcher(opts: FileWatcherOptions = {}): void {
 export function stopFileWatcher(): void {
   for (const w of state.watchers) {
     try {
+      // Explicit listener removal before close. fs.FSWatcher.close()
+      // implicitly cleans up listeners under current Node impls, but
+      // removeAllListeners() is the defensive contract — it documents
+      // the intent and survives future fs.watch impl changes.
+      w.removeAllListeners();
       w.close();
     } catch {
       /* watcher already closed — ignore */
