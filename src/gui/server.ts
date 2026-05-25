@@ -14,6 +14,8 @@
 // Routes:
 //   GET  /                                  — dashboard HTML
 //   GET  /api/health                        — { ok, service, version }
+//   GET  /api/backlog[?project_id=&status=todo,in_progress,blocked,done]
+//                                           — Active Backlog Kanban (Epic F / M8)
 //   GET  /api/graduations[?project_id=&state=&k=&offset=]
 //                                           — listGraduationCandidates
 //   POST /api/graduations/:id/compose       — composeGlobalRationale
@@ -54,6 +56,57 @@ import {
   getDaemonBudget as defaultGetDaemonBudget,
   getTaskBudget as defaultGetTaskBudget,
 } from "../tools/budget.js";
+// Epic F (M8 Backlog UI): /api/backlog surface.
+import {
+  listBacklog as defaultListBacklog,
+  type BacklogRow,
+  type BacklogStatus,
+} from "../supabase.js";
+
+export type ListBacklogInput = {
+  project_id?: string;
+  status?: BacklogStatus | BacklogStatus[];
+};
+
+export type BacklogKanbanColumns = {
+  todo: BacklogRow[];
+  in_progress: BacklogRow[];
+  blocked: BacklogRow[];
+  done: BacklogRow[];
+};
+
+export type BacklogKanbanPayload = {
+  ok: true;
+  project_id: string;
+  total: number;
+  columns: BacklogKanbanColumns;
+};
+
+const BACKLOG_STATUSES: readonly BacklogStatus[] = ["todo", "in_progress", "blocked", "done"];
+
+function isBacklogStatus(s: string): s is BacklogStatus {
+  return (BACKLOG_STATUSES as readonly string[]).includes(s);
+}
+
+function emptyColumns(): BacklogKanbanColumns {
+  return { todo: [], in_progress: [], blocked: [], done: [] };
+}
+
+function groupByStatus(rows: BacklogRow[]): BacklogKanbanColumns {
+  const cols = emptyColumns();
+  for (const row of rows) {
+    if (cols[row.status]) cols[row.status].push(row);
+  }
+  // Within each column: priority asc (1 = highest), then oldest first.
+  for (const status of BACKLOG_STATUSES) {
+    cols[status].sort(
+      (a, b) =>
+        a.priority - b.priority ||
+        Date.parse(a.created_at) - Date.parse(b.created_at),
+    );
+  }
+  return cols;
+}
 
 // Static asset root — resolves to src/gui/public when tsx-running directly
 // (npm run gui) and to dist/gui/public after `tsc` builds. The build step
@@ -108,6 +161,7 @@ export type GuiHandlers = {
   listKgEdges: (input: ListKgEdgesInput) => Promise<unknown>;
   getClusterGraphSuper: (projectId: string) => Promise<ClusterGraphSuperPayload | ClusterGraphFailure>;
   getClusterGraphDrill: (projectId: string, supernodeId: number) => Promise<ClusterGraphDrillPayload | ClusterGraphFailure>;
+  listBacklog: (input: ListBacklogInput) => Promise<BacklogRow[]>;
 };
 
 const DEFAULT_HANDLERS: GuiHandlers = {
@@ -119,6 +173,8 @@ const DEFAULT_HANDLERS: GuiHandlers = {
   listKgEdges: defaultListKgEdges,
   getClusterGraphSuper: defaultGetClusterGraphSuper,
   getClusterGraphDrill: defaultGetClusterGraphDrill,
+  listBacklog: ({ project_id, status }) =>
+    defaultListBacklog(project_id ?? currentProjectId, status ? { status } : {}),
 };
 
 // Knowledge Graph route parameter clamps.
@@ -259,6 +315,37 @@ export function createGuiServer(opts: GuiServerOptions = {}): http.Server {
           task = await defaultGetTaskBudget({ task_id: taskId.trim() });
         }
         return sendJson(res, 200, { ok: true, mode: daemons.mode, daemons: daemons.rows, task });
+      }
+
+      // Epic F (M8 Backlog UI) — Active Backlog Kanban surface.
+      // Reads cloud_backlog rows for the resolved project_id (done rows
+      // typically already archived; cleared status: filter omits them).
+      // Returns rows pre-grouped + sorted by (priority asc, age asc) per
+      // column, so the client can render columns directly without re-sort.
+      if (method === "GET" && path === "/api/backlog") {
+        const projectId = resolveProjectId(url.searchParams.get("project_id"), serverProjectId);
+        const rawStatus = url.searchParams.get("status");
+        let statusFilter: BacklogStatus | BacklogStatus[] | undefined;
+        if (rawStatus !== null && rawStatus.trim().length > 0) {
+          const parts = rawStatus
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0)
+            .filter(isBacklogStatus);
+          if (parts.length === 1) statusFilter = parts[0];
+          else if (parts.length > 1) statusFilter = parts;
+        }
+        const input: ListBacklogInput = { project_id: projectId };
+        if (statusFilter !== undefined) input.status = statusFilter;
+        const rows = await handlers.listBacklog(input);
+        const columns = groupByStatus(rows);
+        const payload: BacklogKanbanPayload = {
+          ok: true,
+          project_id: projectId,
+          total: rows.length,
+          columns,
+        };
+        return sendJson(res, 200, payload);
       }
 
       if (method === "GET" && path === "/api/graduations") {

@@ -75,6 +75,68 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
       return el;
     }
 
+    // ─── Epic F (M8) — Active Backlog Kanban ───────────────────────────
+    // Pulls /api/backlog (defaults to the server's resolved project_id),
+    // renders 4 columns (todo / in_progress / blocked / done). Rows
+    // arrive pre-grouped and pre-sorted by (priority asc, age asc) per
+    // column, so we just render — no client-side sort.
+    const BACKLOG_COLUMNS = ['todo', 'in_progress', 'blocked', 'done'];
+
+    function renderBacklogCard(row) {
+      const li = makeEl('li', { cls: 'kanban-card' });
+      const title = makeEl('div', { cls: 'card-title', text: row.title || '(untitled)' });
+      const meta = makeEl('div', { cls: 'card-meta' });
+      const pri = makeEl('span', { cls: 'pri', text: 'p' + row.priority });
+      pri.setAttribute('data-priority', String(row.priority));
+      const id = makeEl('span', { cls: 'id', text: '#' + row.id });
+      meta.appendChild(pri);
+      meta.appendChild(id);
+      if (row.created_at) {
+        const d = new Date(row.created_at);
+        if (!Number.isNaN(d.getTime())) {
+          const age = makeEl('span', { cls: 'age', text: d.toISOString().slice(0, 10) });
+          meta.appendChild(age);
+        }
+      }
+      li.appendChild(title);
+      li.appendChild(meta);
+      if (row.notes) {
+        li.appendChild(makeEl('div', { cls: 'card-notes', text: String(row.notes) }));
+      }
+      return li;
+    }
+
+    async function loadBacklog() {
+      const grid = document.getElementById('kanban-grid');
+      if (!grid) return;
+      const totalEl = document.getElementById('backlog-total');
+      const projectEl = document.getElementById('backlog-project');
+      const r = await jsonFetch('/api/backlog');
+      if (!r.ok || !r.body || r.body.ok !== true) {
+        if (totalEl) totalEl.textContent = '(error)';
+        return;
+      }
+      const cols = r.body.columns || {};
+      let total = 0;
+      for (const status of BACKLOG_COLUMNS) {
+        const list = grid.querySelector('[data-kanban-list="' + status + '"]');
+        const count = grid.querySelector('[data-kanban-count="' + status + '"]');
+        const rows = Array.isArray(cols[status]) ? cols[status] : [];
+        if (list) {
+          list.replaceChildren();
+          if (rows.length === 0) {
+            list.appendChild(makeEl('li', { cls: 'kanban-empty', text: '(empty)' }));
+          } else {
+            for (const row of rows) list.appendChild(renderBacklogCard(row));
+          }
+        }
+        if (count) count.textContent = String(rows.length);
+        total += rows.length;
+      }
+      if (totalEl) totalEl.textContent = total === 0 ? 'empty' : '· ' + total;
+      if (projectEl && r.body.project_id) projectEl.textContent = String(r.body.project_id);
+    }
+
     function renderCard(row) {
       const card = makeEl('div', { cls: 'card' });
 
@@ -187,11 +249,14 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
       loadGraduations();
     });
 
-    $('#refresh').addEventListener('click', () => { loadHealth(); loadGraduations(); loadBudget(); });
+    $('#refresh').addEventListener('click', () => { loadHealth(); loadGraduations(); loadBudget(); loadBacklog(); });
+    const backlogReloadBtn = document.getElementById('backlog-reload');
+    if (backlogReloadBtn) backlogReloadBtn.addEventListener('click', loadBacklog);
 
     loadHealth();
     loadGraduations();
     loadBudget();
+    loadBacklog();
     /* auto-refresh interval is now driven by Settings (see initSettings) */
     // Expose loadBudget so the Settings polling loop (initSettings/applyAutoRefresh)
     // can include it in the tick set without re-declaring the IIFE scope.

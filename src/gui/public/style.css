@@ -1480,3 +1480,159 @@
     @media (max-width: 480px) {
       aside.drawer { width: 100vw; }
     }
+
+    /* ─── Epic F (M8) — Active Backlog Kanban ────────────────────────── */
+    .backlog-panel {
+      margin-top: 18px;
+      border: 1px solid var(--border);
+      background:
+        linear-gradient(180deg, rgba(10,17,28,0.95) 0%, rgba(5,7,13,0.95) 100%);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .backlog-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--hairline);
+      background: rgba(0,0,0,0.25);
+    }
+    .backlog-header h2 {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+    .backlog-controls {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .backlog-controls code {
+      color: var(--accent);
+      background: transparent;
+      font-family: var(--font-mono);
+    }
+    .backlog-controls button {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent-d);
+      padding: 4px 12px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      cursor: pointer;
+      border-radius: 3px;
+      transition: all 0.18s ease;
+    }
+    .backlog-controls button:hover {
+      box-shadow: var(--glow-cyan);
+      color: #fff;
+    }
+    .kanban-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      padding: 14px 18px;
+    }
+    .kanban-col {
+      display: flex;
+      flex-direction: column;
+      min-height: 120px;
+      max-height: 360px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: rgba(3,5,10,0.45);
+      overflow: hidden;
+    }
+    .kanban-col h3 {
+      margin: 0;
+      padding: 8px 12px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--hairline);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .kanban-count {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+    .kanban-col[data-status="todo"] h3        { color: var(--accent); }
+    .kanban-col[data-status="in_progress"] h3 { color: var(--lane-composed); }
+    .kanban-col[data-status="blocked"] h3     { color: var(--err); }
+    .kanban-col[data-status="done"] h3        { color: var(--ok); }
+    .kanban-list {
+      list-style: none;
+      margin: 0;
+      padding: 8px;
+      overflow-y: auto;
+      flex: 1;
+      font-size: 11px;
+    }
+    .kanban-card {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      border: 1px solid var(--hairline);
+      border-radius: 3px;
+      background: rgba(10,17,28,0.65);
+      color: var(--text);
+      transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+    .kanban-card:hover {
+      border-color: var(--accent-d);
+      box-shadow: var(--glow-cyan);
+    }
+    .kanban-card .card-title {
+      font-weight: 500;
+      line-height: 1.35;
+      word-wrap: break-word;
+    }
+    .kanban-card .card-meta {
+      display: flex;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .kanban-card .card-meta .pri[data-priority="1"] { color: var(--err); }
+    .kanban-card .card-meta .pri[data-priority="2"] { color: var(--warn); }
+    .kanban-card .card-meta .pri[data-priority="3"] { color: var(--accent); }
+    .kanban-card .card-meta .pri[data-priority="4"] { color: var(--text-dim); }
+    .kanban-card .card-meta .pri[data-priority="5"] { color: var(--muted); }
+    .kanban-card .card-notes {
+      font-size: 10px;
+      color: var(--text-dim);
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .kanban-empty {
+      padding: 14px 12px;
+      color: var(--muted);
+      font-style: italic;
+      font-size: 10px;
+      text-align: center;
+    }
+    @media (max-width: 900px) {
+      .kanban-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 520px) {
+      .kanban-grid { grid-template-columns: 1fr; }
+    }
