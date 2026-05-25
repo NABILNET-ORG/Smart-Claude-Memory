@@ -233,7 +233,7 @@ export async function ensureSovereignConstitution(
  * Current canonical constitution version. Bumped in lock-step with the
  * SOVEREIGN_CONSTITUTION_TEMPLATE body.
  */
-export const CANONICAL_CONSTITUTION_VERSION = "v2.1.10";
+export const CANONICAL_CONSTITUTION_VERSION = "v2.1.11";
 
 /**
  * SHA-256 hex digests of the canonical block body for each previously-shipped
@@ -252,6 +252,7 @@ export const KNOWN_CANONICAL_HASHES: Record<string, string> = {
   "v2.1.8": "453bf797b22a8e9babf3ad6f74a2dd5c2059ea5becae1252e8c169e800463c54",
   "v2.1.9": "1965461840b43c5c81ba4a9c0c0d57aa071a5d6cd16df14a947117538150f07c",
   "v2.1.10": "2fe020f8ef8eebff59d94d8cb6f9abf71b4a58ee07d1942ab870c2c6dc0e4185",
+  "v2.1.11": "6edf03a5a62b9ba1ffabefb1558aea5f2b38dc41813f845233dcf40f9ccda548",
 };
 
 export type UpgradeConstitutionOptions = {
