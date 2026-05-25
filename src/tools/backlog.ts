@@ -82,6 +82,10 @@ const ARCH_IGNORE = new Set([
   ".turbo",
   "coverage",
   "__pycache__",
+  // Windows reserved-device leakage. `> nul` redirects occasionally drop a
+  // literal `nul` file at the repo root — keep it out of the architecture
+  // tree so Mermaid diagrams stay clean (paired with `.gitignore` entry).
+  "nul",
 ]);
 
 const ARCH_HIDDEN_ALLOWLIST = new Set([

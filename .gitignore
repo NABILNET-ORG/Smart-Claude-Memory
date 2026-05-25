@@ -5,3 +5,8 @@ dist/
 *.log
 backups/
 docs/scm-memory/
+
+# Windows reserved-device leakage. `> nul` redirects under pwsh/cmd
+# occasionally materialize a literal file named `nul` in the worktree
+# (last seen Session 44). Block it from tracking on every host.
+nul
