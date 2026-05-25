@@ -2,9 +2,9 @@
 
 # Smart Claude Memory
 
-![Smart Claude Memory v2.3.0 Master Schematic](docs/assets/schematic.png)
+![Smart Claude Memory v2.3.1 Master Schematic](docs/assets/schematic.png)
 
-*Master schematic — the definitive visual reference for the Smart Claude Memory v2.3.x production baseline (v2.3.0 ships M8.3 Semantic Clustering on top of v2.2.2 — supernode/community drill, clustering scanner daemon, 3 new MCP tools, `/api/graph/clusters` + Cluster View toggle in the dashboard; see [ARCHITECTURE.md §4.13](ARCHITECTURE.md#413-m83-semantic-clustering-mission-10--scm-s41-d1d7)).*
+*Master schematic — the definitive visual reference for the Smart Claude Memory v2.3.x production baseline (v2.3.0 ships M8.3 Semantic Clustering on top of v2.2.2 — supernode/community drill, clustering scanner daemon, 3 new MCP tools, `/api/graph/clusters` + Cluster View toggle in the dashboard; see [ARCHITECTURE.md §4.13](ARCHITECTURE.md#413-m83-semantic-clustering-mission-10--scm-s41-d1d7); v2.3.1 surfaces the Active Backlog Kanban at the top of the dashboard, adds the `/api/backlog` route + Epic G `file_watcher` KG auto-sync daemon + migration `024`, and canonicalizes the v2.1.11 Zero-Autonomy constitution).*
 
 **Hybrid cloud-local memory for Claude — semantic retrieval instead of context bloat.**
 
@@ -29,7 +29,7 @@ Claude sessions load `memory.md`, `rules.md`, `cloud.md`, and a dozen other cont
 
 ## What this does
 
-`smart-claude-memory` is a **Model Context Protocol server** that replaces "read every .md at startup" with "search them on demand." It chunks your markdown notes, embeds them with a local Ollama model, stores them in Supabase (pgvector), and exposes **fifty MCP tools** to Claude spanning memory, vision, backlog, hygiene, orchestration, system health, transactional checkpoints (M4), autonomous curriculum (M5), observability + telemetry pruning (M6), human-gated skill graduation to GLOBAL (M7), and a Hybrid-RAG knowledge graph with a browser dashboard (M8). The elevator pitch:
+`smart-claude-memory` is a **Model Context Protocol server** that replaces "read every .md at startup" with "search them on demand." It chunks your markdown notes, embeds them with a local Ollama model, stores them in Supabase (pgvector), and exposes **fifty-eight MCP tools** to Claude spanning memory, vision, backlog, hygiene, orchestration, system health, transactional checkpoints (M4), autonomous curriculum (M5), observability + telemetry pruning (M6), human-gated skill graduation to GLOBAL (M7), a Hybrid-RAG knowledge graph with a browser dashboard (M8.1/M8.2), and on-disk → KG auto-sync (Epic G `file_watcher`). The elevator pitch:
 
 | Tool | Purpose |
 |---|---|
@@ -205,7 +205,7 @@ search_memory({ query: "auth flow", project_id: "acme-api" })
 | `confirm_promotion` | Graduation | **HUMAN-GATED PROMOTION TO GLOBAL** — the sole `is_global=true` mint path outside of `save_memory({is_global:true})`. Calls the `apply_graduation` SQL RPC: atomic INSERT of a GLOBAL `agent_skills` clone + UPDATE `state='approved'` in ONE transaction. PostgreSQL `now()` collapses `graduation.decided_at === new_skill.created_at` to the microsecond (C4 atomic-tx proof). Source skill UNTOUCHED. |
 | `reject_graduation` | Graduation | M7 veto. TS-only UPDATE `WHERE state IN ('proposed','composed')`. Diverges from `reject_curriculum_task`: a second reject on an already-rejected row returns `ok:false` (reason='invalid_state_transition') instead of silently overwriting — GLOBAL rejection reasons carry audit weight. |
 
-### Full tool roster — 58 MCP tools by domain (v2.3.0)
+### Full tool roster — 58 MCP tools by domain (v2.3.1)
 
 The table above documents the canonical headline surface. The complete roster, grouped by subsystem, follows. Each tool is registered in [src/index.ts](src/index.ts) and consumed via the MCP `tools/list` + `tools/call` protocol.
 
@@ -242,11 +242,11 @@ The GUI surface (M8.2, v2.2.0) is **not** an MCP tool — it's an HTTP server (`
 2. Pulls the last 5 archived rows via `listArchive`.
 3. Replaces the `### 🚀 Recent Progress
 
+* [DONE] Verify Backlog UI Layout changes (archived at 2026-05-25).
 * [DONE] Idempotency: make migrations 001–018 strictly re-runnable (archived at 2026-05-14).
 * [DONE] Tech-debt: relocate 006_smoke/006_verify out of scripts/, drop loadMigrationFiles denylist (archived at 2026-05-14).
 * [DONE] [OBS-EPIC] Telemetry retention policy (rolling window for daemon_telemetry) (archived at 2026-05-14).
 * [DONE] [OBS-EPIC] Aggregate per-chunk token counters in compactor state for richer telemetry (archived at 2026-05-14).
-* [DONE] [FOUNDATION-FIX] Explicit service_role grants for May 30 Supabase compliance (archived at 2026-05-13).
 ### 🚀 Recent Progress
 
 * [DONE] Fix login form validation (archived at 2026-04-24).
@@ -1096,7 +1096,7 @@ For inquiries, integrations, or sovereign-grade Claude Code tooling, visit [nabi
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-05-25T06:47:29.665Z for `smart-claude-memory`._
+_Auto-synced at 2026-05-25T14:48:58.077Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
@@ -1181,7 +1181,7 @@ flowchart TD
   n15 --> n39
   n40["SESSION-34-REPORT.md"]
   n15 --> n40
-  n41["… (13 more)"]
+  n41["… (14 more)"]
   n15 --> n41
   n42["specs/"]
   n5 --> n42
@@ -1521,16 +1521,14 @@ flowchart TD
   n0 --> n209
   n210["marketplace.json"]
   n0 --> n210
-  n211["nul"]
+  n211["package-lock.json"]
   n0 --> n211
-  n212["package-lock.json"]
+  n212["package.json"]
   n0 --> n212
-  n213["package.json"]
+  n213["project_file_architecture.md"]
   n0 --> n213
-  n214["project_file_architecture.md"]
+  n214["README.md"]
   n0 --> n214
-  n215["README.md"]
+  n215["tsconfig.json"]
   n0 --> n215
-  n216["tsconfig.json"]
-  n0 --> n216
 ```
