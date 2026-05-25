@@ -4,7 +4,8 @@ export type DaemonName =
   | "trajectory_compactor"
   | "telemetry_pruner"
   | "graduation_scanner"
-  | "clustering_scanner";
+  | "clustering_scanner"
+  | "file_watcher";
 export type EventType =
   | "run_started"
   | "run_ended"
@@ -76,6 +77,16 @@ export type ClusteringEndedPayload = {
   [extra: string]: unknown;
 };
 
+// Epic G (Session 43 Phase 2) file_watcher: tick-level rollup. files_queued is
+// the count of distinct paths that fired change events inside the debounce
+// window; duration_ms is the wall-clock cost of the syncLocalMemory call the
+// flush triggered.
+export type FileWatcherEndedPayload = {
+  files_queued: number;
+  duration_ms: number;
+  [extra: string]: unknown;
+};
+
 export type RunErroredPayload = {
   error_message: string;
   duration_ms: number;
@@ -102,6 +113,7 @@ export type MetricEvent =
   | { daemon: "telemetry_pruner";      event: "run_ended";    payload: TelemetryPrunerEndedPayload }
   | { daemon: "graduation_scanner";    event: "run_ended";    payload: GraduationEndedPayload }
   | { daemon: "clustering_scanner";    event: "run_ended";    payload: ClusteringEndedPayload }
+  | { daemon: "file_watcher";          event: "run_ended";    payload: FileWatcherEndedPayload }
   | { daemon: "curriculum_scanner";    event: "task_outcome"; payload: CurriculumDeltaPayload }
   | { daemon: DaemonName;              event: "run_errored";  payload: RunErroredPayload }
   | { daemon: DaemonName;              event: "run_skipped_budget"; payload: RunSkippedBudgetPayload };

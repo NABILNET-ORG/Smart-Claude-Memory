@@ -11,7 +11,9 @@ type DaemonName =
   | "curriculum_scanner"
   | "trajectory_compactor"
   | "telemetry_pruner"
-  | "graduation_scanner";
+  | "graduation_scanner"
+  | "clustering_scanner"
+  | "file_watcher";
 
 export type DashboardInput = {
   window_hours?: number;

@@ -110,6 +110,8 @@ import { startTelemetryPruner } from "./telemetry/pruner.js";
 import { startGraphExtractor } from "./graph/daemon.js";
 // M8.3 Task 4 — clustering daemon + tool surface (SCM-S41-D7).
 import { startClusteringScanner } from "./clustering/daemon.js";
+// Epic G (Session 43 Phase 2) — KG Auto-Sync file watcher daemon.
+import { startFileWatcher } from "./sync/file-watcher-daemon.js";
 import {
   listSupernodes,
   listSupernodesInputShape,
@@ -194,6 +196,13 @@ startGraphExtractor();
 // daemon in daemon_budget_buckets). .unref()'d. Universal — discovers
 // projects via SELECT DISTINCT project_id FROM kg_nodes; never hardcoded.
 startClusteringScanner();
+
+// Epic G — KG Auto-Sync (Session 43 Phase 2). fs.watch over MEMORY_ROOTS
+// debounces local file changes and fires syncLocalMemory automatically;
+// the existing graph_extractor daemon then folds the new chunks into
+// kg_nodes on its own tick. Opt out with SCM_FILE_WATCHER_ENABLED=false.
+// No-ops cleanly when MEMORY_ROOTS is empty.
+startFileWatcher();
 
 // Export the current frozen_features snapshot to the shared cache file so
 // hooks/md-policy.py can read it without hitting Supabase per tool call.
