@@ -1033,7 +1033,7 @@ flowchart TD
   n15 --> n39
   n40["SESSION-34-REPORT.md"]
   n15 --> n40
-  n41["… (14 more)"]
+  n41["… (15 more)"]
   n15 --> n41
   n42["specs/"]
   n5 --> n42
@@ -1381,8 +1381,8 @@ flowchart TD
   n0 --> n213
   n214["README.md"]
   n0 --> n214
-  n215["tsconfig.json"]
-  n0 --> n215
+  n216["tsconfig.json"]
+  n0 --> n216
 ```
 
 <!-- MEMORY:ARCH:END -->

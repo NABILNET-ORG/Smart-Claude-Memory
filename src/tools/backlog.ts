@@ -117,6 +117,7 @@ async function scanTree(dir: string, depth: number): Promise<ArchNode> {
   const filtered = entries.filter((e) => {
     if (ARCH_IGNORE.has(e.name)) return false;
     if (e.name.startsWith(".") && !ARCH_HIDDEN_ALLOWLIST.has(e.name)) return false;
+    if (e.name.endsWith(".tgz")) return false;
     return true;
   });
   filtered.sort((a, b) => {
