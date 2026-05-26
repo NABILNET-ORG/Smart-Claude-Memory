@@ -14,7 +14,7 @@
 [![pgvector](https://img.shields.io/badge/pgvector-HNSW-336791?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Ollama](https://img.shields.io/badge/Ollama-local%20embeddings-000)](https://ollama.com/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](#license)
-[![Version](https://img.shields.io/badge/version-2.3.0-green)](#)
+[![Version](https://img.shields.io/badge/version-2.3.1-green)](#)
 [![Developer](https://img.shields.io/badge/developer-NABILNET.AI-6e56cf?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyTDIgNy4xN0wxMiAxMi4zM0wyMiA3LjE3WiIvPjwvc3ZnPg==)](https://nabilnet.ai)
 
 **Developed by [NABILNET.AI](https://nabilnet.ai)**
@@ -61,7 +61,15 @@ npm install smart-claude-memory-mcp
 
 Published as [`smart-claude-memory-mcp`](https://www.npmjs.com/package/smart-claude-memory-mcp) (MIT). Exposes a `smart-claude-memory-mcp` binary you can wire into any MCP-compatible client.
 
-Both paths require an empty Supabase project + a local Ollama install with `moondream` and `nomic-embed-text` pulled. See [Bootstrap](#bootstrap) for the three-step setup ritual.
+**Option C — Direct from GitHub (latest `main`):**
+
+```bash
+npm install git+https://github.com/NABILNET-ORG/Smart-Claude-Memory.git
+```
+
+Installs straight from the canonical repo without a registry round-trip. The `prepare` script declared in [package.json](package.json) auto-runs the full `npm run build` chain (`lint:boundaries` → `tsc` → `copy:gui`) on install, so the TypeScript sources compile to `dist/` and the `smart-claude-memory-mcp` binary lands fully resolved on the consumer's `node_modules/.bin/` — no `npm run build` follow-up needed. Pin a tag (`...Smart-Claude-Memory.git#v2.3.1`) or commit SHA for reproducible installs.
+
+All three paths require an empty Supabase project + a local Ollama install with `moondream` and `nomic-embed-text` pulled. See [Bootstrap](#bootstrap) for the three-step setup ritual.
 
 ---
 
@@ -1050,6 +1058,7 @@ flowchart TD
 | Command | Purpose |
 |---|---|
 | `npm run build` | Three-step chain: `lint:boundaries` → `tsc` → `copy:gui`. Compiles TypeScript and mirrors `src/gui/public/` → `dist/gui/public/` for the modular dashboard (v2.2.0). |
+| `npm run prepare` | npm lifecycle hook — wraps `npm run build`. Runs automatically on `npm install` from a git URL (Option C above) and before `npm pack` / `npm publish`, so git-based consumers and published tarballs both ship a freshly compiled `dist/` with zero manual build step. Added in v2.3.1 release-prep (Session 45). |
 | `npm run lint:boundaries` | Boundary Invariant #1 fence — scans `src/sleep`, `src/curriculum`, `src/graduation` for forbidden LLM imports / endpoints. Runs first in `build`. |
 | `npm run copy:gui` | Zero-dep mirror of `src/gui/public/` → `dist/gui/public/` via `fs.cpSync` (no `cpx` / `fs-extra` introduced). Idempotent. |
 | `npm run dev` | Run the MCP server via `tsx` (no build step) |

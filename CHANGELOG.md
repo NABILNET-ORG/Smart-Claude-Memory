@@ -22,6 +22,13 @@ Patch-level release rolling up the four post-v2.3.0 commits that landed in Sessi
 - No new architectural decisions saved (DECISION IDs). Session 43 Part 2 / Session 44 work was governance + feature execution on patterns already chosen at v2.3.0. The `createRequire` pattern from Epic E and the daemon-allow-list backfill pattern from Epic G are both `package_skill` / GLOBAL-promotion candidates if either recurs.
 - Constitution drift continues at v2.1.8 → v2.1.11 (intentional local customization preserving Sovereign Memory Protocol body). Operators wanting the canonical template still run `upgrade_constitution({force:true})`.
 
+### Release Prep (Session 45 — 2026-05-25)
+Distribution-readiness sweep against the existing v2.3.1 surface (no code or behavior change; published tarball, MCP tool count, schema, and test suite all unchanged). Lands as commit `cd67204` (`chore(release): prepare package.json for public distribution`):
+
+- **`.gitignore`** — added `*.tgz` so packed releases (e.g. `smart-claude-memory-mcp-2.3.1.tgz`) can never be committed by accident. Verified via `git check-ignore` against the live tarball at repo root.
+- **`package.json` `prepare` script** — `"prepare": "npm run build"`. Architecturally critical: git-based installs (`npm install git+https://github.com/NABILNET-ORG/Smart-Claude-Memory.git`) now auto-compile TypeScript → `dist/` via npm's lifecycle hook, so the `smart-claude-memory-mcp` binary resolves immediately on the consumer side. Also runs before `npm pack` / `npm publish` to guarantee fresh `dist/` in every published tarball.
+- **npm keywords expanded 7 → 17** — adds `claude`, `anthropic`, `model-context-protocol`, `long-term-memory`, `sovereign-memory`, `rag`, `vector-database`, `embeddings`, `knowledge-graph`, `llm`, `agent` for public-registry discoverability. The other public metadata fields (`repository`, `bugs`, `homepage`, `author`, `license: MIT`, `engines.node >= 20`, `files[]`, `bin`) were already in place and verified npm-publish ready.
+
 ---
 
 ## [2.3.0] — 2026-05-24
