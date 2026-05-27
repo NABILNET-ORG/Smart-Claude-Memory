@@ -250,11 +250,11 @@ The GUI surface (M8.2, v2.2.0) is **not** an MCP tool — it's an HTTP server (`
 2. Pulls the last 5 archived rows via `listArchive`.
 3. Replaces the `### 🚀 Recent Progress
 
+* [DONE] Legacy sweep verdict: KEEP scripts/backup-and-remove.ts (production, not bloat) (archived at 2026-05-27).
 * [DONE] Verify Backlog UI Layout changes (archived at 2026-05-25).
 * [DONE] Idempotency: make migrations 001–018 strictly re-runnable (archived at 2026-05-14).
 * [DONE] Tech-debt: relocate 006_smoke/006_verify out of scripts/, drop loadMigrationFiles denylist (archived at 2026-05-14).
 * [DONE] [OBS-EPIC] Telemetry retention policy (rolling window for daemon_telemetry) (archived at 2026-05-14).
-* [DONE] [OBS-EPIC] Aggregate per-chunk token counters in compactor state for richer telemetry (archived at 2026-05-14).
 ### 🚀 Recent Progress
 
 * [DONE] Fix login form validation (archived at 2026-04-24).
@@ -1103,7 +1103,7 @@ For inquiries, integrations, or sovereign-grade Claude Code tooling, visit [nabi
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-05-26T06:04:44.857Z for `smart-claude-memory`._
+_Auto-synced at 2026-05-27T04:59:57.590Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
@@ -1188,7 +1188,7 @@ flowchart TD
   n15 --> n39
   n40["SESSION-34-REPORT.md"]
   n15 --> n40
-  n41["… (15 more)"]
+  n41["… (16 more)"]
   n15 --> n41
   n42["specs/"]
   n5 --> n42
@@ -1292,9 +1292,9 @@ flowchart TD
   n68 --> n91
   n92["024_telemetry_file_watcher_daemon.sql"]
   n68 --> n92
-  n93["apply-schema.ts"]
+  n93["025_security_advisor_compliance.sql"]
   n68 --> n93
-  n94["… (37 more)"]
+  n94["… (39 more)"]
   n68 --> n94
   n95["src/"]
   n0 --> n95
@@ -1536,6 +1536,6 @@ flowchart TD
   n0 --> n213
   n214["README.md"]
   n0 --> n214
-  n216["tsconfig.json"]
-  n0 --> n216
+  n215["tsconfig.json"]
+  n0 --> n215
 ```

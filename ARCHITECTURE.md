@@ -1033,7 +1033,7 @@ flowchart TD
   n15 --> n39
   n40["SESSION-34-REPORT.md"]
   n15 --> n40
-  n41["… (15 more)"]
+  n41["… (16 more)"]
   n15 --> n41
   n42["specs/"]
   n5 --> n42
@@ -1137,9 +1137,9 @@ flowchart TD
   n68 --> n91
   n92["024_telemetry_file_watcher_daemon.sql"]
   n68 --> n92
-  n93["apply-schema.ts"]
+  n93["025_security_advisor_compliance.sql"]
   n68 --> n93
-  n94["… (37 more)"]
+  n94["… (39 more)"]
   n68 --> n94
   n95["src/"]
   n0 --> n95
@@ -1381,8 +1381,8 @@ flowchart TD
   n0 --> n213
   n214["README.md"]
   n0 --> n214
-  n216["tsconfig.json"]
-  n0 --> n216
+  n215["tsconfig.json"]
+  n0 --> n215
 ```
 
 <!-- MEMORY:ARCH:END -->
