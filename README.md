@@ -2,9 +2,9 @@
 
 # Smart Claude Memory
 
-![Smart Claude Memory v2.3.1 Master Schematic](docs/assets/schematic.png)
+![Smart Claude Memory v2.3.2 Master Schematic](docs/assets/schematic.png)
 
-*Master schematic — the definitive visual reference for the Smart Claude Memory v2.3.x production baseline (v2.3.0 ships M8.3 Semantic Clustering on top of v2.2.2 — supernode/community drill, clustering scanner daemon, 3 new MCP tools, `/api/graph/clusters` + Cluster View toggle in the dashboard; see [ARCHITECTURE.md §4.13](ARCHITECTURE.md#413-m83-semantic-clustering-mission-10--scm-s41-d1d7); v2.3.1 surfaces the Active Backlog Kanban at the top of the dashboard, adds the `/api/backlog` route + Epic G `file_watcher` KG auto-sync daemon + migration `024`, and canonicalizes the v2.1.11 Zero-Autonomy constitution).*
+*Master schematic — the definitive visual reference for the Smart Claude Memory v2.3.x production baseline (v2.3.0 ships M8.3 Semantic Clustering on top of v2.2.2 — supernode/community drill, clustering scanner daemon, 3 new MCP tools, `/api/graph/clusters` + Cluster View toggle in the dashboard; see [ARCHITECTURE.md §4.13](ARCHITECTURE.md#413-m83-semantic-clustering-mission-10--scm-s41-d1d7); v2.3.1 surfaces the Active Backlog Kanban at the top of the dashboard, adds the `/api/backlog` route + Epic G `file_watcher` KG auto-sync daemon + migration `024`, and canonicalizes the v2.1.11 Zero-Autonomy constitution; v2.3.2 closes every Supabase Security Advisor finding via migrations `025` + `026` — RLS-enable, `security_invoker` views, pinned `search_path`, and explicit `REVOKE EXECUTE` from PUBLIC + anon + authenticated, leaving `service_role` as the sole RPC caller).*
 
 **Hybrid cloud-local memory for Claude — semantic retrieval instead of context bloat.**
 
@@ -14,7 +14,7 @@
 [![pgvector](https://img.shields.io/badge/pgvector-HNSW-336791?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Ollama](https://img.shields.io/badge/Ollama-local%20embeddings-000)](https://ollama.com/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](#license)
-[![Version](https://img.shields.io/badge/version-2.3.1-green)](#)
+[![Version](https://img.shields.io/badge/version-2.3.2-green)](#)
 [![Developer](https://img.shields.io/badge/developer-NABILNET.AI-6e56cf?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyTDIgNy4xN0wxMiAxMi4zM0wyMiA3LjE3WiIvPjwvc3ZnPg==)](https://nabilnet.ai)
 
 **Developed by [NABILNET.AI](https://nabilnet.ai)**
@@ -67,7 +67,7 @@ Published as [`smart-claude-memory-mcp`](https://www.npmjs.com/package/smart-cla
 npm install git+https://github.com/NABILNET-ORG/Smart-Claude-Memory.git
 ```
 
-Installs straight from the canonical repo without a registry round-trip. The `prepare` script declared in [package.json](package.json) auto-runs the full `npm run build` chain (`lint:boundaries` → `tsc` → `copy:gui`) on install, so the TypeScript sources compile to `dist/` and the `smart-claude-memory-mcp` binary lands fully resolved on the consumer's `node_modules/.bin/` — no `npm run build` follow-up needed. Pin a tag (`...Smart-Claude-Memory.git#v2.3.1`) or commit SHA for reproducible installs.
+Installs straight from the canonical repo without a registry round-trip. The `prepare` script declared in [package.json](package.json) auto-runs the full `npm run build` chain (`lint:boundaries` → `tsc` → `copy:gui`) on install, so the TypeScript sources compile to `dist/` and the `smart-claude-memory-mcp` binary lands fully resolved on the consumer's `node_modules/.bin/` — no `npm run build` follow-up needed. Pin a tag (`...Smart-Claude-Memory.git#v2.3.2`) or commit SHA for reproducible installs.
 
 All three paths require an empty Supabase project + a local Ollama install with `moondream` and `nomic-embed-text` pulled. See [Bootstrap](#bootstrap) for the three-step setup ritual.
 
@@ -213,7 +213,7 @@ search_memory({ query: "auth flow", project_id: "acme-api" })
 | `confirm_promotion` | Graduation | **HUMAN-GATED PROMOTION TO GLOBAL** — the sole `is_global=true` mint path outside of `save_memory({is_global:true})`. Calls the `apply_graduation` SQL RPC: atomic INSERT of a GLOBAL `agent_skills` clone + UPDATE `state='approved'` in ONE transaction. PostgreSQL `now()` collapses `graduation.decided_at === new_skill.created_at` to the microsecond (C4 atomic-tx proof). Source skill UNTOUCHED. |
 | `reject_graduation` | Graduation | M7 veto. TS-only UPDATE `WHERE state IN ('proposed','composed')`. Diverges from `reject_curriculum_task`: a second reject on an already-rejected row returns `ok:false` (reason='invalid_state_transition') instead of silently overwriting — GLOBAL rejection reasons carry audit weight. |
 
-### Full tool roster — 58 MCP tools by domain (v2.3.1)
+### Full tool roster — 58 MCP tools by domain (v2.3.2)
 
 The table above documents the canonical headline surface. The complete roster, grouped by subsystem, follows. Each tool is registered in [src/index.ts](src/index.ts) and consumed via the MCP `tools/list` + `tools/call` protocol.
 

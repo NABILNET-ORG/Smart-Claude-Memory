@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.3.2] — 2026-05-26
+
+**v2.3.2 — Security Compliance Sprint (Session 46, SCM-S46-F1 + SCM-S46-F2)**
+
+Patch-level security release closing every finding in the Supabase Security Advisor report. No MCP tool surface change (still **58**), no test surface change, no new runtime dependencies. Two forward-only, idempotent migrations bring the schema in line with PostgREST least-privilege expectations. The documented `service_role`-only access pattern is preserved end-to-end — `service_role` retains its explicit `EXECUTE` grant and `BYPASSRLS` attribute, so no documented call path regresses.
+
+### Added
+- **`scripts/025_security_advisor_compliance.sql`** — four idempotent sections in one migration:
+  - **RLS** enabled on `workflow_checkpoints` and `schema_migrations` (Supabase advisor `rls_disabled_in_public`).
+  - **`SECURITY INVOKER`** flipped on three views (`kg_supernodes`, `v_daemon_budget_health`, `v_task_budget_health`) — Postgres views default to `SECURITY DEFINER`, which silently bypasses RLS of the underlying tables. Requires Postgres 15+ (Supabase is on PG15+).
+  - **`search_path`** pinned to `public, extensions, pg_catalog` on `skill_graduations_touch_updated_at`, `match_chunks`, `kg_nodes_touch_updated_at`, `increment_daemon_bucket`. Closes the CVE-2018-1058 family attack surface for mutable-search-path functions. Discovers actual signatures from `pg_proc` at apply time, so overloads and parameter-list drift are handled automatically.
+  - **`REVOKE EXECUTE … FROM PUBLIC`** on every user-defined function/procedure in `public` (23 rows touched). Strips the implicit grant Postgres applies to PUBLIC on `CREATE FUNCTION`; explicit role grants are preserved.
+- **`scripts/026_revoke_anon_authenticated.sql`** — follow-up DO block looping `pg_proc × pg_namespace` for the `public` schema and explicitly `REVOKE EXECUTE … FROM anon, authenticated` on every function/procedure. The Advisor continued flagging `anon_security_definer_function_executable` and `authenticated_security_definer_function_executable` after Migration 025 because Supabase auto-grants `EXECUTE` to those two PostgREST roles on function creation; the catch-all PUBLIC revoke didn't strip them. Post-apply state: **23/23** functions retained `postgres` + `service_role` EXECUTE, **0/23** retained `anon` or `authenticated` EXECUTE.
+
+### Notes
+- Schema migrations applied total **26** (up from 24 at v2.3.1). Idempotent under `npm run schema` re-runs — every block uses `IF EXISTS` or a `pg_proc` lookup, so re-applying is a no-op.
+- Verification at HEAD: live-DB queries against `pg_class.relrowsecurity`, `pg_options_to_table(reloptions)` for `security_invoker`, `pg_proc.proconfig` for `search_path`, and `aclexplode(proacl)` for the grant audit all confirm the expected post-state. Sample for `match_chunks(vector, double precision, integer, text)` shows `search_path=public, extensions, pg_catalog`.
+- Design choice: signature-agnostic DO blocks (via `pg_get_function_identity_arguments`) rather than hardcoded `ALTER FUNCTION name(args)` statements. Tolerates future overloads without migration churn. The user-supplied function list became the *target* set; the apply-time enumeration is the *source of truth*.
+- New DECISION `SCM-S46-D1` (Session 46) — backup-script sweep verdict (`scripts/backup-and-remove.ts` retained as production tooling, not legacy bloat). Memory ID 22800. Documents a 4-condition retention rule for future `init_project.legacy_sweep` candidates.
+
+---
+
 ## [2.3.1] — 2026-05-25
 
 **v2.3.1 — Post-Mega-Sprint Roll-Up: Backlog UI, KG Auto-Sync, Zero-Autonomy Governance**
