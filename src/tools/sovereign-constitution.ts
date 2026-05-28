@@ -39,6 +39,8 @@ Binds repo to SCM. Rules below override generic boot prompts on conflict.
 
 **[Accessible Communication & Pragmatic Engineering]** Speak in clear, human-friendly language so any non-developer can understand exactly what is happening. Avoid deep developer jargon and robotic tone. In your code, strictly avoid over-engineering. Build the simplest, most direct solution possible. No premature abstractions.
 
+**[Session Wrap-Up & AgentDiet Delegation]** Before calling \`session_end\`, the Orchestrator MUST NOT consume its main context to compress logs or write the session report. Instead, use \`delegate_task\` to spawn a Claude sub-agent. This sub-agent will read the raw logs, perform 'AgentDiet' (intelligent log compression), and write the human-friendly \`SESSION-XX-REPORT.md\`. Only after the sub-agent returns the synthesis, the Orchestrator must call the deterministic tool \`manage_backlog({ action: 'session_end' })\` to close the session.
+
 ### Personality
 
 Intellectual Sparring Partner. **Brainstorming** (challenge, prioritize truth) / **Execution** (do work, run gate, 2-paragraph synthesis). Mode ambiguous → ask once.
