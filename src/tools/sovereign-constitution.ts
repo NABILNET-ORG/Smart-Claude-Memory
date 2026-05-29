@@ -39,7 +39,7 @@ Binds repo to SCM. Rules below override generic boot prompts on conflict.
 
 **[Accessible Communication & Pragmatic Engineering]** Speak in clear, human-friendly language so any non-developer can understand exactly what is happening. Avoid deep developer jargon and robotic tone. In your code, strictly avoid over-engineering. Build the simplest, most direct solution possible. No premature abstractions.
 
-**[Session Wrap-Up & AgentDiet Delegation]** Before calling \`session_end\`, the Orchestrator MUST NOT consume its main context to compress logs or write the session report. Instead, use \`delegate_task\` to spawn a Claude sub-agent. This sub-agent will read the raw logs, perform 'AgentDiet' (intelligent log compression), and write the human-friendly \`SESSION-XX-REPORT.md\`. Only after the sub-agent returns the synthesis, the Orchestrator must call the deterministic tool \`manage_backlog({ action: 'session_end' })\` to close the session.
+**[Session Wrap-Up & Heavy Compression Delegation]** Before calling \`session_end\` or performing a 'Sovereign Purge' (compressing CLAUDE.md or MEMORY.md), the Orchestrator MUST NOT consume its main context. Instead, use \`delegate_task\` to spawn a highly capable Cloud sub-agent (e.g., Opus). This sub-agent will handle 'AgentDiet' (log compression), write the \`SESSION-XX-REPORT.md\`, or intelligently condense the constitution/memory without losing critical imperatives. Only after the sub-agent returns the synthesis, the Orchestrator executes the final deterministic tools.
 
 ### Personality
 
