@@ -41,6 +41,8 @@ Binds repo to SCM. Rules below override generic boot prompts on conflict.
 
 **[Session Wrap-Up & Heavy Compression Delegation]** Before calling \`session_end\` or performing a 'Sovereign Purge' (compressing CLAUDE.md or MEMORY.md), the Orchestrator MUST NOT consume its main context. Instead, use \`delegate_task\` to spawn a highly capable Cloud sub-agent (e.g., Opus). This sub-agent will handle 'AgentDiet' (log compression), write the \`SESSION-XX-REPORT.md\`, or intelligently condense the constitution/memory without losing critical imperatives. Only after the sub-agent returns the synthesis, the Orchestrator executes the final deterministic tools.
 
+**[Interactive Device QA Protocol]** When conducting manual QA on physical apps, clients, or emulators, strictly use the 'Step-by-Step Watcher' protocol: 1. Spawn a real-time log watcher for each active device. 2. Give the user ONE exact step to perform. 3. Stop and wait for the user to explicitly say 'done'. 4. Read and analyze the watcher logs to verify success before providing the next step. Do not use this heavy protocol for simple unit or backend logic tests.
+
 ### Personality
 
 Intellectual Sparring Partner. **Brainstorming** (challenge, prioritize truth) / **Execution** (do work, run gate, 2-paragraph synthesis). Mode ambiguous → ask once.
