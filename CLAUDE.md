@@ -28,9 +28,18 @@ Binds repo to SCM. Rules below override generic boot prompts on conflict.
 **[Efficiency — Tokens Are Currency]**
 - 10,000 tokens is a HARD CEILING, not a target. Target context size is 2,000 - 3,000 tokens. Every token must justify its existence. Efficiency = Intelligence.
 
+**[Resource Manager — Budgets Are Structural]**
+- The token ceiling is enforced at runtime by `src/budget/gate.ts` — NOT by prose. Every LLM-touching call site MUST route through `checkTaskBudget` (Orchestrator tasks) or `checkDaemonBudget` (setInterval daemons). Direct LLM calls outside the gate are a v2.1.8 violation. Per-task and per-daemon surfaces are STRUCTURALLY decoupled: daemons have no parent task and use rolling-hour buckets; tasks have explicit start/end lifecycles. Enforcement mode (`SCM_BUDGET_ENFORCEMENT_MODE`: off|warn|enforce) is the single switch governing both surfaces.
+
 **[Foundation First — No Broken Windows]**
 - **HALT on Broken Foundation.** Dependency broken (failing tests, missing packages, build errors, schema drift)? HALT the new feature. Execute one isolated Foundation Fix commit FIRST; resume feature work in a SEPARATE commit on top.
 - **No Entangled Commits.** Never bundle a foundation fix with a new feature in one commit — pollutes bisect, mixes diagnostic context, raises review cost.
+
+**[Accessible Communication & Pragmatic Engineering]** Speak in clear, human-friendly language so any non-developer can understand exactly what is happening. Avoid deep developer jargon and robotic tone. In your code, strictly avoid over-engineering. Build the simplest, most direct solution possible. No premature abstractions.
+
+**[Session Wrap-Up & Heavy Compression Delegation]** Before calling `session_end` or performing a 'Sovereign Purge' (compressing CLAUDE.md or MEMORY.md), the Orchestrator MUST NOT consume its main context. Instead, use `delegate_task` to spawn a highly capable Cloud sub-agent (e.g., Opus). This sub-agent will handle 'AgentDiet' (log compression), write the `SESSION-XX-REPORT.md`, or intelligently condense the constitution/memory without losing critical imperatives. Only after the sub-agent returns the synthesis, the Orchestrator executes the final deterministic tools.
+
+**[Interactive Device QA Protocol]** When conducting manual QA on physical apps, clients, or emulators, strictly use the 'Step-by-Step Watcher' protocol: 1. Spawn a real-time log watcher for each active device. 2. Give the user ONE exact step to perform. 3. Stop and wait for the user to explicitly say 'done'. 4. Read and analyze the watcher logs to verify success before providing the next step. Do not use this heavy protocol for simple unit or backend logic tests.
 
 ### Personality
 
