@@ -17,6 +17,10 @@ const Env = z.object({
   MEMORY_ROOTS: z.string().min(1),
   CHUNK_SIZE: z.coerce.number().int().positive().default(800),
   CHUNK_OVERLAP: z.coerce.number().int().nonnegative().default(100),
+  SCM_DELEGATION_ENABLED: z
+    .string()
+    .default("true")
+    .transform((v) => v.toLowerCase() !== "false"),
 }).refine((v) => Boolean(v.SUPABASE_POOLER_URL) || Boolean(v.SUPABASE_DB_URL), {
   message:
     "At least one of SUPABASE_POOLER_URL (preferred, IPv4) or SUPABASE_DB_URL must be set",

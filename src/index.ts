@@ -2,6 +2,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { config } from "./config.js";
 import { syncLocalMemory } from "./tools/sync.js";
 import { pruneMemory } from "./tools/prune.js";
 import { searchMemory } from "./tools/search.js";
@@ -896,6 +897,9 @@ server.tool(
   }),
 );
 
+// Orchestrator delegation tools — registered only when SCM_DELEGATION_ENABLED (env, default true).
+// Disabled → the native LLM (e.g., Opus 4.8 Ultra Code) drives execution & file edits directly.
+if (config.SCM_DELEGATION_ENABLED) {
 server.tool(
   "delegate_task",
   "Orchestrator pattern (v1.1.0 — Autonomous Self-Healing): emit a canonical worker sub-agent prompt for a task. Natural-language triggers: 'delegate this', 'spawn a worker', 'send to sub-agent', 'offload this task'. The returned 'prompt' field plugs into the Agent tool — every delegation carries the contract: do the work → refactor_guard({action:'gate'}) → if red, diagnose via analyze_regression against backups and fix locally (up to max_healing_attempts), re-gate → rollback only if healing exhausts → return a 2-paragraph synthesis with strict no-raw-content caps. Keeps the Orchestrator's context clean of failed-compile churn. Pass optional task_id (from start_task) to gate subagent_depth via the Agentic Resource Manager.",
@@ -926,6 +930,7 @@ server.tool(
     content: [{ type: "text", text: JSON.stringify(await syncArtefacts(args), null, 2) }],
   }),
 );
+} // end SCM_DELEGATION_ENABLED gate (delegate_task + sync_artefacts)
 
 // ─── Agentic Resource Manager (SCM-S39-D1, v2.2.2) ────────────────────────
 

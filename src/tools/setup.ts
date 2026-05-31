@@ -16,6 +16,7 @@ const { glob } = require("glob") as typeof import("glob");
 import { Client } from "pg";
 import { loadFrozenCache } from "./frozen-cache.js";
 import { currentProjectId, slugify } from "../project.js";
+import { config } from "../config.js";
 import { GLOBAL_PROJECT_ID } from "./save.js";
 import {
   applyPendingMigrations,
@@ -458,6 +459,7 @@ export type Capabilities = {
   taxonomy: ["DECISION", "PATTERN", "ERROR", "LOG"];
   context_gathering_hints: string[];
   delegate_task_threshold: string;
+  execution_mode_notice?: string;
 };
 
 const CAPABILITIES_HINTS: readonly string[] = [
@@ -481,8 +483,9 @@ const CAPABILITIES_HINTS: readonly string[] = [
  */
 export function buildCapabilities(
   projectIdSlug: string,
+  delegationEnabled: boolean = true,
 ): Capabilities {
-  return {
+  const capabilities: Capabilities = {
     protocol: "smart-claude-memory/v2.1.0",
     project_id: projectIdSlug,
     global_scope: {
@@ -495,6 +498,11 @@ export function buildCapabilities(
     context_gathering_hints: [...CAPABILITIES_HINTS],
     delegate_task_threshold: ">3 files OR >100 lines raw output",
   };
+  if (!delegationEnabled) {
+    capabilities.execution_mode_notice =
+      "Delegation tools are DISABLED via env var. Use your native multi-agent or Ultra Code capabilities for execution and file modifications.";
+  }
+  return capabilities;
 }
 
 type MigrationsCheck = {
@@ -875,7 +883,7 @@ export async function initProject(args: {
   // v2.0.0-rc1 Capabilities Header — surfaces the protocol contract the agent should
   // adhere to during the session: dual-scope search, GLOBAL Knowledge Vault,
   // Sovereign Taxonomy, and the delegation threshold from CLAUDE.md.
-  const capabilities: Capabilities = buildCapabilities(slugify(currentProjectId));
+  const capabilities: Capabilities = buildCapabilities(slugify(currentProjectId), config.SCM_DELEGATION_ENABLED);
 
   // v2.1.9 GUI Auto-Start — deterministic port hashed from project_id.
   // Universal: same workspace → same port across MCP restarts; different
