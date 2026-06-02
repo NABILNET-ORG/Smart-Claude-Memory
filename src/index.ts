@@ -1020,12 +1020,6 @@ server.tool(
       .describe(
         "Absolute path for the export file. Default ~/.claude-memory/exports/global-vault.json (parent dirs are created).",
       ),
-    pretty: z
-      .boolean()
-      .optional()
-      .describe(
-        "Accepted for compatibility; the canonical serializer is always pretty-printed (2-space indent) to preserve byte-stability, so this flag is a no-op.",
-      ),
   },
   async (args) => ({
     content: [

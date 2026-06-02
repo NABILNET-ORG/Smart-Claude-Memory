@@ -50,11 +50,6 @@ export type GlobalVaultPackage = {
 
 export type ExportGlobalVaultArgs = {
   out_path?: string;
-  // `pretty` is accepted for forward-compatibility with the design's tool
-  // signature. The canonical serializer is ALWAYS pretty (2-space indent) so
-  // exports stay byte-stable; a "compact" mode would break the determinism
-  // contract, so the flag is intentionally a no-op.
-  pretty?: boolean;
 };
 
 export type ExportGlobalVaultResult = {
