@@ -410,7 +410,7 @@ Every command runs from the repo root. None require sudo. None create permanent 
 
 ### Quick command reference (MCP — inside Claude Code)
 
-Every MCP tool is invoked the same way: type the tool name with arguments inside your Claude Code chat. Claude routes the call through the MCP server. **All 55 tools are documented in the [Toolbox](#toolbox).** The most-used invocations:
+Every MCP tool is invoked the same way: type the tool name with arguments inside your Claude Code chat. Claude routes the call through the MCP server. **All 58 tools are documented in the [Toolbox](#toolbox).** The most-used invocations:
 
 ```text
 init_project()                                          # boot — readiness + auto-migrate
@@ -510,6 +510,7 @@ Set in your project's `.env` file or your shell. Documented checks live in `src/
 | `OLLAMA_EMBED_MODEL` | — | `nomic-embed-text` | Embedding model |
 | `EMBED_DIM` | — | `768` | Embedding vector dimension (must match the model) |
 | `MEMORY_ROOTS` | — | (empty) | Semicolon-separated folders to sync |
+| `SCM_DELEGATION_ENABLED` | — | `true` | Set `false` to unregister `delegate_task` + `sync_artefacts` so a native multi-agent model (e.g. Opus 4.8 Ultra Code) drives execution directly; `init_project` then advertises this via `capabilities.execution_mode_notice` (Dual Mode, SCM-S47-D2) |
 | `SCM_GUI_PORT` | — | `7788` | GUI dashboard port (loopback only) |
 | `SCM_GUI_HOST` | — | `127.0.0.1` | GUI host — change ONLY if you understand the threat model (service-role key lives in this process) |
 | `SCM_GUI_TOKEN` | — | (none) | Optional bearer token gating `/api/*` mutation routes |
@@ -600,7 +601,7 @@ The current 6-arg RPC `match_memory_chunks(query_embedding, p_project_id, match_
 
 ```
 src/
-├── index.ts              MCP server entry — registers all 22 tools
+├── index.ts              MCP server entry — registers all 58 tools
 ├── config.ts             Env loader (absolute .env path resolution)
 ├── project.ts            project_id detection + slugification
 ├── project-detect.ts     Multi-stack project root detection
@@ -1103,7 +1104,7 @@ For inquiries, integrations, or sovereign-grade Claude Code tooling, visit [nabi
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-05-29T06:29:55.707Z for `smart-claude-memory`._
+_Auto-synced at 2026-06-02T06:23:51.374Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
