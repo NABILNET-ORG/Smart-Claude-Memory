@@ -1630,6 +1630,18 @@
       font-size: 10px;
       text-align: center;
     }
+    /* Drag-drop affordances (Phase 1) — matches the existing kanban palette. */
+    .kanban-card { cursor: grab; }
+    .kanban-card.dragging {
+      opacity: 0.5;
+      cursor: grabbing;
+      border-color: var(--accent-d);
+    }
+    .kanban-list.drag-over {
+      outline: 1px dashed var(--accent);
+      outline-offset: -3px;
+      background: rgba(0,224,255,0.06);
+    }
     @media (max-width: 900px) {
       .kanban-grid { grid-template-columns: repeat(2, 1fr); }
     }

@@ -25,6 +25,13 @@ import type { BacklogRow, BacklogStatus } from "../src/supabase.js";
 type BacklogStubState = {
   lastInput?: ListBacklogInput;
   callCount: number;
+  // PATCH stub telemetry (Phase 1 write route).
+  lastUpdateId?: number;
+  lastUpdatePatch?: { status: BacklogStatus };
+  updateCallCount: number;
+  // When set, the updateBacklog stub throws this message (simulates a DB
+  // error / not-found) instead of returning a row.
+  updateThrows?: string;
 };
 
 function row(
@@ -70,6 +77,17 @@ function makeHandlers(state: BacklogStubState, rows: BacklogRow[]): GuiHandlers 
       const set = new Set(Array.isArray(input.status) ? input.status : [input.status]);
       return rows.filter((r) => set.has(r.status));
     },
+    // PATCH write route (Phase 1). Echoes the patched row back so the route
+    // can wrap it as { ok:true, task }. Throws on demand to exercise the
+    // DB-error / not-found path. Stubbed the same way as listBacklog above —
+    // no Supabase round-trip.
+    updateBacklog: async (id: number, patch: { status: BacklogStatus }) => {
+      state.lastUpdateId = id;
+      state.lastUpdatePatch = patch;
+      state.updateCallCount += 1;
+      if (state.updateThrows) throw new Error(state.updateThrows);
+      return row(id, patch.status, 2, "patched row", "2026-05-24T00:00:00Z");
+    },
     // Other handlers are unused by /api/backlog; cast bypasses the
     // GuiHandlers exhaustiveness check (same pragmatic stance as the
     // sibling gui.test.ts stub which only provides the M7 handlers).
@@ -96,7 +114,7 @@ async function startTestServer(handlers: GuiHandlers) {
 describe("gui server — /api/backlog (Epic F)", () => {
   let baseUrl: string;
   let close: () => Promise<void>;
-  const state: BacklogStubState = { callCount: 0 };
+  const state: BacklogStubState = { callCount: 0, updateCallCount: 0 };
 
   before(async () => {
     const handlers = makeHandlers(state, FIXTURE);
@@ -177,7 +195,7 @@ describe("gui server — /api/backlog (Epic F)", () => {
 
   it("returns empty columns + total=0 when the handler returns no rows", async () => {
     // Re-spin a fresh server with an empty fixture to keep this hermetic.
-    const localState: BacklogStubState = { callCount: 0 };
+    const localState: BacklogStubState = { callCount: 0, updateCallCount: 0 };
     const localServer = await startTestServer(makeHandlers(localState, []));
     try {
       const res = await fetch(`${localServer.baseUrl}/api/backlog`);
@@ -194,5 +212,116 @@ describe("gui server — /api/backlog (Epic F)", () => {
     } finally {
       await localServer.close();
     }
+  });
+});
+
+describe("gui server — PATCH /api/backlog/:id (Phase 1 write route)", () => {
+  let baseUrl: string;
+  let close: () => Promise<void>;
+  let state: BacklogStubState;
+
+  before(async () => {
+    state = { callCount: 0, updateCallCount: 0 };
+    const started = await startTestServer(makeHandlers(state, FIXTURE));
+    baseUrl = started.baseUrl;
+    close = started.close;
+  });
+
+  after(async () => {
+    await close();
+  });
+
+  it("patches a valid status → 200 { ok:true, task } with the updated row", async () => {
+    state.updateThrows = undefined;
+    const res = await fetch(`${baseUrl}/api/backlog/42`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "done" }),
+    });
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as { ok: boolean; task: BacklogRow };
+    assert.equal(body.ok, true);
+    assert.equal(body.task.id, 42);
+    assert.equal(body.task.status, "done");
+    // The route forwarded exactly the parsed id + status-only patch.
+    assert.equal(state.lastUpdateId, 42);
+    assert.deepEqual(state.lastUpdatePatch, { status: "done" });
+  });
+
+  it("ignores non-status fields, forwarding only { status }", async () => {
+    state.updateThrows = undefined;
+    const res = await fetch(`${baseUrl}/api/backlog/7`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "blocked", priority: 1, title: "hijack" }),
+    });
+    assert.equal(res.status, 200);
+    assert.deepEqual(state.lastUpdatePatch, { status: "blocked" });
+  });
+
+  it("rejects an invalid status → 400 { ok:false } and never calls updateBacklog", async () => {
+    state.updateThrows = undefined;
+    const before = state.updateCallCount;
+    const res = await fetch(`${baseUrl}/api/backlog/42`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "nope" }),
+    });
+    assert.equal(res.status, 400);
+    const body = (await res.json()) as { ok: boolean; reason: string };
+    assert.equal(body.ok, false);
+    assert.equal(typeof body.reason, "string");
+    assert.equal(state.updateCallCount, before);
+  });
+
+  it("rejects a missing status → 400 { ok:false }", async () => {
+    const res = await fetch(`${baseUrl}/api/backlog/42`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    assert.equal(res.status, 400);
+    const body = (await res.json()) as { ok: boolean };
+    assert.equal(body.ok, false);
+  });
+
+  it("rejects a non-integer id → 400 (route regex falls through to 404 only for non-numeric)", async () => {
+    // A non-numeric id never matches /^\/api\/backlog\/(\d+)$/, so it falls
+    // through the API routes and 404s — assert it is NOT a successful 200.
+    const res = await fetch(`${baseUrl}/api/backlog/abc`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "done" }),
+    });
+    assert.notEqual(res.status, 200);
+    const body = (await res.json()) as { ok: boolean };
+    assert.equal(body.ok, false);
+  });
+
+  it("surfaces a DB error → 500 { ok:false, reason }", async () => {
+    state.updateThrows = "updateBacklog failed: connection reset";
+    const res = await fetch(`${baseUrl}/api/backlog/99`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "todo" }),
+    });
+    assert.equal(res.status, 500);
+    const body = (await res.json()) as { ok: boolean; reason: string };
+    assert.equal(body.ok, false);
+    assert.match(body.reason, /connection reset/);
+    state.updateThrows = undefined;
+  });
+
+  it("maps a not-found DB error → 404 { ok:false }", async () => {
+    state.updateThrows = "updateBacklog failed: JSON object requested, multiple (or no) rows returned (PGRST116)";
+    const res = await fetch(`${baseUrl}/api/backlog/123456`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "todo" }),
+    });
+    assert.equal(res.status, 404);
+    const body = (await res.json()) as { ok: boolean };
+    assert.equal(body.ok, false);
+    state.updateThrows = undefined;
   });
 });

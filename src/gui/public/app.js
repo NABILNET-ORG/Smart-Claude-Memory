@@ -84,6 +84,11 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
 
     function renderBacklogCard(row) {
       const li = makeEl('li', { cls: 'kanban-card' });
+      // Drag-drop persistence (Phase 1): each card carries its id + current
+      // status so the delegated drop handler can compute a move + revert.
+      li.draggable = true;
+      li.dataset.id = String(row.id);
+      li.dataset.status = String(row.status);
       const title = makeEl('div', { cls: 'card-title', text: row.title || '(untitled)' });
       const meta = makeEl('div', { cls: 'card-meta' });
       const pri = makeEl('span', { cls: 'pri', text: 'p' + row.priority });
@@ -106,6 +111,44 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
       return li;
     }
 
+    // Recompute per-column counts + grand total from the live DOM. Counts only
+    // real .kanban-card nodes (the (empty) placeholder is excluded), so it is
+    // correct both after a full loadBacklog render and after an optimistic
+    // drag-drop move. Shared by loadBacklog and the drop handler (DRY).
+    function recomputeBacklogCounts() {
+      const grid = document.getElementById('kanban-grid');
+      if (!grid) return;
+      const totalEl = document.getElementById('backlog-total');
+      let total = 0;
+      for (const status of BACKLOG_COLUMNS) {
+        const list = grid.querySelector('[data-kanban-list="' + status + '"]');
+        const count = grid.querySelector('[data-kanban-count="' + status + '"]');
+        const n = list ? list.querySelectorAll('.kanban-card').length : 0;
+        if (count) count.textContent = String(n);
+        total += n;
+      }
+      if (totalEl) totalEl.textContent = total === 0 ? 'empty' : '· ' + total;
+    }
+
+    // Keep a list's empty-state placeholder in sync: add the (empty) marker
+    // when it has no cards, remove it the moment a card lands. Markup matches
+    // loadBacklog's exact empty node so renders + moves stay visually identical.
+    function syncBacklogPlaceholder(list) {
+      if (!list) return;
+      const hasCards = list.querySelector('.kanban-card') !== null;
+      const placeholder = list.querySelector('.kanban-empty');
+      if (hasCards) {
+        if (placeholder) placeholder.remove();
+      } else if (!placeholder) {
+        list.appendChild(makeEl('li', { cls: 'kanban-empty', text: '(empty)' }));
+      }
+    }
+
+    function backlogError(msg) {
+      // Reuse the existing toast surface for inline error feedback (no alert()).
+      toast(msg, 'err');
+    }
+
     async function loadBacklog() {
       const grid = document.getElementById('kanban-grid');
       if (!grid) return;
@@ -117,10 +160,8 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
         return;
       }
       const cols = r.body.columns || {};
-      let total = 0;
       for (const status of BACKLOG_COLUMNS) {
         const list = grid.querySelector('[data-kanban-list="' + status + '"]');
-        const count = grid.querySelector('[data-kanban-count="' + status + '"]');
         const rows = Array.isArray(cols[status]) ? cols[status] : [];
         if (list) {
           list.replaceChildren();
@@ -130,11 +171,101 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
             for (const row of rows) list.appendChild(renderBacklogCard(row));
           }
         }
-        if (count) count.textContent = String(rows.length);
-        total += rows.length;
       }
-      if (totalEl) totalEl.textContent = total === 0 ? 'empty' : '· ' + total;
+      recomputeBacklogCounts();
       if (projectEl && r.body.project_id) projectEl.textContent = String(r.body.project_id);
+    }
+
+    // ── Drag-drop persistence (Phase 1) ───────────────────────────────────
+    // Bound ONCE on the grid root via event delegation so it survives every
+    // loadBacklog() replaceChildren re-render. Dropping a card on a different
+    // column optimistically moves the DOM, recomputes counts, then PATCHes
+    // /api/backlog/:id; a failed PATCH reverts the move + counts.
+    function initBacklogDnD() {
+      const grid = document.getElementById('kanban-grid');
+      if (!grid || grid.dataset.dndBound === '1') return;
+      grid.dataset.dndBound = '1';
+
+      grid.addEventListener('dragstart', (ev) => {
+        const card = ev.target && ev.target.closest ? ev.target.closest('.kanban-card') : null;
+        if (!card) return;
+        card.classList.add('dragging');
+        if (ev.dataTransfer) {
+          ev.dataTransfer.effectAllowed = 'move';
+          ev.dataTransfer.setData('text/plain', card.dataset.id || '');
+        }
+      });
+
+      grid.addEventListener('dragend', (ev) => {
+        const card = ev.target && ev.target.closest ? ev.target.closest('.kanban-card') : null;
+        if (card) card.classList.remove('dragging');
+      });
+
+      grid.addEventListener('dragover', (ev) => {
+        const list = ev.target && ev.target.closest ? ev.target.closest('[data-kanban-list]') : null;
+        if (!list) return;
+        ev.preventDefault();
+        if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+        list.classList.add('drag-over');
+      });
+
+      grid.addEventListener('dragleave', (ev) => {
+        const list = ev.target && ev.target.closest ? ev.target.closest('[data-kanban-list]') : null;
+        if (!list) return;
+        // Only clear when the pointer actually left the list subtree (dragleave
+        // also fires when moving onto a child node).
+        if (!list.contains(ev.relatedTarget)) list.classList.remove('drag-over');
+      });
+
+      grid.addEventListener('drop', async (ev) => {
+        const list = ev.target && ev.target.closest ? ev.target.closest('[data-kanban-list]') : null;
+        if (!list) return;
+        ev.preventDefault();
+        list.classList.remove('drag-over');
+
+        const targetStatus = list.dataset.kanbanList;
+        const id = ev.dataTransfer ? ev.dataTransfer.getData('text/plain') : '';
+        const card = id
+          ? grid.querySelector('.kanban-card[data-id="' + id + '"]')
+          : grid.querySelector('.kanban-card.dragging');
+        if (!card || !targetStatus) return;
+
+        const fromStatus = card.dataset.status;
+        if (fromStatus === targetStatus) return; // no-op: same column
+
+        const sourceList = grid.querySelector('[data-kanban-list="' + fromStatus + '"]');
+        const nextSibling = card.nextSibling; // for precise revert positioning
+
+        // Optimistic move: relocate the card, fix both placeholders + counts.
+        list.appendChild(card);
+        card.dataset.status = targetStatus;
+        syncBacklogPlaceholder(list);
+        syncBacklogPlaceholder(sourceList);
+        recomputeBacklogCounts();
+
+        const r = await jsonFetch('/api/backlog/' + id, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ status: targetStatus }),
+        });
+
+        if (!r.ok || !r.body || r.body.ok !== true) {
+          // Revert: put the card back exactly where it was, restore counts.
+          if (sourceList) {
+            if (nextSibling && nextSibling.parentNode === sourceList) {
+              sourceList.insertBefore(card, nextSibling);
+            } else {
+              sourceList.appendChild(card);
+            }
+          }
+          card.dataset.status = fromStatus;
+          syncBacklogPlaceholder(sourceList);
+          syncBacklogPlaceholder(list);
+          recomputeBacklogCounts();
+          const reason = (r.body && r.body.reason) || r.status;
+          backlogError('move failed: ' + reason);
+        }
+      });
     }
 
     function renderCard(row) {
@@ -256,6 +387,7 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
     loadHealth();
     loadGraduations();
     loadBudget();
+    initBacklogDnD();
     loadBacklog();
     /* auto-refresh interval is now driven by Settings (see initSettings) */
     // Expose loadBudget so the Settings polling loop (initSettings/applyAutoRefresh)

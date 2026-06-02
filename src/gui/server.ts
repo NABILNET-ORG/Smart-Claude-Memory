@@ -16,6 +16,7 @@
 //   GET  /api/health                        — { ok, service, version }
 //   GET  /api/backlog[?project_id=&status=todo,in_progress,blocked,done]
 //                                           — Active Backlog Kanban (Epic F / M8)
+//   PATCH /api/backlog/:id                  — move a card (status only); Phase 1
 //   GET  /api/graduations[?project_id=&state=&k=&offset=]
 //                                           — listGraduationCandidates
 //   POST /api/graduations/:id/compose       — composeGlobalRationale
@@ -59,9 +60,12 @@ import {
 // Epic F (M8 Backlog UI): /api/backlog surface.
 import {
   listBacklog as defaultListBacklog,
+  updateBacklog as defaultUpdateBacklog,
   type BacklogRow,
   type BacklogStatus,
 } from "../supabase.js";
+// Phase 1 (Epic F): Active Backlog write route (PATCH status), split out to keep this file under the 750-line ceiling.
+import { handleBacklogPatch } from "./backlog-write.js";
 
 export type ListBacklogInput = {
   project_id?: string;
@@ -162,6 +166,7 @@ export type GuiHandlers = {
   getClusterGraphSuper: (projectId: string) => Promise<ClusterGraphSuperPayload | ClusterGraphFailure>;
   getClusterGraphDrill: (projectId: string, supernodeId: number) => Promise<ClusterGraphDrillPayload | ClusterGraphFailure>;
   listBacklog: (input: ListBacklogInput) => Promise<BacklogRow[]>;
+  updateBacklog: (id: number, patch: { status: BacklogStatus }) => Promise<BacklogRow>;
 };
 
 const DEFAULT_HANDLERS: GuiHandlers = {
@@ -175,6 +180,7 @@ const DEFAULT_HANDLERS: GuiHandlers = {
   getClusterGraphDrill: defaultGetClusterGraphDrill,
   listBacklog: ({ project_id, status }) =>
     defaultListBacklog(project_id ?? currentProjectId, status ? { status } : {}),
+  updateBacklog: (id, patch) => defaultUpdateBacklog(id, patch),
 };
 
 // Knowledge Graph route parameter clamps.
@@ -262,6 +268,14 @@ export function createGuiServer(opts: GuiServerOptions = {}): http.Server {
   const serverProjectId = opts.projectId ?? slugify(currentProjectId);
 
   return http.createServer(async (req, res) => {
+    // Per-request access log (QA watcher signal): one stderr line on finish.
+    const reqStart = Date.now();
+    const logMethod = (req.method ?? "GET").toUpperCase();
+    const logPath = (req.url ?? "/").split("?")[0];
+    res.on("finish", () =>
+      console.error("[scm-gui] %s %s -> %d %dms", logMethod, logPath, res.statusCode, Date.now() - reqStart),
+    );
+
     // Defense-in-depth headers. The dashboard is same-origin, no third-party
     // assets, no inline event handlers — CSP is permissive only for inline
     // styles + scripts the dashboard itself ships.
@@ -305,8 +319,7 @@ export function createGuiServer(opts: GuiServerOptions = {}): http.Server {
       }
 
       // SCM-S39-D1: Agentic Resource Manager surface for the GUI ticker.
-      // Always returns the daemon-budget current-hour rollup; if task_id is
-      // passed, also returns that task's burn state.
+      // Returns the daemon current-hour rollup; with task_id, also that task's burn.
       if (method === "GET" && path === "/api/budget") {
         const taskId = url.searchParams.get("task_id");
         const daemons = await defaultGetDaemonBudget({});
@@ -317,11 +330,9 @@ export function createGuiServer(opts: GuiServerOptions = {}): http.Server {
         return sendJson(res, 200, { ok: true, mode: daemons.mode, daemons: daemons.rows, task });
       }
 
-      // Epic F (M8 Backlog UI) — Active Backlog Kanban surface.
-      // Reads cloud_backlog rows for the resolved project_id (done rows
-      // typically already archived; cleared status: filter omits them).
-      // Returns rows pre-grouped + sorted by (priority asc, age asc) per
-      // column, so the client can render columns directly without re-sort.
+      // Epic F (M8 Backlog UI) — Active Backlog Kanban surface. Reads
+      // cloud_backlog rows for the resolved project_id, pre-grouped + sorted
+      // (priority asc, age asc) per column so the client renders without re-sort.
       if (method === "GET" && path === "/api/backlog") {
         const projectId = resolveProjectId(url.searchParams.get("project_id"), serverProjectId);
         const rawStatus = url.searchParams.get("status");
@@ -524,9 +535,21 @@ export function createGuiServer(opts: GuiServerOptions = {}): http.Server {
         }
       }
 
-      // Static asset fall-through — any GET that didn't match an API route
-      // is attempted as a file from PUBLIC_DIR. serveStatic itself 404s if
-      // the file is missing or escapes the public sandbox.
+      // Phase 1 (Epic F) — Active Backlog drag-drop persistence: PATCH one
+      // card's status. Token auth is already enforced above for /api/*; the
+      // handler reuses the same helpers + guard as the graduation routes.
+      const backlogPatchMatch = path.match(/^\/api\/backlog\/(\d+)$/);
+      if (method === "PATCH" && backlogPatchMatch) {
+        return handleBacklogPatch(
+          req,
+          res,
+          { readJsonBody, sendJson, isBacklogStatus, updateBacklog: handlers.updateBacklog },
+          backlogPatchMatch[1],
+        );
+      }
+
+      // Static asset fall-through — any non-API GET is served from PUBLIC_DIR
+      // (serveStatic 404s if the file is missing or escapes the sandbox).
       if (method === "GET" && !path.startsWith("/api/")) {
         return serveStatic(res, path, serverProjectId);
       }
@@ -587,10 +610,8 @@ export async function startGuiServer(opts: GuiServerOptions = {}): Promise<Start
   });
 
   // v2.1.10 EADDRINUSE-safe post-startup error guard. Any error fired AFTER
-  // the initial 'listening' handshake (rare — e.g., a downstream socket
-  // explosion or a kernel-level port revocation) must NOT crash the MCP
-  // stdio loop. Log to stderr and let the server keep serving whatever it
-  // can. The MCP server's tool surface is independent of GUI liveness.
+  // the initial 'listening' handshake must NOT crash the MCP stdio loop —
+  // log to stderr and keep serving; the MCP tool surface is independent.
   server.on("error", (err: Error) => {
     try {
       process.stderr.write(`[scm-gui] post-startup error (non-fatal): ${err.message}\n`);
