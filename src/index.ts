@@ -121,6 +121,8 @@ import {
   triggerClustering,
   triggerClusteringInputShape,
 } from "./clustering/clusters.js";
+import { exportGlobalVault } from "./tools/global-vault-export.js";
+import { importGlobalVault } from "./tools/global-vault-import.js";
 import { ensureSchema, startKeepAlive, writeFrozenPatternsCache } from "./supabase.js";
 import { currentProjectId } from "./project.js";
 import { VERSION } from "./version.js";
@@ -1005,6 +1007,55 @@ server.tool(
   triggerClusteringInputShape,
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await triggerClustering(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "export_global_vault",
+  "Serialize the reserved 'GLOBAL' Knowledge Vault (memory_chunks where project_id='GLOBAL') to a portable, PURELY DETERMINISTIC JSON package. The same vault state always produces a byte-identical file: chunks are sorted by (content_hash, file_origin, chunk_index), volatile fields (id, updated_at, project_id) are excluded, JSON keys are sorted recursively with fixed 2-space indent, and a content_digest (sha256 over the canonical chunks) certifies integrity independent of SCM version. Embeddings are shipped inside the package (Ollama embeddings are not reproducible across model versions → no re-embedding on import), which makes the payload large, so it is written to a FILE (default ~/.claude-memory/exports/global-vault.json) and only a summary is returned. Pair with import_global_vault.",
+  {
+    out_path: z
+      .string()
+      .optional()
+      .describe(
+        "Absolute path for the export file. Default ~/.claude-memory/exports/global-vault.json (parent dirs are created).",
+      ),
+    pretty: z
+      .boolean()
+      .optional()
+      .describe(
+        "Accepted for compatibility; the canonical serializer is always pretty-printed (2-space indent) to preserve byte-stability, so this flag is a no-op.",
+      ),
+  },
+  async (args) => ({
+    content: [
+      { type: "text", text: JSON.stringify(await exportGlobalVault(args), null, 2) },
+    ],
+  }),
+);
+
+server.tool(
+  "import_global_vault",
+  "Import a 'scm-global-vault' package (from export_global_vault) into the local GLOBAL vault WITHOUT overriding any existing local data. The merge is a pure function of (package, local state): a chunk whose content_hash already exists locally is skipped_existing (so re-importing the same package is an idempotent no-op); a chunk whose (file_origin, chunk_index) slot is already taken is skipped_conflict (a local row is NEVER replaced); everything else is inserted via a plain INSERT (never an upsert). Before any write the content_digest is recomputed and compared (tamper/corruption detection). Embedding dimension must match the local vector column or the import is fatal; a model mismatch (same dim) is governed by on_embed_mismatch. Use dry_run to preview the ledger without writing.",
+  {
+    in_path: z
+      .string()
+      .describe("Absolute path to the scm-global-vault JSON package to import."),
+    dry_run: z
+      .boolean()
+      .optional()
+      .describe("When true, classify chunks and return the ledger WITHOUT writing anything. Default false."),
+    on_embed_mismatch: z
+      .enum(["abort", "allow", "skip"])
+      .optional()
+      .describe(
+        "Policy when the package embedding model differs from the local one (dimension must always match regardless). abort (default) → refuse; skip → no-op ledger; allow → import anyway.",
+      ),
+  },
+  async (args) => ({
+    content: [
+      { type: "text", text: JSON.stringify(await importGlobalVault(args), null, 2) },
+    ],
   }),
 );
 
