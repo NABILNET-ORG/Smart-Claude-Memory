@@ -24,6 +24,10 @@ export type FetchUrlOk = {
   text: string;
   bytes: number;
   truncated: boolean;
+  // Populated only when opts.includeRaw is true AND the response was HTML.
+  // The crawler needs the raw markup to enumerate <a href> links; existing
+  // callers (fetch_url, research_url) leave this undefined and are unaffected.
+  html?: string;
 };
 
 export type FetchUrlErr = { ok: false; reason: string };
@@ -36,6 +40,10 @@ export type FetchUrlOpts = {
   allowPrivate?: boolean;
   allowlist?: string[];
   maxReturnChars?: number;
+  // When true, the raw (uncapped-by-maxReturnChars) HTML body is returned on
+  // result.html for HTML responses. Off by default so the agent's context is
+  // never flooded with markup; the crawler opts in to feed extractLinks.
+  includeRaw?: boolean;
 };
 
 const MAX_REDIRECTS = 5;
@@ -148,6 +156,7 @@ export async function fetchUrl(
   const maxReturnChars = opts.maxReturnChars ?? config.SCM_FETCH_MAX_RETURN_CHARS;
   const allowPrivate = opts.allowPrivate ?? config.SCM_FETCH_ALLOW_PRIVATE;
   const allowlist = opts.allowlist ?? config.SCM_FETCH_ALLOWLIST;
+  const includeRaw = opts.includeRaw ?? false;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -238,6 +247,10 @@ export async function fetchUrl(
       text,
       bytes,
       truncated: returnTruncated,
+      // Expose raw HTML only when explicitly requested and the body was HTML.
+      // rawBody is itself bounded by maxBytes (read off the socket), so this is
+      // not an unbounded leak — it is the same buffer htmlToText consumed.
+      ...(includeRaw && isHtml ? { html: rawBody } : {}),
     };
   } catch (e) {
     const err = e as Error;

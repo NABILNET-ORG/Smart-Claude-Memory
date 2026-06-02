@@ -123,9 +123,10 @@ import {
 } from "./clustering/clusters.js";
 import { exportGlobalVault } from "./tools/global-vault-export.js";
 import { importGlobalVault } from "./tools/global-vault-import.js";
-// Native web-research tools (fetch_url + research_url) — SSRF-guarded.
+// Native web-research tools (fetch_url + research_url + crawl_docs) — SSRF-guarded.
 import { fetchUrlTool } from "./tools/fetch-url.js";
 import { researchUrl } from "./tools/research-url.js";
+import { crawlDocs } from "./tools/crawl-docs.js";
 import { ensureSchema, startKeepAlive, writeFrozenPatternsCache } from "./supabase.js";
 import { currentProjectId } from "./project.js";
 import { VERSION } from "./version.js";
@@ -1094,6 +1095,52 @@ server.tool(
   },
   async (args) => ({
     content: [{ type: "text", text: JSON.stringify(await researchUrl(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "crawl_docs",
+  "Bounded, polite, SSRF-safe MULTI-page documentation crawler. Starts at seed_url and breadth-first follows SAME-ORIGIN <a href> links (zero-dep regex extraction) up to max_depth/max_pages, ingesting every page into the project's searchable memory (memory_chunks) via the SAME pipeline as research_url (each page is one file_origin; re-crawling is idempotent — prior rows for a URL are deleted before re-insert). SSRF guard applies to the seed AND every discovered link AND every redirect hop (loopback/private/link-local blocked unless allow_private). robots.txt is respected by default (User-agent:* Disallow prefixes + Crawl-delay). Per-host politeness delay and a total deadline bound runtime; the embed fan-out is gated by the Resource Manager (stops with stopped_reason:'budget' on block). Never throws: per-page failures land in skipped[]/errors[]. Returns { ok, seed_url, project_id, pages_ingested, chunks_upserted, skipped, errors, stopped_reason }.",
+  {
+    seed_url: z.string().describe("Absolute http(s) URL to start crawling from."),
+    max_depth: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe("BFS depth from the seed (0 = seed only). Default CRAWL_MAX_DEPTH (2)."),
+    max_pages: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Hard cap on total pages fetched. Default CRAWL_MAX_PAGES (50)."),
+    same_origin_only: z
+      .boolean()
+      .optional()
+      .describe("Confine the crawl to the seed's origin. Default true."),
+    respect_robots: z
+      .boolean()
+      .optional()
+      .describe("Honor /robots.txt (User-agent:* Disallow + Crawl-delay). Default true."),
+    project_id: projectIdSchema,
+    allow_private: z
+      .boolean()
+      .optional()
+      .describe("Allow private/loopback/link-local hosts (on-prem docs). Default false."),
+    allowlist: z
+      .array(z.string())
+      .optional()
+      .describe("Host allowlist (exact or subdomain); when set, only these hosts are fetched. Default []."),
+    politeness_ms: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe("Per-host delay floor between request waves in ms. Default CRAWL_POLITENESS_MS (1000)."),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await crawlDocs(args), null, 2) }],
   }),
 );
 

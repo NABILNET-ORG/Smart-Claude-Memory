@@ -14,16 +14,9 @@
 // new ones, so stale chunk_indexes never linger (mirrors sync_local_memory's
 // delete-before-reembed on a changed file).
 
-import { createHash } from "node:crypto";
-import { chunkMarkdown } from "../chunker.js";
-import { embed } from "../ollama.js";
-import {
-  upsertChunks,
-  deleteChunksForFile,
-  type ChunkRow,
-} from "../supabase.js";
 import { currentProjectId } from "../project.js";
 import { fetchUrl } from "../web/fetch.js";
+import { ingestPage } from "../web/ingest.js";
 
 export type ResearchUrlArgs = {
   url: string;
@@ -49,10 +42,6 @@ export type ResearchUrlResult = ResearchUrlOk | ResearchUrlErr;
 // volume guard is SCM_FETCH_MAX_BYTES (applied while reading the socket).
 const INGEST_RETURN_CHARS = Number.MAX_SAFE_INTEGER;
 
-function sha256(s: string): string {
-  return createHash("sha256").update(s).digest("hex");
-}
-
 export async function researchUrl(args: ResearchUrlArgs): Promise<ResearchUrlResult> {
   if (!args.url || typeof args.url !== "string" || args.url.trim() === "") {
     return { ok: false, reason: "Missing required 'url' argument." };
@@ -67,45 +56,22 @@ export async function researchUrl(args: ResearchUrlArgs): Promise<ResearchUrlRes
   const projectId = args.project_id ?? currentProjectId;
   const sourceUrl = fetched.final_url || args.url;
 
-  const text = fetched.text;
-  if (!text.trim()) {
-    return { ok: false, reason: "Fetched page contained no extractable text." };
-  }
-
-  const rawChunks = chunkMarkdown(text);
-  if (rawChunks.length === 0) {
-    return { ok: false, reason: "Page produced zero chunks after chunking." };
-  }
-
-  const embeddings = await embed(rawChunks.map((c) => c.content));
-  const fileHash = sha256(text);
-  const fetchedAt = new Date().toISOString();
-
-  const rows: ChunkRow[] = rawChunks.map((c, i) => ({
-    content: c.content,
-    file_origin: sourceUrl,
-    chunk_index: c.chunk_index,
-    embedding: embeddings[i] as number[],
-    file_hash: fileHash,
-    metadata: {
-      type: "LOG",
-      kind: "web",
-      source_url: sourceUrl,
-      title: fetched.title,
-      fetched_at: fetchedAt,
-      ...(c.heading ? { heading: c.heading } : {}),
-    },
-  }));
-
-  // Clean refresh: drop prior rows for this URL before inserting the new set.
-  await deleteChunksForFile(projectId, sourceUrl);
-  await upsertChunks(projectId, rows);
+  // Delegate the chunk→embed→delete→upsert pipeline to the shared ingestPage().
+  // Default (whole-page) batch + no meta extension reproduces the exact rows +
+  // metadata research_url wrote before this extraction (behavior-preserving).
+  const ingested = await ingestPage({
+    url: sourceUrl,
+    text: fetched.text,
+    title: fetched.title,
+    projectId,
+  });
+  if (!ingested.ok) return ingested;
 
   return {
     ok: true,
     source_url: sourceUrl,
     title: fetched.title,
-    chunks_stored: rows.length,
+    chunks_stored: ingested.chunks_stored,
     bytes: fetched.bytes,
     truncated: fetched.truncated,
     project_id: projectId,

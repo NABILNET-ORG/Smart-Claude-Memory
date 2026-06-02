@@ -38,6 +38,15 @@ const Env = z.object({
         .map((s) => s.trim())
         .filter(Boolean),
     ),
+  // ─── Bounded docs crawler (crawl_docs) — SCM-S49-D2 ──────────────────────
+  // All env-overridable; tool args override env at the handler boundary.
+  CRAWL_MAX_DEPTH: z.coerce.number().int().nonnegative().default(2),
+  CRAWL_MAX_PAGES: z.coerce.number().int().positive().default(50),
+  CRAWL_MAX_PAGES_PER_DOMAIN: z.coerce.number().int().positive().default(50),
+  CRAWL_POLITENESS_MS: z.coerce.number().int().nonnegative().default(1000),
+  CRAWL_CONCURRENCY: z.coerce.number().int().positive().default(3),
+  CRAWL_EMBED_BATCH: z.coerce.number().int().positive().default(16),
+  CRAWL_TIMEOUT_TOTAL_MS: z.coerce.number().int().positive().default(120000),
 }).refine((v) => Boolean(v.SUPABASE_POOLER_URL) || Boolean(v.SUPABASE_DB_URL), {
   message:
     "At least one of SUPABASE_POOLER_URL (preferred, IPv4) or SUPABASE_DB_URL must be set",
