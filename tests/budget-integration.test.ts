@@ -127,6 +127,18 @@ describe("budget gate — real-DB integration (NS-isolated)", () => {
           `daemon_budget_events=${daemonEvents.count ?? 0}, ` +
           `daemon_budget_buckets=${daemonBuckets.count ?? 0}`,
       );
+      // Hard guarantee, not just a log line: any residual row FAILS the run so a
+      // cleanup leak can never pass green.
+      const totalResidual =
+        (taskEvents.count ?? 0) +
+        (tasks.count ?? 0) +
+        (daemonEvents.count ?? 0) +
+        (daemonBuckets.count ?? 0);
+      assert.equal(
+        totalResidual,
+        0,
+        `teardown leaked ${totalResidual} row(s) for NS=${NS}`,
+      );
     }
   });
 
