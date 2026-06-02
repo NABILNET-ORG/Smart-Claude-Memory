@@ -21,6 +21,23 @@ const Env = z.object({
     .string()
     .default("true")
     .transform((v) => v.toLowerCase() !== "false"),
+  // ─── Native web-research tools (fetch_url + research_url) ────────────────
+  SCM_FETCH_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
+  SCM_FETCH_MAX_BYTES: z.coerce.number().int().positive().default(2000000),
+  SCM_FETCH_MAX_RETURN_CHARS: z.coerce.number().int().positive().default(20000),
+  SCM_FETCH_ALLOW_PRIVATE: z
+    .string()
+    .default("false")
+    .transform((v) => v.toLowerCase() === "true"),
+  SCM_FETCH_ALLOWLIST: z
+    .string()
+    .default("")
+    .transform((v) =>
+      v
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
 }).refine((v) => Boolean(v.SUPABASE_POOLER_URL) || Boolean(v.SUPABASE_DB_URL), {
   message:
     "At least one of SUPABASE_POOLER_URL (preferred, IPv4) or SUPABASE_DB_URL must be set",

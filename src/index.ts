@@ -123,6 +123,9 @@ import {
 } from "./clustering/clusters.js";
 import { exportGlobalVault } from "./tools/global-vault-export.js";
 import { importGlobalVault } from "./tools/global-vault-import.js";
+// Native web-research tools (fetch_url + research_url) — SSRF-guarded.
+import { fetchUrlTool } from "./tools/fetch-url.js";
+import { researchUrl } from "./tools/research-url.js";
 import { ensureSchema, startKeepAlive, writeFrozenPatternsCache } from "./supabase.js";
 import { currentProjectId } from "./project.js";
 import { VERSION } from "./version.js";
@@ -1050,6 +1053,47 @@ server.tool(
     content: [
       { type: "text", text: JSON.stringify(await importGlobalVault(args), null, 2) },
     ],
+  }),
+);
+
+server.tool(
+  "fetch_url",
+  "Fetch a public web page and return its CLEANED, readable text (HTML is stripped to plain text via html-to-text; <title> is extracted). SSRF-guarded: only http/https, loopback/private/link-local hosts are blocked, and EVERY redirect hop is re-validated against the same guard (defends against redirect-to-internal). Non-2xx, unsupported content-types (only text/html, text/plain, text/markdown, application/json, application/xml, application/xhtml+xml are read), oversize bodies, and timeouts return { ok:false, reason } — this tool never throws. The returned text is capped (SCM_FETCH_MAX_RETURN_CHARS, default 20k) to protect the context window; truncated:true flags when the cap or byte limit was hit. Use research_url instead when you want the page INGESTED into searchable project memory.",
+  {
+    url: z.string().describe("Absolute http(s) URL to fetch."),
+    timeout_ms: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Per-request timeout in ms. Default SCM_FETCH_TIMEOUT_MS (15000)."),
+    max_bytes: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Hard byte cap on the response body. Default SCM_FETCH_MAX_BYTES (2,000,000)."),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await fetchUrlTool(args), null, 2) }],
+  }),
+);
+
+server.tool(
+  "research_url",
+  "Fetch a public web page (same SSRF guard + redirect re-validation as fetch_url), convert it to clean text, chunk + embed it, and INGEST the chunks into the current project's searchable memory (memory_chunks) so they surface in search_memory exactly like local notes. Each chunk is stored with metadata {type:'LOG', kind:'web', source_url, title, fetched_at}. Refresh semantics: re-researching the same URL deletes the prior rows for that URL before inserting the new set (no stale chunks). Returns { ok:true, source_url, title, chunks_stored, bytes, truncated, project_id } or { ok:false, reason }. Unlike fetch_url, the full page body is ingested (not return-char-capped); only a small summary object comes back, so the context window stays clean.",
+  {
+    url: z.string().describe("Absolute http(s) URL to research and ingest."),
+    project_id: projectIdSchema,
+    timeout_ms: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Per-request timeout in ms. Default SCM_FETCH_TIMEOUT_MS (15000)."),
+  },
+  async (args) => ({
+    content: [{ type: "text", text: JSON.stringify(await researchUrl(args), null, 2) }],
   }),
 );
 
