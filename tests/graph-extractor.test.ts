@@ -150,3 +150,21 @@ describe("extractor — garbage rejection (SCM-S50-D1)", () => {
     assert.ok(!labels.some((l) => l.trim().startsWith(">")), "primary not a blockquote fragment");
   });
 });
+
+describe("extractor — SYMBOL producer (SCM-S50-D1)", () => {
+  it("extracts backticked identifiers as SYMBOL nodes + edges, defers files/decisions", () => {
+    const c = chunk({
+      id: 7,
+      content: "Call `search_memory` and `kgHybridSearch`; see `gate.ts` and `SCM-S16-D1`.",
+      metadata: { type: "NOTE" },
+    });
+    const r = extractFromChunk(c);
+    const symbols = r.nodes.filter((n) => n.type === "SYMBOL").map((n) => n.label);
+    assert.ok(symbols.includes("search_memory"), "extracts snake_case symbol");
+    assert.ok(symbols.includes("kgHybridSearch"), "extracts camelCase symbol");
+    assert.ok(!symbols.includes("gate.ts"), "defers file ref to FILE producer");
+    assert.ok(!symbols.includes("SCM-S16-D1"), "defers decision id to DECISION producer");
+    const symEdges = r.edges.filter((e) => e.target.type === "SYMBOL").map((e) => e.target.label);
+    assert.ok(symEdges.includes("search_memory"), "symbol gets a MENTIONS edge from the primary");
+  });
+});

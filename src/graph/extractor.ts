@@ -52,6 +52,7 @@ const MIN_CONTENT_CHARS = 20;
 const MAX_LABEL_LEN = 200;
 const MAX_FILE_REFS = 10;
 const MAX_DECISION_REFS = 5;
+const MAX_SYMBOL_REFS = 15;
 
 // Matches paths like `src/tools/kg.ts`, `scripts/020_knowledge_graph.sql`,
 // `package.json`, etc. Extensions are the ones we actually want to
@@ -61,6 +62,14 @@ const FILE_REF_RE = /\b[\w./-]+\.(?:ts|tsx|js|jsx|sql|md|py|json)\b/g;
 
 // Sovereign Decision IDs: SCM-S<session>-D<index>.
 const DECISION_RE = /SCM-S\d+-D\d+/g;
+
+// Backticked code identifiers → SYMBOL nodes. These are author-flagged,
+// high-signal entities; file-shaped and decision-shaped labels are deferred to
+// their own producers (FILE_EXT_RE / DECISION_LABEL_RE) to avoid duplicate types.
+const BACKTICK_RE = /`([^`]+)`/g;
+const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*(?:\(\))?$/;
+const FILE_EXT_RE = /\.(?:ts|tsx|js|jsx|sql|md|py|json)$/i;
+const DECISION_LABEL_RE = /^SCM-S\d+-D\d+$/;
 
 export function sanitizeLabel(s: string, max: number = MAX_LABEL_LEN): string {
   let out = String(s ?? "").trim();
@@ -190,6 +199,30 @@ export function extractFromChunk(chunk: {
       target: { type: "DECISION", label: dec },
       relation: "REFERENCES",
       weight: 1.5,
+    });
+  }
+
+  // ── Symbol-ref edges ──────────────────────────────────────────────────
+  // Backticked identifiers are author-flagged, high-signal entities; the shared
+  // (project_id, type, label) node bridges every chunk that mentions a symbol,
+  // giving the graph enough density to re-rank. Defer file/decision shapes.
+  const symbolLabels: string[] = [];
+  for (const m of text.matchAll(BACKTICK_RE)) {
+    const label = m[1].trim().replace(/\(\)$/, "");
+    if (!IDENTIFIER_RE.test(label)) continue;
+    if (FILE_EXT_RE.test(label)) continue;
+    if (DECISION_LABEL_RE.test(label)) continue;
+    if (isGarbageLabel(label)) continue;
+    symbolLabels.push(label);
+  }
+
+  for (const sym of dedupe(symbolLabels).slice(0, MAX_SYMBOL_REFS)) {
+    nodes.push({ type: "SYMBOL", label: sym, properties: {} });
+    edges.push({
+      source: { type: primaryType, label: primaryLabel },
+      target: { type: "SYMBOL", label: sym },
+      relation: "MENTIONS",
+      weight: 1.0,
     });
   }
 
