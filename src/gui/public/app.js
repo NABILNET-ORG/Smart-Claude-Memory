@@ -89,6 +89,17 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
       li.draggable = true;
       li.dataset.id = String(row.id);
       li.dataset.status = String(row.status);
+      // #300: stash the fields the drop handler needs to recompute effective
+      // sort keys (priority, created_at, metadata.rank) entirely from the DOM —
+      // mirroring the server's effectiveKey ordering so a fractional rank lands
+      // a card exactly between two unranked neighbours.
+      li.dataset.priority = String(row.priority);
+      li.dataset.created = String(row.created_at || '');
+      const rankVal =
+        row.metadata && typeof row.metadata.rank === 'number' && isFinite(row.metadata.rank)
+          ? row.metadata.rank
+          : null;
+      if (rankVal !== null) li.dataset.rank = String(rankVal);
       const title = makeEl('div', { cls: 'card-title', text: row.title || '(untitled)' });
       const meta = makeEl('div', { cls: 'card-meta' });
       const pri = makeEl('span', { cls: 'pri', text: 'p' + row.priority });
@@ -176,20 +187,82 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
       if (projectEl && r.body.project_id) projectEl.textContent = String(r.body.project_id);
     }
 
-    // ── Drag-drop persistence (Phase 1) ───────────────────────────────────
+    // #300 — find the .kanban-card whose vertical midpoint sits just below the
+    // cursor; the dragging card is inserted *before* it (or appended when null,
+    // i.e. the cursor is below every card). Standard HTML5 DnD reorder pattern.
+    function getDragAfterElement(listEl, clientY) {
+      const cards = Array.prototype.slice.call(
+        listEl.querySelectorAll('.kanban-card:not(.dragging)'),
+      );
+      let closest = null;
+      let closestOffset = Number.NEGATIVE_INFINITY;
+      for (const child of cards) {
+        const box = child.getBoundingClientRect();
+        const offset = clientY - box.top - box.height / 2;
+        // The element we want is the nearest one whose midpoint is *below* the
+        // cursor: offset < 0 and as close to 0 as possible (largest such offset).
+        if (offset < 0 && offset > closestOffset) {
+          closestOffset = offset;
+          closest = child;
+        }
+      }
+      return closest;
+    }
+
+    // #300 — reconstruct a card's effective sort key EXACTLY as the server does
+    // (sortColumn in src/gui/server.ts): metadata.rank when finite, else the
+    // card's index in the LEGACY order (priority asc, then created_at asc) of the
+    // column. `orderedCards` must already be the column's cards in DOM order; the
+    // legacy index is derived independently so it matches the backend regardless
+    // of the current visual order. Returns a Map keyed by card element.
+    function effectiveKeyMap(cards) {
+      // Legacy order: stable sort by (priority asc, created_at asc), reading the
+      // same data-* attributes the server reads from the row. Ties keep input
+      // order — harmless, since the tie-break only matters for equal keys.
+      const legacy = cards.slice().sort((a, b) => {
+        const pa = Number(a.dataset.priority);
+        const pb = Number(b.dataset.priority);
+        if (pa !== pb) return pa - pb;
+        const ta = Date.parse(a.dataset.created || '');
+        const tb = Date.parse(b.dataset.created || '');
+        return (isNaN(ta) ? 0 : ta) - (isNaN(tb) ? 0 : tb);
+      });
+      const legacyIndex = new Map();
+      legacy.forEach((el, i) => legacyIndex.set(el, i));
+
+      const keys = new Map();
+      for (const el of cards) {
+        const raw = el.dataset.rank;
+        const rank = raw === undefined ? NaN : Number(raw);
+        keys.set(el, Number.isFinite(rank) ? rank : legacyIndex.get(el));
+      }
+      return keys;
+    }
+
+    // ── Drag-drop persistence (Phase 1 + #300 reorder) ─────────────────────
     // Bound ONCE on the grid root via event delegation so it survives every
-    // loadBacklog() replaceChildren re-render. Dropping a card on a different
-    // column optimistically moves the DOM, recomputes counts, then PATCHes
-    // /api/backlog/:id; a failed PATCH reverts the move + counts.
+    // loadBacklog() replaceChildren re-render. Cross-column drop optimistically
+    // moves the DOM then PATCHes status; same-column drop reorders via a
+    // fractional metadata.rank midpoint then PATCHes rank. A failed PATCH reverts.
     function initBacklogDnD() {
       const grid = document.getElementById('kanban-grid');
       if (!grid || grid.dataset.dndBound === '1') return;
       grid.dataset.dndBound = '1';
 
+      // #300 — the card's pre-drag position, captured at dragstart so revert is
+      // exact even after dragover live-moves the node. Cleared on dragend.
+      let dragOrigin = null;
+
       grid.addEventListener('dragstart', (ev) => {
         const card = ev.target && ev.target.closest ? ev.target.closest('.kanban-card') : null;
         if (!card) return;
         card.classList.add('dragging');
+        dragOrigin = {
+          list: card.parentNode,
+          nextSibling: card.nextSibling,
+          status: card.dataset.status,
+          rank: card.dataset.rank, // string | undefined
+        };
         if (ev.dataTransfer) {
           ev.dataTransfer.effectAllowed = 'move';
           ev.dataTransfer.setData('text/plain', card.dataset.id || '');
@@ -199,7 +272,26 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
       grid.addEventListener('dragend', (ev) => {
         const card = ev.target && ev.target.closest ? ev.target.closest('.kanban-card') : null;
         if (card) card.classList.remove('dragging');
+        // dragend fires after drop; the drop handler has already read dragOrigin.
+        dragOrigin = null;
       });
+
+      // #300 — restore a card to its captured pre-drag position + dataset.
+      function revertToOrigin(card, origin, fromList, toList) {
+        if (origin && origin.list) {
+          if (origin.nextSibling && origin.nextSibling.parentNode === origin.list) {
+            origin.list.insertBefore(card, origin.nextSibling);
+          } else {
+            origin.list.appendChild(card);
+          }
+          card.dataset.status = origin.status;
+          if (origin.rank === undefined) delete card.dataset.rank;
+          else card.dataset.rank = origin.rank;
+        }
+        syncBacklogPlaceholder(fromList);
+        syncBacklogPlaceholder(toList);
+        recomputeBacklogCounts();
+      }
 
       grid.addEventListener('dragover', (ev) => {
         const list = ev.target && ev.target.closest ? ev.target.closest('[data-kanban-list]') : null;
@@ -207,6 +299,20 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
         ev.preventDefault();
         if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
         list.classList.add('drag-over');
+
+        // #300 — live-preview the insertion point so same-column (and the final
+        // landing slot of cross-column) reordering feels smooth. We only move the
+        // card visually here; persistence happens on drop.
+        const dragging = grid.querySelector('.kanban-card.dragging');
+        if (!dragging) return;
+        const after = getDragAfterElement(list, ev.clientY);
+        if (after == null) {
+          if (dragging.parentNode !== list || dragging.nextSibling !== null) {
+            list.appendChild(dragging);
+          }
+        } else if (after !== dragging && after.previousSibling !== dragging) {
+          list.insertBefore(dragging, after);
+        }
       });
 
       grid.addEventListener('dragleave', (ev) => {
@@ -230,14 +336,60 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
           : grid.querySelector('.kanban-card.dragging');
         if (!card || !targetStatus) return;
 
-        const fromStatus = card.dataset.status;
-        if (fromStatus === targetStatus) return; // no-op: same column
-
+        // True source column comes from the captured origin, NOT card.dataset —
+        // dragover may have already live-moved the node into the target list.
+        const origin = dragOrigin;
+        const fromStatus = origin ? origin.status : card.dataset.status;
         const sourceList = grid.querySelector('[data-kanban-list="' + fromStatus + '"]');
-        const nextSibling = card.nextSibling; // for precise revert positioning
 
-        // Optimistic move: relocate the card, fix both placeholders + counts.
-        list.appendChild(card);
+        if (fromStatus === targetStatus) {
+          // ── #300 same-column reorder ─────────────────────────────────────
+          // The card is already in its visual slot (placed by dragover). If it
+          // never actually moved, do nothing (avoid a pointless PATCH).
+          if (origin && origin.list === list && origin.nextSibling === card.nextSibling) {
+            return;
+          }
+
+          // Compute the moved card's new rank = MIDPOINT of its neighbours'
+          // effective keys, using the SAME legacy-index fallback as the server.
+          const cards = Array.prototype.slice.call(list.querySelectorAll('.kanban-card'));
+          const keys = effectiveKeyMap(cards);
+          const idx = cards.indexOf(card);
+          const above = idx > 0 ? cards[idx - 1] : null;
+          const below = idx < cards.length - 1 ? cards[idx + 1] : null;
+
+          let newRank;
+          if (above && below) {
+            newRank = (keys.get(above) + keys.get(below)) / 2;
+          } else if (below) {
+            newRank = keys.get(below) - 1; // dropped at the top
+          } else if (above) {
+            newRank = keys.get(above) + 1; // dropped at the bottom
+          } else {
+            newRank = 0; // only card in the column
+          }
+
+          // Optimistic: keep the DOM move, stamp the new rank locally.
+          card.dataset.rank = String(newRank);
+          recomputeBacklogCounts();
+
+          const r = await jsonFetch('/api/backlog/' + id, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ rank: newRank }),
+          });
+
+          if (!r.ok || !r.body || r.body.ok !== true) {
+            revertToOrigin(card, origin, sourceList, list);
+            const reason = (r.body && r.body.reason) || r.status;
+            backlogError('reorder failed: ' + reason);
+          }
+          return;
+        }
+
+        // ── Cross-column move (status PATCH) — unchanged behaviour ──────────
+        // dragover already relocated the card into `list`; ensure status + the
+        // placeholders/counts reflect the move, then persist.
         card.dataset.status = targetStatus;
         syncBacklogPlaceholder(list);
         syncBacklogPlaceholder(sourceList);
@@ -250,18 +402,7 @@ const STATES = ['proposed', 'composed', 'approved', 'rejected'];
         });
 
         if (!r.ok || !r.body || r.body.ok !== true) {
-          // Revert: put the card back exactly where it was, restore counts.
-          if (sourceList) {
-            if (nextSibling && nextSibling.parentNode === sourceList) {
-              sourceList.insertBefore(card, nextSibling);
-            } else {
-              sourceList.appendChild(card);
-            }
-          }
-          card.dataset.status = fromStatus;
-          syncBacklogPlaceholder(sourceList);
-          syncBacklogPlaceholder(list);
-          recomputeBacklogCounts();
+          revertToOrigin(card, origin, sourceList, list);
           const reason = (r.body && r.body.reason) || r.status;
           backlogError('move failed: ' + reason);
         }

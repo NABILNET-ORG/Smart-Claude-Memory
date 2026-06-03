@@ -17,6 +17,7 @@ import assert from "node:assert/strict";
 import { type AddressInfo } from "node:net";
 import {
   createGuiServer,
+  sortColumn,
   type GuiHandlers,
   type ListBacklogInput,
 } from "../src/gui/server.js";
@@ -27,11 +28,15 @@ type BacklogStubState = {
   callCount: number;
   // PATCH stub telemetry (Phase 1 write route).
   lastUpdateId?: number;
-  lastUpdatePatch?: { status: BacklogStatus };
+  lastUpdatePatch?: { status?: BacklogStatus; metadata?: Record<string, unknown> };
   updateCallCount: number;
   // When set, the updateBacklog stub throws this message (simulates a DB
   // error / not-found) instead of returning a row.
   updateThrows?: string;
+  // #300 — getBacklogRow stub: the row its read-merge-write reads back. When
+  // unset the stub returns a default row carrying `existingMeta` as metadata.
+  existingMeta?: Record<string, unknown>;
+  lastGetId?: number;
 };
 
 function row(
@@ -81,12 +86,30 @@ function makeHandlers(state: BacklogStubState, rows: BacklogRow[]): GuiHandlers 
     // can wrap it as { ok:true, task }. Throws on demand to exercise the
     // DB-error / not-found path. Stubbed the same way as listBacklog above —
     // no Supabase round-trip.
-    updateBacklog: async (id: number, patch: { status: BacklogStatus }) => {
+    updateBacklog: async (
+      id: number,
+      patch: { status?: BacklogStatus; metadata?: Record<string, unknown> },
+    ) => {
       state.lastUpdateId = id;
       state.lastUpdatePatch = patch;
       state.updateCallCount += 1;
       if (state.updateThrows) throw new Error(state.updateThrows);
-      return row(id, patch.status, 2, "patched row", "2026-05-24T00:00:00Z");
+      const out = row(id, patch.status ?? "todo", 2, "patched row", "2026-05-24T00:00:00Z");
+      if (patch.metadata !== undefined) {
+        (out as { metadata: Record<string, unknown> }).metadata = patch.metadata;
+      }
+      return out;
+    },
+    // #300 — single-row reader feeding the rank read-merge-write. Returns a row
+    // whose metadata is the configured `existingMeta` (defaults to a sibling key
+    // so tests can assert it survives the merge).
+    getBacklogRow: async (id: number) => {
+      state.lastGetId = id;
+      if (state.updateThrows) throw new Error(state.updateThrows);
+      const out = row(id, "todo", 2, "current row", "2026-05-24T00:00:00Z");
+      (out as { metadata: Record<string, unknown> }).metadata =
+        state.existingMeta ?? { note: "keep-me" };
+      return out;
     },
     // Other handlers are unused by /api/backlog; cast bypasses the
     // GuiHandlers exhaustiveness check (same pragmatic stance as the
@@ -110,6 +133,57 @@ async function startTestServer(handlers: GuiHandlers) {
       }),
   };
 }
+
+// ── #300 — sortColumn effective-key ordering (pure, no server) ────────────
+describe("sortColumn — #300 intra-column rank ordering", () => {
+  it("honors metadata.rank ordering over legacy (priority, created_at)", () => {
+    // Three rows whose legacy order (by priority then age) is A,B,C, but whose
+    // ranks force the order C,A,B. metadata.rank must win.
+    const rows: BacklogRow[] = [
+      { ...row(1, "todo", 1, "A", "2026-05-01T00:00:00Z"), metadata: { rank: 10 } },
+      { ...row(2, "todo", 2, "B", "2026-05-02T00:00:00Z"), metadata: { rank: 20 } },
+      { ...row(3, "todo", 3, "C", "2026-05-03T00:00:00Z"), metadata: { rank: 5 } },
+    ];
+    const ordered = sortColumn(rows).map((r) => r.id);
+    assert.deepEqual(ordered, [3, 1, 2]);
+  });
+
+  it("lands a fractional rank between two UNRANKED neighbours (legacy-index fallback)", () => {
+    // Legacy order of the unranked pair: id=1 (pri 1) then id=2 (pri 2), so
+    // their effective keys are indices 0 and 1. A card ranked 0.5 must sort
+    // strictly between them → [1, mid, 2].
+    const rows: BacklogRow[] = [
+      row(1, "todo", 1, "first", "2026-05-01T00:00:00Z"),
+      row(2, "todo", 2, "second", "2026-05-02T00:00:00Z"),
+      { ...row(3, "todo", 5, "mid", "2026-05-03T00:00:00Z"), metadata: { rank: 0.5 } },
+    ];
+    const ordered = sortColumn(rows).map((r) => r.id);
+    assert.deepEqual(ordered, [1, 3, 2]);
+  });
+
+  it("falls back to (priority, created_at) exactly when NO row has a rank", () => {
+    // Identical fixture shape to the legacy /api/backlog sort test — no ranks,
+    // so the result must match the historical comparator with zero regression.
+    const rows: BacklogRow[] = [
+      row(10, "todo", 3, "low-pri", "2026-05-20T00:00:00Z"),
+      row(11, "todo", 1, "urgent newer", "2026-05-22T00:00:00Z"),
+      row(12, "todo", 1, "urgent older", "2026-05-21T00:00:00Z"),
+    ];
+    const ordered = sortColumn(rows).map((r) => r.id);
+    assert.deepEqual(ordered, [12, 11, 10]);
+  });
+
+  it("treats a non-finite metadata.rank as unranked (legacy fallback)", () => {
+    // NaN / non-number rank must NOT hijack the order — defensive parity with
+    // the server's Number.isFinite guard.
+    const rows: BacklogRow[] = [
+      { ...row(1, "todo", 1, "first", "2026-05-01T00:00:00Z"), metadata: { rank: "oops" } },
+      row(2, "todo", 2, "second", "2026-05-02T00:00:00Z"),
+    ];
+    const ordered = sortColumn(rows).map((r) => r.id);
+    assert.deepEqual(ordered, [1, 2]);
+  });
+});
 
 describe("gui server — /api/backlog (Epic F)", () => {
   let baseUrl: string;
@@ -323,5 +397,70 @@ describe("gui server — PATCH /api/backlog/:id (Phase 1 write route)", () => {
     const body = (await res.json()) as { ok: boolean };
     assert.equal(body.ok, false);
     state.updateThrows = undefined;
+  });
+
+  // ── #300 — rank reorder PATCH path ──────────────────────────────────────
+  it("merges { rank } into metadata WITHOUT dropping existing keys", async () => {
+    state.updateThrows = undefined;
+    state.existingMeta = { note: "keep-me", origin: "scout" };
+    const res = await fetch(`${baseUrl}/api/backlog/55`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ rank: 12.5 }),
+    });
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as { ok: boolean; task: BacklogRow };
+    assert.equal(body.ok, true);
+    // The read-merge-write read row #55 first, then patched metadata only.
+    assert.equal(state.lastGetId, 55);
+    assert.deepEqual(state.lastUpdatePatch, {
+      metadata: { note: "keep-me", origin: "scout", rank: 12.5 },
+    });
+    // No status key when the body carried rank only.
+    assert.equal(state.lastUpdatePatch?.status, undefined);
+    state.existingMeta = undefined;
+  });
+
+  it("accepts status AND rank together, applying both", async () => {
+    state.updateThrows = undefined;
+    state.existingMeta = { note: "keep-me" };
+    const res = await fetch(`${baseUrl}/api/backlog/56`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "in_progress", rank: 3 }),
+    });
+    assert.equal(res.status, 200);
+    assert.equal(state.lastUpdatePatch?.status, "in_progress");
+    assert.deepEqual(state.lastUpdatePatch?.metadata, { note: "keep-me", rank: 3 });
+    state.existingMeta = undefined;
+  });
+
+  it("rejects a non-finite rank → 400 and never reads or writes the row", async () => {
+    state.updateThrows = undefined;
+    const beforeUpdate = state.updateCallCount;
+    state.lastGetId = undefined;
+    const res = await fetch(`${baseUrl}/api/backlog/57`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ rank: "nope" }),
+    });
+    assert.equal(res.status, 400);
+    const body = (await res.json()) as { ok: boolean; reason: string };
+    assert.equal(body.ok, false);
+    assert.match(body.reason, /rank/);
+    // Neither the reader nor the writer ran for an invalid rank.
+    assert.equal(state.lastGetId, undefined);
+    assert.equal(state.updateCallCount, beforeUpdate);
+  });
+
+  it("rejects a body with neither status nor rank → 400", async () => {
+    const res = await fetch(`${baseUrl}/api/backlog/58`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ priority: 1 }),
+    });
+    assert.equal(res.status, 400);
+    const body = (await res.json()) as { ok: boolean };
+    assert.equal(body.ok, false);
   });
 });

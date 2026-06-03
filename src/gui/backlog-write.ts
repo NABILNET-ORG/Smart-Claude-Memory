@@ -16,9 +16,13 @@
 // already gated upstream — no per-route token logic is duplicated here.
 //
 // Route: PATCH /api/backlog/:id   (:id = positive integer)
-//   body  { status: "todo"|"in_progress"|"blocked"|"done" }   (other fields ignored)
+//   body  { status?: "todo"|"in_progress"|"blocked"|"done", rank?: number }
+//         status → cross-column move; rank → intra-column reorder (#300).
+//         A request may carry status OR rank (or both); each is applied if present.
+//         Other fields ignored.
 //   200   { ok:true, task: BacklogRow }
-//   400   { ok:false, reason }   — non-integer id, or missing/invalid status
+//   400   { ok:false, reason }   — non-integer id, invalid status, non-finite
+//                                  rank, or neither status nor rank supplied
 //   404   { ok:false, reason }   — row not found
 //   500   { ok:false, reason }   — unexpected DB error
 
@@ -32,11 +36,20 @@ export type BacklogPatchHelpers = {
   sendJson: (res: http.ServerResponse, status: number, body: unknown) => void;
   /** Narrowing guard for the four legal statuses. Mirrors server.ts isBacklogStatus. */
   isBacklogStatus: (s: string) => s is BacklogStatus;
-  /** Data accessor — patches the row's status and returns the fresh row. */
+  /**
+   * Data accessor — patches status and/or metadata, returns the fresh row.
+   * #300: metadata carries the read-merged `rank` hint for intra-column order.
+   */
   updateBacklog: (
     id: number,
-    patch: { status: BacklogStatus },
+    patch: { status?: BacklogStatus; metadata?: Record<string, unknown> },
   ) => Promise<BacklogRow>;
+  /**
+   * #300 — single-row read for the rank read-merge-write. Optional so the
+   * status-only call path (and existing tests) need not provide it; it is only
+   * dereferenced when a `rank` is present in the body.
+   */
+  getBacklogRow?: (id: number) => Promise<BacklogRow>;
 };
 
 /**
@@ -63,18 +76,64 @@ export async function handleBacklogPatch(
   }
 
   const body = await helpers.readJsonBody(req);
-  const rawStatus = body.status;
-  if (typeof rawStatus !== "string" || !helpers.isBacklogStatus(rawStatus)) {
+
+  // #300 — a request may carry `status` (cross-column move) and/or `rank`
+  // (intra-column reorder). Validate whichever is present; reject if neither is.
+  const hasStatus = body.status !== undefined;
+  const hasRank = body.rank !== undefined;
+
+  if (!hasStatus && !hasRank) {
     return helpers.sendJson(res, 400, {
       ok: false,
-      reason: "status must be one of: todo, in_progress, blocked, done",
+      reason: "body must include a status and/or a numeric rank",
     });
   }
 
-  // status ONLY — every other inbound field is intentionally ignored to keep
-  // the write surface minimal and the frozen schema untouched.
+  let status: BacklogStatus | undefined;
+  if (hasStatus) {
+    const rawStatus = body.status;
+    if (typeof rawStatus !== "string" || !helpers.isBacklogStatus(rawStatus)) {
+      return helpers.sendJson(res, 400, {
+        ok: false,
+        reason: "status must be one of: todo, in_progress, blocked, done",
+      });
+    }
+    status = rawStatus;
+  }
+
+  let rank: number | undefined;
+  if (hasRank) {
+    const rawRank = body.rank;
+    if (typeof rawRank !== "number" || !Number.isFinite(rawRank)) {
+      return helpers.sendJson(res, 400, {
+        ok: false,
+        reason: "rank must be a finite number",
+      });
+    }
+    rank = rawRank;
+  }
+
   try {
-    const task = await helpers.updateBacklog(id, { status: rawStatus });
+    const patch: { status?: BacklogStatus; metadata?: Record<string, unknown> } = {};
+    if (status !== undefined) patch.status = status;
+
+    // Rank path: read-merge-write so we set metadata.rank WITHOUT clobbering any
+    // other keys already stored in the jsonb column (updateBacklog overwrites the
+    // whole `metadata` field). The reader is required for this path; treat a
+    // missing seam as a server misconfiguration rather than silently dropping rank.
+    if (rank !== undefined) {
+      if (!helpers.getBacklogRow) {
+        return helpers.sendJson(res, 500, {
+          ok: false,
+          reason: "rank updates unavailable: no row reader configured",
+        });
+      }
+      const current = await helpers.getBacklogRow(id);
+      const merged: Record<string, unknown> = { ...(current.metadata ?? {}), rank };
+      patch.metadata = merged;
+    }
+
+    const task = await helpers.updateBacklog(id, patch);
     return helpers.sendJson(res, 200, { ok: true, task });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

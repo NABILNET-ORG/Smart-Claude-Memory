@@ -362,6 +362,20 @@ export async function updateBacklog(
   return data as BacklogRow;
 }
 
+// #300 — single-row read by id. Needed by the PATCH rank path so it can
+// read-merge-write metadata (preserving sibling keys) instead of clobbering
+// the whole jsonb column. Mirrors updateBacklog's .single() error semantics so
+// a missing id surfaces the same PGRST116 "no rows" message the route maps to 404.
+export async function getBacklogRow(id: number): Promise<BacklogRow> {
+  const { data, error } = await supabase
+    .from("cloud_backlog")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error) throw new Error(`getBacklogRow failed: ${error.message}`);
+  return data as BacklogRow;
+}
+
 export type ArchiveRow = {
   id: number;
   cloud_backlog_id: number | null;

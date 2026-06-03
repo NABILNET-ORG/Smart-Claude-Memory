@@ -61,6 +61,7 @@ import {
 import {
   listBacklog as defaultListBacklog,
   updateBacklog as defaultUpdateBacklog,
+  getBacklogRow as defaultGetBacklogRow,
   type BacklogRow,
   type BacklogStatus,
 } from "../supabase.js";
@@ -96,18 +97,48 @@ function emptyColumns(): BacklogKanbanColumns {
   return { todo: [], in_progress: [], blocked: [], done: [] };
 }
 
+// #300 — intra-column drag-to-reorder. A card's position is governed by an
+// "effective key": its metadata.rank when that is a finite number, ELSE its
+// index in the LEGACY order (priority asc, then created_at asc) of the column.
+// This lets a freshly-ranked card slot between two never-ranked neighbours by
+// landing on a fractional midpoint of their legacy indices — no schema/migration
+// needed, and unranked columns render byte-identical to the pre-#300 behaviour.
+// Pure + deterministic so the test can call it directly.
+export function sortColumn(rows: BacklogRow[]): BacklogRow[] {
+  // Legacy order = the historical comparator. Build id→legacyIndex from it so
+  // an unranked card's effective key is its slot in that exact ordering.
+  const legacy = [...rows].sort(
+    (a, b) =>
+      a.priority - b.priority ||
+      Date.parse(a.created_at) - Date.parse(b.created_at),
+  );
+  const legacyIndex = new Map<number, number>();
+  legacy.forEach((r, i) => legacyIndex.set(r.id, i));
+
+  const keyOf = (r: BacklogRow): number => {
+    const rank = (r.metadata as { rank?: unknown } | null | undefined)?.rank;
+    return typeof rank === "number" && Number.isFinite(rank)
+      ? rank
+      : (legacyIndex.get(r.id) ?? 0);
+  };
+
+  return [...rows].sort(
+    (a, b) =>
+      keyOf(a) - keyOf(b) ||
+      // Stable tie-break: identical effective keys fall back to legacy order.
+      a.priority - b.priority ||
+      Date.parse(a.created_at) - Date.parse(b.created_at),
+  );
+}
+
 function groupByStatus(rows: BacklogRow[]): BacklogKanbanColumns {
   const cols = emptyColumns();
   for (const row of rows) {
     if (cols[row.status]) cols[row.status].push(row);
   }
-  // Within each column: priority asc (1 = highest), then oldest first.
+  // Within each column: effective-key order (metadata.rank, else legacy index).
   for (const status of BACKLOG_STATUSES) {
-    cols[status].sort(
-      (a, b) =>
-        a.priority - b.priority ||
-        Date.parse(a.created_at) - Date.parse(b.created_at),
-    );
+    cols[status] = sortColumn(cols[status]);
   }
   return cols;
 }
@@ -166,7 +197,13 @@ export type GuiHandlers = {
   getClusterGraphSuper: (projectId: string) => Promise<ClusterGraphSuperPayload | ClusterGraphFailure>;
   getClusterGraphDrill: (projectId: string, supernodeId: number) => Promise<ClusterGraphDrillPayload | ClusterGraphFailure>;
   listBacklog: (input: ListBacklogInput) => Promise<BacklogRow[]>;
-  updateBacklog: (id: number, patch: { status: BacklogStatus }) => Promise<BacklogRow>;
+  // #300: patch may carry status (cross-column move) and/or metadata (rank reorder).
+  updateBacklog: (
+    id: number,
+    patch: { status?: BacklogStatus; metadata?: Record<string, unknown> },
+  ) => Promise<BacklogRow>;
+  // #300: single-row read for the rank read-merge-write path.
+  getBacklogRow: (id: number) => Promise<BacklogRow>;
 };
 
 const DEFAULT_HANDLERS: GuiHandlers = {
@@ -181,6 +218,7 @@ const DEFAULT_HANDLERS: GuiHandlers = {
   listBacklog: ({ project_id, status }) =>
     defaultListBacklog(project_id ?? currentProjectId, status ? { status } : {}),
   updateBacklog: (id, patch) => defaultUpdateBacklog(id, patch),
+  getBacklogRow: (id) => defaultGetBacklogRow(id),
 };
 
 // Knowledge Graph route parameter clamps.
@@ -543,7 +581,13 @@ export function createGuiServer(opts: GuiServerOptions = {}): http.Server {
         return handleBacklogPatch(
           req,
           res,
-          { readJsonBody, sendJson, isBacklogStatus, updateBacklog: handlers.updateBacklog },
+          {
+            readJsonBody,
+            sendJson,
+            isBacklogStatus,
+            updateBacklog: handlers.updateBacklog,
+            getBacklogRow: handlers.getBacklogRow,
+          },
           backlogPatchMatch[1],
         );
       }
