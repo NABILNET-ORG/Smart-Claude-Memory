@@ -17,22 +17,22 @@ export function sanitizeForExtraction(content: string): string {
     .join("\n");
 }
 
-// Shared by the TS extractor and the SQL purge script (kept in lockstep).
-const STRUCTURAL_DENYLIST =
-  /^(?:graph|subgraph|td|lr|tb|rl|bt|end|click|style|classdef|n\d+)$|-->|==>|["'\]\[]/i;
+// Structural fragments to reject as node labels: mermaid keywords, node ids,
+// arrows, and punctuation-dominant scraps (e.g.  s"]  or  [" ). Kept PRECISE so
+// it is safe to run against primary labels, which are whole prose first-lines
+// and routinely contain quotes/brackets.
+const STRUCTURAL_KEYWORD = /^(?:graph|subgraph|td|lr|tb|rl|bt|end|click|style|classdef)$/i;
+const MERMAID_NODE = /^n\d+$/i;
+const MERMAID_ARROW = /-->|==>/;
 
-/** True when a produced label is a structural fragment, not a real entity. */
+/** True when a label is a structural fragment, not a real entity. */
 export function isGarbageLabel(label: string): boolean {
   const t = label.trim();
-  return t.length < 3 || STRUCTURAL_DENYLIST.test(t);
-}
-
-// Postgres-flavored mirror of STRUCTURAL_DENYLIST for the purge script (Task 4).
-export const GARBAGE_SQL_REGEX =
-  "^(graph|subgraph|td|lr|tb|rl|bt|end|click|style|classdef|n[0-9]+)$|-->|==>|[\"'\\]\\[]";
-
-/** JS-side parity check used by the purge predicate test. */
-export function matchesGarbageSql(label: string): boolean {
-  const t = label.trim();
-  return t.length < 3 || new RegExp(GARBAGE_SQL_REGEX, "i").test(t);
+  if (t.length < 3) return true;
+  if (STRUCTURAL_KEYWORD.test(t)) return true;
+  if (MERMAID_NODE.test(t)) return true;
+  if (MERMAID_ARROW.test(t)) return true;
+  // Fewer than two alphanumerics ⇒ punctuation-dominant scrap.
+  if (t.replace(/[^A-Za-z0-9]/g, "").length < 2) return true;
+  return false;
 }
