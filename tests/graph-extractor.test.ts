@@ -129,3 +129,24 @@ describe("sanitizeLabel + fallback label", () => {
     }
   });
 });
+
+describe("extractor — garbage rejection (SCM-S50-D1)", () => {
+  it("never emits mermaid/blockquote fragments as node labels", () => {
+    const c = chunk({
+      id: 4242,
+      content: [
+        "> n161 --> n162",
+        "Budget logic lives in src/budget/gate.ts.",
+        "```mermaid",
+        "graph TD; n900 --> n901",
+        "```",
+      ].join("\n"),
+      metadata: { type: "NOTE" },
+    });
+    const r = extractFromChunk(c);
+    const labels = r.nodes.map((n) => n.label);
+    assert.ok(!labels.some((l) => /n161|n900|-->/.test(l)), `no fragments, got: ${JSON.stringify(labels)}`);
+    assert.ok(labels.includes("src/budget/gate.ts"), "keeps real file ref");
+    assert.ok(!labels.some((l) => l.trim().startsWith(">")), "primary not a blockquote fragment");
+  });
+});

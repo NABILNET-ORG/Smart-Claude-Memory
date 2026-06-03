@@ -23,6 +23,8 @@
 // roots, we hold the invariant voluntarily so the daemon's promotion to
 // a protected directory in future is a no-op.
 
+import { sanitizeForExtraction, isGarbageLabel } from "./sanitize.js";
+
 export type ExtractedNode = {
   type: string;
   label: string;
@@ -74,11 +76,12 @@ export function sanitizeLabel(s: string, max: number = MAX_LABEL_LEN): string {
   return out;
 }
 
-function firstNonEmptyLine(s: string): string {
-  const lines = String(s ?? "").split("\n");
-  for (const ln of lines) {
-    const t = ln.trim();
-    if (t.length > 0) return t;
+// First line that yields a non-empty, non-garbage label — so a chunk that opens
+// with a mermaid/blockquote scrap doesn't become a garbage primary node.
+function firstProseLabel(s: string, max: number): string {
+  for (const ln of String(s ?? "").split("\n")) {
+    const label = sanitizeLabel(ln, max);
+    if (label.length > 0 && !isGarbageLabel(label)) return label;
   }
   return "";
 }
@@ -108,9 +111,13 @@ export function extractFromChunk(chunk: {
     return { nodes: [], edges: [], skipped: true, reason: "log_or_too_short" };
   }
 
+  // Strip code/mermaid/table/HTML/blockquote syntax before any producer reads
+  // the chunk, so structural fragments never become nodes (SCM-S50-D1).
+  const text = sanitizeForExtraction(content);
+
   // ── Primary node ──────────────────────────────────────────────────────
   const primaryType = metaType ?? "NOTE";
-  let primaryLabel = sanitizeLabel(firstNonEmptyLine(content), MAX_LABEL_LEN);
+  let primaryLabel = firstProseLabel(text, MAX_LABEL_LEN);
   if (primaryLabel.length === 0) primaryLabel = `chunk:${chunk.id}`;
 
   const primaryProps: Record<string, unknown> = {
@@ -118,7 +125,7 @@ export function extractFromChunk(chunk: {
   };
   if (typeof meta.status === "string") primaryProps.status = meta.status;
 
-  const decMatch = content.match(/SCM-S\d+-D\d+/);
+  const decMatch = text.match(/SCM-S\d+-D\d+/);
   if (decMatch) primaryProps.decision_id = decMatch[0];
 
   const primary: ExtractedNode = {
@@ -138,15 +145,16 @@ export function extractFromChunk(chunk: {
   // can't capture because `:` and `/` of the scheme are outside its
   // character class.
   const rawFileMatches: string[] = [];
-  for (const m of content.matchAll(FILE_REF_RE)) {
+  for (const m of text.matchAll(FILE_REF_RE)) {
     const idx = m.index ?? 0;
-    const before2 = content.slice(Math.max(0, idx - 3), idx);
+    const before2 = text.slice(Math.max(0, idx - 3), idx);
     if (before2.endsWith("://")) continue; // URL scheme prefix
     rawFileMatches.push(m[0]);
   }
   const filesDeduped = dedupe(rawFileMatches)
     .filter((p) => !p.includes("node_modules"))
     .filter((p) => !p.startsWith("http"))
+    .filter((p) => !isGarbageLabel(p))
     .slice(0, MAX_FILE_REFS);
 
   for (const fpath of filesDeduped) {
@@ -164,10 +172,11 @@ export function extractFromChunk(chunk: {
   }
 
   // ── Decision-ref edges ────────────────────────────────────────────────
-  const decMatches = content.match(DECISION_RE) ?? [];
+  const decMatches = text.match(DECISION_RE) ?? [];
   const ownDecision = typeof primaryProps.decision_id === "string" ? (primaryProps.decision_id as string) : null;
   const decsDeduped = dedupe(decMatches)
     .filter((d) => d !== ownDecision)
+    .filter((d) => !isGarbageLabel(d))
     .slice(0, MAX_DECISION_REFS);
 
   for (const dec of decsDeduped) {
