@@ -28,6 +28,8 @@ import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { URL, fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import { currentProjectId, slugify } from "../project.js";
 import {
   listGraduationCandidates as defaultList,
@@ -185,6 +187,59 @@ export function computeProjectPort(projectId: string): number {
   const digest = createHash("sha256").update(projectId, "utf8").digest();
   const u32 = digest.readUInt32LE(0);
   return PROJECT_PORT_RANGE_START + (u32 % PROJECT_PORT_RANGE_SIZE);
+}
+
+// ─── #342 browser auto-open recency guard ──────────────────────────────────
+// The GUI runs IN-PROCESS, so it dies with the MCP process. probePort() only
+// catches a *concurrent* server, never a prior sequential session — so a fresh
+// tab was opened on every boot ("browser fatigue"). A per-port recency marker
+// suppresses the redundant auto-open within a TTL; the stable per-project port
+// means any still-open tab simply reconnects when the new session rebinds it.
+export const GUI_OPEN_TTL_MS = 12 * 60 * 60 * 1000; // 12h; override via SCM_GUI_OPEN_TTL_MS
+
+/** Per-port "last browser auto-open" timestamps (epoch ms), under ~/.claude-memory. */
+export function guiOpenMarkerPath(): string {
+  return path.join(os.homedir(), ".claude-memory", "gui-open-marker.json");
+}
+
+/** Pure decision: open only if no open within ttl. A non-positive ttl or a
+ *  missing / non-finite timestamp ⇒ always open (degrades to legacy behavior). */
+export function shouldOpenBrowserNow(lastOpenMs: number | undefined, ttlMs: number, nowMs: number): boolean {
+  if (!Number.isFinite(ttlMs) || ttlMs <= 0) return true;
+  if (typeof lastOpenMs !== "number" || !Number.isFinite(lastOpenMs)) return true;
+  return nowMs - lastOpenMs >= ttlMs;
+}
+
+function readOpenMarker(file: string): Record<string, number> {
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf8")) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** True if a browser tab should be auto-opened for `port` at `nowMs`. */
+export function shouldOpenForPort(
+  port: number,
+  ttlMs: number,
+  nowMs: number,
+  file: string = guiOpenMarkerPath(),
+): boolean {
+  return shouldOpenBrowserNow(readOpenMarker(file)[String(port)], ttlMs, nowMs);
+}
+
+/** Best-effort stamp of "opened a tab for `port` at nowMs". Never throws — the
+ *  marker is an optimization and must never block GUI startup. */
+export function stampOpenForPort(port: number, nowMs: number, file: string = guiOpenMarkerPath()): void {
+  try {
+    const data = readOpenMarker(file);
+    data[String(port)] = nowMs;
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify(data));
+  } catch {
+    /* swallow: marker write is non-critical */
+  }
 }
 
 export type GuiHandlers = {

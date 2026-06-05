@@ -32,6 +32,9 @@ import {
 import {
   startGuiServer,
   computeProjectPort,
+  shouldOpenForPort,
+  stampOpenForPort,
+  GUI_OPEN_TTL_MS,
   type StartedGuiServer,
 } from "../gui/server.js";
 import { spawn } from "node:child_process";
@@ -145,21 +148,32 @@ export async function maybeAutoStartGui(projectId: string): Promise<GuiAutoStart
     };
   }
 
-  // (c) Bind in-process + open browser exactly once.
+  // (c) Bind in-process + open the browser — but only if a tab wasn't already
+  //     auto-opened for this port within the recency TTL. #342: the in-process
+  //     GUI dies with the MCP process, so probePort misses it on every fresh
+  //     sequential session and a redundant tab opened on each boot.
   try {
     _guiInstance = await startGuiServer({
       port,
       projectId,
       token: process.env.SCM_GUI_TOKEN ?? null,
     });
-    openBrowserDetached(_guiInstance.url);
+    const ttlMs = Number(process.env.SCM_GUI_OPEN_TTL_MS ?? GUI_OPEN_TTL_MS);
+    const now = Date.now();
+    const opened = shouldOpenForPort(_guiInstance.port, ttlMs, now);
+    if (opened) {
+      openBrowserDetached(_guiInstance.url);
+      stampOpenForPort(_guiInstance.port, now);
+    }
     return {
       status: "started",
       url: _guiInstance.url,
       port: _guiInstance.port,
       project_id: projectId,
-      browser_opened: true,
-      message: `Started on ${_guiInstance.url} for project '${projectId}'.`,
+      browser_opened: opened,
+      message: opened
+        ? `Started on ${_guiInstance.url} for project '${projectId}'.`
+        : `Started on ${_guiInstance.url} for project '${projectId}' (browser auto-open suppressed — opened within the last ${Math.round(ttlMs / 3_600_000)}h).`,
     };
   } catch (err) {
     return {
