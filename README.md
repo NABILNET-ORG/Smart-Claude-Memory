@@ -69,7 +69,7 @@ npm install git+https://github.com/NABILNET-ORG/Smart-Claude-Memory.git
 
 Installs straight from the canonical repo without a registry round-trip. The `prepare` script declared in [package.json](package.json) auto-runs the full `npm run build` chain (`lint:boundaries` → `tsc` → `copy:gui`) on install, so the TypeScript sources compile to `dist/` and the `smart-claude-memory-mcp` binary lands fully resolved on the consumer's `node_modules/.bin/` — no `npm run build` follow-up needed. Pin a tag (`...Smart-Claude-Memory.git#v2.4.0`) or commit SHA for reproducible installs.
 
-All three paths require an empty Supabase project + a local Ollama install with `moondream` and `nomic-embed-text` pulled. See [Bootstrap](#bootstrap) for the three-step setup ritual.
+All three paths require an empty Supabase project + a local Ollama install with `moondream` and `nomic-embed-text` pulled. See [Bootstrap](#bootstrap-3-step-setup-5-minutes) for the three-step setup ritual.
 
 ---
 
@@ -254,11 +254,11 @@ The GUI surface (M8.2, v2.2.0) is **not** an MCP tool — it's an HTTP server (`
 2. Pulls the last 5 archived rows via `listArchive`.
 3. Replaces the `### 🚀 Recent Progress
 
+* [DONE] Fix browser-fatigue regression in init_project: stop launching new browser tabs if GUI TCP probe is already active (archived at 2026-06-05).
+* [DONE] SCM-S50 ship-gate: populate eval fixture, run off/on eval, flip SCM_GRAPH_RERANK_ENABLED default (archived at 2026-06-05).
+* [DONE] Foundation fix: flaky clustering smoke test C8 (tests/clustering-daemon.test.ts:195) times out in isolation (archived at 2026-06-05).
 * [DONE] Wire budget-integration.test.ts and establish a safe DB-integration test lane (setup/teardown/test-db) (archived at 2026-06-03).
 * [DONE] Web research: multi-page docs crawler (bounded depth + rate-limit/politeness + crawl budget) (archived at 2026-06-03).
-* [DONE] Kanban: persist intra-column drag-to-reorder (manual card ordering) (archived at 2026-06-03).
-* [DONE] QA-1: drag me To Do -> In Progress (archived at 2026-06-02).
-* [DONE] QA-2: Kanban dogfood card (archived at 2026-06-02).
 ### 🚀 Recent Progress
 
 * [DONE] Fix login form validation (archived at 2026-04-24).
@@ -358,7 +358,7 @@ SUPABASE_SECRET_KEY=<service-role-key>
 SUPABASE_POOLER_URL=postgres://postgres:<password>@<pooler-host>:6543/postgres
 ```
 
-Then call `init_project()` from Claude Code. The plugin **auto-applies all 27 schema migrations** (through `scripts/027_kg_bridge.sql`) to your empty DB on the first call, verifies your Ollama models are pulled, and reports `overall: pending → healthy` within a few minutes. Zero manual `npm run schema`, zero hand-edited settings.
+Then call `init_project()` from Claude Code. The plugin **auto-applies all 28 schema migrations** (through `scripts/028_clustering_discover_projects.sql`) to your empty DB on the first call, verifies your Ollama models are pulled, and reports `overall: pending → healthy` within a few minutes. Zero manual `npm run schema`, zero hand-edited settings.
 
 ### Optional env vars
 
@@ -1109,7 +1109,7 @@ For inquiries, integrations, or sovereign-grade Claude Code tooling, visit [nabi
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-06-05T09:03:58.821Z for `smart-claude-memory`._
+_Auto-synced at 2026-06-05T11:54:05.107Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
@@ -1194,7 +1194,7 @@ flowchart TD
   n15 --> n39
   n40["SESSION-34-REPORT.md"]
   n15 --> n40
-  n41["… (22 more)"]
+  n41["… (23 more)"]
   n15 --> n41
   n42["specs/"]
   n5 --> n42
@@ -1314,7 +1314,7 @@ flowchart TD
   n75 --> n99
   n100["025_security_advisor_compliance.sql"]
   n75 --> n100
-  n101["… (42 more)"]
+  n101["… (43 more)"]
   n75 --> n101
   n102["src/"]
   n0 --> n102
@@ -1552,7 +1552,7 @@ flowchart TD
   n190 --> n218
   n219["graph-sanitize.test.ts"]
   n190 --> n219
-  n220["… (19 more)"]
+  n220["… (20 more)"]
   n190 --> n220
   n221[".env.example"]
   n0 --> n221

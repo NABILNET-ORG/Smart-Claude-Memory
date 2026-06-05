@@ -91,22 +91,20 @@ This session's work touched `src/graph/**` (sanitize/extractor/SYMBOL), the brid
 
 ## Ship-Gate — PENDING (default stays OFF)
 
-`SCM_GRAPH_RERANK_ENABLED` remains **OFF** until recall is proven. The eval fixture `s16-d1-eval-queries.json` ships **EMPTY**; 10 challenging queries with proposed gold chunks await user approval:
+`SCM_GRAPH_RERANK_ENABLED` remains **OFF** until recall is proven. The eval fixture `s16-d1-eval-queries.json` shipped **EMPTY**, with proposed gold chunks awaiting approval.
 
-| Query | Proposed gold chunk |
+> **Correction (SCM-S51):** verification found that **4 of the 10** originally-proposed gold ids — q2=44449, q3=44524, q4=44514, q10=44495 — **do not exist** in `memory_chunks`. They are removed below so this record stays truthful; only the 6 verified ids remain.
+
+| Query | Gold chunk (verified) |
 |---|---|
 | q1 | 13865 |
-| q2 | 44449 |
-| q3 | 44524 |
-| q4 | 44514 |
 | q5 | 29221 |
 | q6 | 13533 |
 | q7 | 13498 |
 | q8 | 13866 |
 | q9 | 29217 |
-| q10 | 44495 |
 
-**Next steps:** approve → populate the fixture → run `eval-graph-rerank.ts` **off vs on** → prune queries the baseline already nails → **flip the default** only if recall@3 improves.
+**Ship-Gate outcome (SCM-S51):** the gate did **not** flip. The feature was dead-on-arrival (a 50ms `Promise.race` timeout below real DB RTT) — fixed in `fddbfb8`; once actually running, the eval showed **no recall lift**, so the default stays **OFF**. A bridge-aware "Goldilocks" eval + KG densification are tracked in backlog **#372**. Full detail in `SESSION-51-REPORT.md`.
 
 ---
 
