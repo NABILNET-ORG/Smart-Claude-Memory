@@ -61,6 +61,8 @@ mock.module("../src/supabase.js", {
     },
     listBacklog: async () => [],
     listArchive: async () => [],
+    fetchConceptChunks: async () => [],
+    fetchChunksByIds: async () => [],
   },
 });
 

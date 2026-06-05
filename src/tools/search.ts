@@ -4,11 +4,16 @@ import {
   searchChunks,
   listBacklog,
   listArchive,
+  fetchConceptChunks,
+  fetchChunksByIds,
   type BacklogRow,
   type ArchiveRow,
 } from "../supabase.js";
 import { currentProjectId } from "../project.js";
 import { kgHybridSearch, type KgSeed, type KgNeighbor } from "./kg.js";
+import { config } from "../config.js";
+import { conceptWeights } from "./bridge.js";
+import { rerank } from "./rerank.js";
 
 /** Pure-number queries (e.g. "11468") -> direct SQL fetch by id. Bypasses
  *  vector ranking, which can fail to surface a known row when its embedding
@@ -46,6 +51,14 @@ function sortByPriorityThenAge(rows: BacklogRow[]): BacklogRow[] {
   return [...rows].sort(
     (a, b) => a.priority - b.priority || Date.parse(a.created_at) - Date.parse(b.created_at),
   );
+}
+
+/** Reject if `p` doesn't settle within `ms` — bounds the graph re-rank queries. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("rerank_timeout")), ms)),
+  ]);
 }
 
 export async function searchMemory(args: {
@@ -238,7 +251,7 @@ export async function searchMemory(args: {
     searchChunks(
       projectId,
       queryVec,
-      limit,
+      config.SCM_GRAPH_RERANK_ENABLED ? config.SCM_GRAPH_RERANK_POOL : limit,
       args.min_similarity ?? 0.0,
       args.metadata_filter ?? null,
       includeGlobal,
@@ -247,7 +260,7 @@ export async function searchMemory(args: {
   ]);
 
   if (resultsSettled.status === "rejected") throw resultsSettled.reason;
-  const results = resultsSettled.value;
+  const candidates = resultsSettled.value;
 
   let graphContext: { seeds: KgSeed[]; neighbors: KgNeighbor[] } | undefined;
   if (graphSettled.status === "fulfilled") {
@@ -257,6 +270,52 @@ export async function searchMemory(args: {
       graphContext = { seeds: ok.seeds, neighbors: ok.neighbors };
     }
   }
+
+  // M8.2 — concept-bridge re-rank (SCM-S50): fuse vector similarity with shared
+  // graph concepts and recover graph-connected chunks the vector pool missed.
+  // Flag-gated; alpha=1 ≡ pure vector. Extra queries are timeout-guarded with a
+  // pure-vector fallback so the graph layer can never block a search.
+  let results = candidates;
+  if (config.SCM_GRAPH_RERANK_ENABLED && graphContext && candidates.length) {
+    const W = conceptWeights(graphContext.seeds, graphContext.neighbors);
+    const conceptIds = [...W.keys()];
+    if (conceptIds.length) {
+      try {
+        const bridge = await withTimeout(
+          fetchConceptChunks(projectId, conceptIds),
+          config.SCM_GRAPH_RERANK_TIMEOUT_MS,
+        );
+        const candidateIds = new Set(candidates.map((c) => c.id));
+        const gRaw = new Map<number, number>();
+        for (const b of bridge) {
+          const wk = W.get(b.concept_id);
+          if (wk !== undefined) gRaw.set(b.chunk_id, (gRaw.get(b.chunk_id) ?? 0) + wk * b.w_ck);
+        }
+        const expandIds = [...gRaw.entries()]
+          .filter(([id]) => !candidateIds.has(id))
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, config.SCM_GRAPH_RERANK_EXPAND)
+          .map(([id]) => id);
+        const expansion = expandIds.length
+          ? await withTimeout(
+              fetchChunksByIds(projectId, expandIds, queryVec),
+              config.SCM_GRAPH_RERANK_TIMEOUT_MS,
+            )
+          : [];
+        results = rerank({
+          candidates,
+          expansion,
+          conceptWeights: W,
+          bridge,
+          params: { alpha: config.SCM_GRAPH_RERANK_ALPHA },
+        });
+      } catch {
+        // §7: never silent — log to stderr (MCP protocol is on stdout) and fall back.
+        console.warn("graph_rerank_skipped: bridge/expansion failed; using pure-vector results");
+      }
+    }
+  }
+  results = results.slice(0, limit);
 
   return {
     project_id: projectId,
