@@ -47,6 +47,16 @@ const Env = z.object({
   CRAWL_CONCURRENCY: z.coerce.number().int().positive().default(3),
   CRAWL_EMBED_BATCH: z.coerce.number().int().positive().default(16),
   CRAWL_TIMEOUT_TOTAL_MS: z.coerce.number().int().positive().default(120000),
+  // ─── Graph-aware retrieval re-rank (SCM-S50, concept-bridge) ─────────────
+  // Ships OFF; alpha=1 ≡ pure vector. No decay knob (bridge is fixed 2-hop).
+  SCM_GRAPH_RERANK_ENABLED: z
+    .string()
+    .default("false")
+    .transform((v) => v.toLowerCase() === "true"),
+  SCM_GRAPH_RERANK_ALPHA: z.coerce.number().min(0).max(1).default(0.7),
+  SCM_GRAPH_RERANK_POOL: z.coerce.number().int().positive().default(40),
+  SCM_GRAPH_RERANK_EXPAND: z.coerce.number().int().nonnegative().default(10),
+  SCM_GRAPH_RERANK_TIMEOUT_MS: z.coerce.number().int().positive().default(50),
 }).refine((v) => Boolean(v.SUPABASE_POOLER_URL) || Boolean(v.SUPABASE_DB_URL), {
   message:
     "At least one of SUPABASE_POOLER_URL (preferred, IPv4) or SUPABASE_DB_URL must be set",
