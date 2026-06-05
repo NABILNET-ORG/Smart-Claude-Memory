@@ -8,6 +8,6 @@ describe("graph rerank config defaults", () => {
     assert.equal(config.SCM_GRAPH_RERANK_ALPHA, 0.7);
     assert.equal(config.SCM_GRAPH_RERANK_POOL, 40);
     assert.equal(config.SCM_GRAPH_RERANK_EXPAND, 10);
-    assert.equal(config.SCM_GRAPH_RERANK_TIMEOUT_MS, 50);
+    assert.equal(config.SCM_GRAPH_RERANK_TIMEOUT_MS, 1500); // 50ms sat below real DB RTT (~167-213ms) → always timed out (SCM-S51)
   });
 });

@@ -56,7 +56,12 @@ const Env = z.object({
   SCM_GRAPH_RERANK_ALPHA: z.coerce.number().min(0).max(1).default(0.7),
   SCM_GRAPH_RERANK_POOL: z.coerce.number().int().positive().default(40),
   SCM_GRAPH_RERANK_EXPAND: z.coerce.number().int().nonnegative().default(10),
-  SCM_GRAPH_RERANK_TIMEOUT_MS: z.coerce.number().int().positive().default(50),
+  // Per-call ceiling for the two bridge round-trips (fetchConceptChunks +
+  // fetchChunksByIds). The original 50ms default sat *below* real Supabase
+  // round-trip latency (measured 167-213ms in SCM-S51), so withTimeout fired
+  // before the first RPC returned and the rerank silently fell back to pure
+  // vector on EVERY query — the feature never actually ran. 1500ms = ~7x headroom.
+  SCM_GRAPH_RERANK_TIMEOUT_MS: z.coerce.number().int().positive().default(1500),
 }).refine((v) => Boolean(v.SUPABASE_POOLER_URL) || Boolean(v.SUPABASE_DB_URL), {
   message:
     "At least one of SUPABASE_POOLER_URL (preferred, IPv4) or SUPABASE_DB_URL must be set",

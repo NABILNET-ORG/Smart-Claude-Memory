@@ -309,9 +309,14 @@ export async function searchMemory(args: {
           bridge,
           params: { alpha: config.SCM_GRAPH_RERANK_ALPHA },
         });
-      } catch {
+      } catch (e) {
         // §7: never silent — log to stderr (MCP protocol is on stdout) and fall back.
-        console.warn("graph_rerank_skipped: bridge/expansion failed; using pure-vector results");
+        // Surface the actual cause: the bare `catch {` previously discarded the
+        // error, violating §7's own "never silent" intent and hiding root cause.
+        console.warn(
+          "graph_rerank_skipped: bridge/expansion failed; using pure-vector results —",
+          e instanceof Error ? (e.stack ?? e.message) : String(e),
+        );
       }
     }
   }
