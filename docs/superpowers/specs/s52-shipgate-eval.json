@@ -1,0 +1,492 @@
+[
+  {
+    "query": "What are the rules for saving knowledge as a universal pattern that applies across multiple projects?",
+    "gold_chunk_id": 10644,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "How was the rule forbidding deception to the next party handled without any audible objection?",
+    "gold_chunk_id": 10727,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "What are the criteria for confirming that a software build process is completely clean and free of errors and leftover files?",
+    "gold_chunk_id": 10749,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "How did a flaw in the order of version and hash validation allow a partially applied upgrade to bypass safety checks during a constitution block update?",
+    "gold_chunk_id": 11503,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "What were the specific additions and deletions made to the codebase related to the sleep tool and its associated testing artifacts?",
+    "gold_chunk_id": 11843,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "What is the actual root cause of a global search failure when initial assumptions about code restrictions are proven incorrect?",
+    "gold_chunk_id": 11962,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "How are file refactoring checks, rule conflict detection, and image captioning handled within the system's tools?",
+    "gold_chunk_id": 13542,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "What are the internal tools used for image captioning, memory file summarization, and resource bloat auditing?",
+    "gold_chunk_id": 13543,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "How is the visual highlighting of graph elements managed in relation to the overall data loading and rendering process?",
+    "gold_chunk_id": 13575,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "How can I install Python on various operating systems and debug a malfunctioning hook?",
+    "gold_chunk_id": 13591,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "What were the version baselines, decisions, and release planning details documented in Session 41?",
+    "gold_chunk_id": 13744,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "How is the budget enforcement mechanism tested by bypassing the running server to directly check task budgets?",
+    "gold_chunk_id": 13774,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "What is the mechanism for enforcing a hard block when a resource budget is exceeded and usage counters are updated?",
+    "gold_chunk_id": 13775,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "What are the implementation details, performance targets, system status, and outstanding specification items for the knowledge graph system?",
+    "gold_chunk_id": 13777,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "How is system drift detected and corrected when server states become stale following updates?",
+    "gold_chunk_id": 13802,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "How does a required configuration field defined in the schema fail to be utilized by the application code when environment variables are accessed via a fallback chain?",
+    "gold_chunk_id": 13914,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "How are idempotency and safety guaranteed when performing repeated scans on stale data candidates?",
+    "gold_chunk_id": 14286,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "What is the status and failure reason when a task that has been pulled is subsequently rejected, and how does the system handle rejections of already rejected tasks?",
+    "gold_chunk_id": 14393,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "How were the project's public metadata fields updated to enhance discoverability on the registry?",
+    "gold_chunk_id": 22735,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "What is the correct procedure for ensuring a running process uses newly updated source code when changes have been made?",
+    "gold_chunk_id": 22751,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "When interacting with a file, what is the appropriate method for reading content if the goal is to edit versus if the goal is to analyze or summarize?",
+    "gold_chunk_id": 29246,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "How was the integrity of the data handling system, which includes serialization and export/import tools, verified?",
+    "gold_chunk_id": 33191,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "How should a multi-page documentation crawler be designed to safely and efficiently ingest content by composing existing elements instead of duplicating them?",
+    "gold_chunk_id": 40756,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "What is the mathematical procedure for deriving a final relevance score by combining concept weights, vector similarity, and content expansion?",
+    "gold_chunk_id": 51323,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "What is the recommended approach for combining vector recall with a deterministic knowledge graph for re-ranking in a retrieval system?",
+    "gold_chunk_id": 51430,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "What is the security risk associated with modifying live environment files and committing those changes?",
+    "gold_chunk_id": 51466,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "How is the process for invoking the various tools within the Claude Code environment handled?",
+    "gold_chunk_id": 54696,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 1
+  },
+  {
+    "query": "How can a security hook incorrectly block a file operation when it misinterprets a regular expression method as a system command?",
+    "gold_chunk_id": 11847,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 2
+  },
+  {
+    "query": "How should the telemetry pruning feature be integrated, reflected in system status, and validated through testing and documentation updates?",
+    "gold_chunk_id": 12129,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 2
+  },
+  {
+    "query": "How are file hashing, backlog management, security restrictions, and metadata retrieval optimized and structured within the system?",
+    "gold_chunk_id": 13580,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 2
+  },
+  {
+    "query": "What is the method for testing prompt modifications to ensure the test validates only the changes made, rather than the original text?",
+    "gold_chunk_id": 14017,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 2
+  },
+  {
+    "query": "How does one resolve a test failure caused by a missing database relation through the process of creating and applying a schema migration?",
+    "gold_chunk_id": 14216,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 2
+  },
+  {
+    "query": "What is the expected result for the enqueued count when scanning stale candidates with an empty corpus?",
+    "gold_chunk_id": 14261,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 2
+  },
+  {
+    "query": "What is the verification and test coverage plan for ensuring the safety of transactional workflow checkpoints by using agentic execution and live database testing?",
+    "gold_chunk_id": 14412,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 2
+  },
+  {
+    "query": "How must we establish a mandatory baseline for prompt defense across all agent personas?",
+    "gold_chunk_id": 14493,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 2
+  },
+  {
+    "query": "What are the guidelines for making iterative fixes and changes in a system?",
+    "gold_chunk_id": 53654,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 2
+  },
+  {
+    "query": "How should data be structured to separate raw, addressable information from compressed semantic summaries while respecting archival rules?",
+    "gold_chunk_id": 53690,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 2
+  },
+  {
+    "query": "What are the rules for handling endpoint filtering results and applying defense-in-depth security headers to responses?",
+    "gold_chunk_id": 54068,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 2
+  },
+  {
+    "query": "How can session state and port stability be managed for the GUI browser to prevent repeated session openings?",
+    "gold_chunk_id": 54330,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 2
+  },
+  {
+    "query": "What specific actions and functions are available to an npm consumer when executing the project's defined scripts?",
+    "gold_chunk_id": 54693,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 2
+  },
+  {
+    "query": "How is the correct numbering of sequential sessions managed when a report is currently being generated?",
+    "gold_chunk_id": 11965,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 3
+  },
+  {
+    "query": "How should a running process handle updating its view of source code after a file system rebuild?",
+    "gold_chunk_id": 22749,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 3
+  },
+  {
+    "query": "How is data isolation managed during integration tests against a shared database environment?",
+    "gold_chunk_id": 43862,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 3
+  },
+  {
+    "query": "How does the telemetry pruning extension manage the deletion of different types of data, specifically distinguishing between items that are removed and those that are intentionally kept?",
+    "gold_chunk_id": 54105,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 3
+  },
+  {
+    "query": "How are new features and updates implemented while reusing existing database structures and minimizing new dependencies?",
+    "gold_chunk_id": 54203,
+    "project_id": "claude-memory",
+    "partition": "control",
+    "vector_rank": 3
+  },
+  {
+    "query": "How does the system handle applying changes when using legacy single-file mode versus the standard migration process?",
+    "gold_chunk_id": 11996,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 4
+  },
+  {
+    "query": "What is the recommended strategy for managing version releases when internal system improvements do not result in any changes to the external package interface?",
+    "gold_chunk_id": 12148,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 4
+  },
+  {
+    "query": "What principles should be followed when structuring code changes and managing time-sensitive functions to ensure reliable history and deterministic testing?",
+    "gold_chunk_id": 13608,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 4
+  },
+  {
+    "query": "What is the process for updating the global knowledge vault and task delegation prompts through a multi-phase pipeline?",
+    "gold_chunk_id": 14471,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 4
+  },
+  {
+    "query": "How is the process structured for promoting locally validated agent skills to a global status while maintaining strict human oversight?",
+    "gold_chunk_id": 54038,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 4
+  },
+  {
+    "query": "How can agentic workers use specialized capabilities and testing fixtures to lock down a curriculum source and correct documentation errors?",
+    "gold_chunk_id": 14292,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 5
+  },
+  {
+    "query": "How does applying a foundational principle during code refactoring interact with documentation updates and release tracking?",
+    "gold_chunk_id": 13679,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 6
+  },
+  {
+    "query": "How is the system designed to handle the deletion of file data and the subsequent management of associated records?",
+    "gold_chunk_id": 14074,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 6
+  },
+  {
+    "query": "How is the complete set of available tools organized and accessed within the system?",
+    "gold_chunk_id": 54669,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 6
+  },
+  {
+    "query": "How are build artifacts, session reports, and related files managed and bundled during the final commit process?",
+    "gold_chunk_id": 10761,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 7
+  },
+  {
+    "query": "How is the data structured and constrained for tracking the history and status of a skill composition process?",
+    "gold_chunk_id": 54042,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 7
+  },
+  {
+    "query": "How are database migration files organized and how are constraints and daemon updates managed across sequential migration steps?",
+    "gold_chunk_id": 13944,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 8
+  },
+  {
+    "query": "How must the process of applying a promotion be structured to guarantee transactional integrity, prevent data duplication, and maintain the read-only status of source skill information?",
+    "gold_chunk_id": 14169,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 8
+  },
+  {
+    "query": "What are the circumstances that dictate when an agent should avoid requesting a skill?",
+    "gold_chunk_id": 29228,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 8
+  },
+  {
+    "query": "How is the live end-to-end smoke test executed for the M5 Curriculum consumer tools?",
+    "gold_chunk_id": 14397,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 11
+  },
+  {
+    "query": "What were the specific updates to the global vault user experience and project capabilities in version 2.1.0?",
+    "gold_chunk_id": 54201,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 11
+  },
+  {
+    "query": "What are the defined fields and their meanings within the pattern tracking table?",
+    "gold_chunk_id": 53698,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 12
+  },
+  {
+    "query": "What are the performance costs, data requirements, and execution time associated with running the Louvain method on a network structure?",
+    "gold_chunk_id": 14130,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 14
+  },
+  {
+    "query": "What modifications were made to the graduation listing functionality and associated tests?",
+    "gold_chunk_id": 14230,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 14
+  },
+  {
+    "query": "What are the specific decisions governing distribution models, migration application, system health states, model installation, and file loading procedures?",
+    "gold_chunk_id": 11795,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 18
+  },
+  {
+    "query": "How are decisions and their associated artifacts tracked and persisted across a session?",
+    "gold_chunk_id": 11850,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 18
+  },
+  {
+    "query": "What criteria are used to classify saved project decisions as global candidates and what is required for their promotion?",
+    "gold_chunk_id": 14063,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 21
+  },
+  {
+    "query": "How can one ensure that a saved piece of information is visible universally across all related searches, especially when dealing with complex project structures?",
+    "gold_chunk_id": 13618,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 22
+  },
+  {
+    "query": "What changes and new features were implemented in the modular GUI subsystem update for the v2.2.0 baseline?",
+    "gold_chunk_id": 54245,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 27
+  },
+  {
+    "query": "How are specific actions like confirming promotions, rejecting graduations, and inserting skills managed and validated through a verification gate?",
+    "gold_chunk_id": 14235,
+    "project_id": "claude-memory",
+    "partition": "lift",
+    "vector_rank": 29
+  }
+]

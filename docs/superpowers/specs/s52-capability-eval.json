@@ -1,0 +1,42 @@
+[
+  {
+    "query": "What principles should be followed when structuring code changes and managing time-sensitive functions to ensure reliable history and deterministic testing?",
+    "gold_chunk_id": 13608,
+    "project_id": "claude-memory",
+    "partition": "capability",
+    "vector_rank": 4,
+    "bridge_note": "bridge via DECISION 'SCM-S27-D3' (node #35400, w_ck=1.500); OFF rank 4 → ON rank 1 (α=0.7, bridge_rows=14)"
+  },
+  {
+    "query": "What is the process for updating the global knowledge vault and task delegation prompts through a multi-phase pipeline?",
+    "gold_chunk_id": 14471,
+    "project_id": "claude-memory",
+    "partition": "capability",
+    "vector_rank": 4,
+    "bridge_note": "bridge via SYMBOL 'list_global_patterns' (node #25745, w_ck=1.000); OFF rank 4 → ON rank 3 (α=0.7, bridge_rows=878)"
+  },
+  {
+    "query": "How is the process structured for promoting locally validated agent skills to a global status while maintaining strict human oversight?",
+    "gold_chunk_id": 54038,
+    "project_id": "claude-memory",
+    "partition": "capability",
+    "vector_rank": 4,
+    "bridge_note": "bridge via SYMBOL 'agent_skills' (node #31442, w_ck=1.000); OFF rank 4 → ON rank 2 (α=0.7, bridge_rows=177)"
+  },
+  {
+    "query": "How can agentic workers use specialized capabilities and testing fixtures to lock down a curriculum source and correct documentation errors?",
+    "gold_chunk_id": 14292,
+    "project_id": "claude-memory",
+    "partition": "capability",
+    "vector_rank": 5,
+    "bridge_note": "bridge via FILE 'ARCHITECTURE.md' (node #210, w_ck=1.000); OFF rank 5 → ON rank 3 (α=0.7, bridge_rows=514)"
+  },
+  {
+    "query": "How is the complete set of available tools organized and accessed within the system?",
+    "gold_chunk_id": 54669,
+    "project_id": "claude-memory",
+    "partition": "capability",
+    "vector_rank": 6,
+    "bridge_note": "bridge via FILE 'src/index.ts' (node #179, w_ck=1.000); OFF rank 6 → ON rank 1 (α=0.7, bridge_rows=617)"
+  }
+]
