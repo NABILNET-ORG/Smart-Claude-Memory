@@ -1,1 +1,32 @@
-[]
+[
+  {
+    "query": "How are nodes and relationships derived from one saved memory entry without any model inference?",
+    "gold_chunk_id": 13865,
+    "project_id": "claude-memory"
+  },
+  {
+    "query": "What rule prevents a project-local memory from being promoted to the shared cross-project vault, and what does the server require before allowing it?",
+    "gold_chunk_id": 29221,
+    "project_id": "claude-memory"
+  },
+  {
+    "query": "Which module implements the manual gate that blocks further edits until I confirm whether a test passed or failed?",
+    "gold_chunk_id": 13533,
+    "project_id": "claude-memory"
+  },
+  {
+    "query": "What background process automatically shrinks long, stale session histories over time?",
+    "gold_chunk_id": 13498,
+    "project_id": "claude-memory"
+  },
+  {
+    "query": "During extraction, how does a memory get linked to the specific source files and decision identifiers it references?",
+    "gold_chunk_id": 13866,
+    "project_id": "claude-memory"
+  },
+  {
+    "query": "What enforces the maximum allowed file length and blocks writes that exceed it, and what is the line limit?",
+    "gold_chunk_id": 29217,
+    "project_id": "claude-memory"
+  }
+]

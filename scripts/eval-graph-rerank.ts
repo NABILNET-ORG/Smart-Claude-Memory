@@ -29,15 +29,28 @@ async function main(): Promise<void> {
     console.log("[eval] (verify each fails with SCM_GRAPH_RERANK_ENABLED=false BEFORE adding it).");
     return;
   }
+  const verbose = process.env.EVAL_VERBOSE === "1" || process.env.EVAL_VERBOSE === "true";
   let r3 = 0;
   let m = 0;
+  const rows: { rank: string; top3: number; rr: number; gold: number; query: string }[] = [];
   for (const c of cases) {
     const res = (await searchMemory({ query: c.query, project_id: c.project_id, limit: 10 })) as {
       results: { id: number }[];
     };
     const ids = res.results.map((x) => x.id);
-    r3 += recallAtK(ids, c.gold_chunk_id, 3);
-    m += mrr(ids, c.gold_chunk_id);
+    const hit3 = recallAtK(ids, c.gold_chunk_id, 3);
+    const rr = mrr(ids, c.gold_chunk_id);
+    r3 += hit3;
+    m += rr;
+    const idx = ids.indexOf(c.gold_chunk_id);
+    rows.push({ rank: idx === -1 ? ">10" : String(idx + 1), top3: hit3, rr, gold: c.gold_chunk_id, query: c.query });
+  }
+  if (verbose) {
+    for (const row of rows) {
+      console.log(
+        `[q] rank=${row.rank}\ttop3=${row.top3}\trr=${row.rr.toFixed(3)}\tgold=${row.gold}\t:: ${row.query.slice(0, 72)}`,
+      );
+    }
   }
   console.log(
     JSON.stringify(
