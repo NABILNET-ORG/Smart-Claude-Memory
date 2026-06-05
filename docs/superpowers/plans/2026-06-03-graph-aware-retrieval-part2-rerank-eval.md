@@ -56,6 +56,23 @@ WHERE c.id = ANY($1::bigint[])
 
 ---
 
+## As-Built Reconciliation (executed Session 50 — SCM-S50)
+
+Part 2 shipped on `feat/graph-aware-retrieval` (T5–T10), full suite **430/430** green. Corrections to the draft below, recorded so this plan matches reality:
+
+1. **No config mapping layer.** `config` is `z.infer<typeof Env>`, so knobs are read directly as **`config.SCM_GRAPH_RERANK_*`** (the T5/T9 blocks below are corrected from the draft's snake_case `config.graph_rerank_*`).
+2. **`RerankParams` is `{ alpha }` only** — `search.ts` caps expansion and the bridge is fixed 2-hop, so no `expand`/`decay` reaches the scorer.
+3. **`BridgeRow` lives in `src/supabase.ts`** (with the fetch fns); `rerank.ts` imports it.
+4. **The bridge selects `p` by "has a chunk id", not by type** — including DECISION primaries (181 edges) the agent's `p.type NOT IN (...)` draft would have dropped.
+5. **`search-graph-rag.test.ts` mock gained `fetchConceptChunks`/`fetchChunksByIds` no-ops** — search.ts's new imports must resolve even with rerank off.
+6. **RPC smoke-validated** post-migration: 8 concept ids → 23 bridge rows via the service-role client.
+
+**Commit trail:** `35980f5` (T5) · `2e1d77a` (T6) · `6f47432` (T7 + migration 027) · `ae51d60` (T8) · `be8e2d1` (T9) · `2653735` (T10).
+
+**Remaining before the default-on flip (ship-gate):** curate `s16-d1-eval-queries.json` with verified-failing queries → run `eval-graph-rerank.ts` off-vs-on → confirm recall@3 up / mrr not down / no control regression → flip `SCM_GRAPH_RERANK_ENABLED`'s default in `src/config.ts` (its own PR).
+
+---
+
 ## File Structure
 
 - **Modify** `src/config.ts` — `SCM_GRAPH_RERANK_*` knobs (Zod). [T5]
@@ -72,7 +89,7 @@ WHERE c.id = ANY($1::bigint[])
 
 **Files:** Modify `src/config.ts`; Test `tests/config-rerank.test.ts`.
 
-- [ ] **Step 1: RED** — test the defaults (`config.graph_rerank_enabled===false`, `alpha===0.7`, `pool===40`, `expand===10`, `timeout_ms===50`). **No `decay` knob** — the concept-bridge is always exactly 2-hop (seed→concept→chunk), so there's no variable hop to decay; γ is dropped from spec §5 as YAGNI.
+- [ ] **Step 1: RED** — test the defaults (`config.SCM_GRAPH_RERANK_ENABLED===false`, `alpha===0.7`, `pool===40`, `expand===10`, `timeout_ms===50`). **No `decay` knob** — the concept-bridge is always exactly 2-hop (seed→concept→chunk), so there's no variable hop to decay; γ is dropped from spec §5 as YAGNI.
 - [ ] **Step 2:** register test, run, fails.
 - [ ] **Step 3: GREEN** — add to the Zod `Env` object + `config` mapping:
 ```ts
@@ -82,7 +99,7 @@ SCM_GRAPH_RERANK_POOL: z.coerce.number().int().positive().default(40),
 SCM_GRAPH_RERANK_EXPAND: z.coerce.number().int().min(0).default(10),
 SCM_GRAPH_RERANK_TIMEOUT_MS: z.coerce.number().int().positive().default(50),
 ```
-expose as `graph_rerank_enabled/_alpha/_pool/_expand/_timeout_ms` following the file's mapping convention.
+Read directly as `config.SCM_GRAPH_RERANK_*` — `config` is `z.infer<typeof Env>` with no snake_case mapping layer.
 - [ ] **Step 4:** run → pass. **Step 5:** `npx tsc` + commit `feat(config): add SCM_GRAPH_RERANK_* knobs (default off)`.
 
 > Naming: spec §5 said `SCM_GRAPH_RERANK`; we use `_ENABLED` to match `SCM_GRAPH_EXTRACTOR_ENABLED`.
@@ -254,27 +271,27 @@ export function rerank(input: RerankInput): MatchRow[] {
 
 - [ ] **Step 1: RED** — mock `config` (rerank on, α=0.3), `embed` (768-dim), `searchChunks` (two candidates), `kgHybridSearch` (one seed + one neighbor concept), `fetchConceptChunks` (bridge row linking the concept to the lower-vector candidate), `fetchChunksByIds` (`[]`). Assert the concept-sharing candidate is lifted to `results[0]`.
 - [ ] **Step 2:** register, run, fails.
-- [ ] **Step 3: GREEN** — at the `graph_context` site, when `config.graph_rerank_enabled`:
+- [ ] **Step 3: GREEN** — at the `graph_context` site, when `config.SCM_GRAPH_RERANK_ENABLED`:
 ```ts
-const pool = config.graph_rerank_enabled ? config.graph_rerank_pool : (args.limit ?? 5);
+const pool = config.SCM_GRAPH_RERANK_ENABLED ? config.SCM_GRAPH_RERANK_POOL : (args.limit ?? 5);
 // ...searchChunks(..., pool, ...) and kgHybridSearch(...) as today...
 let results = chunks;
-if (config.graph_rerank_enabled && graphContext && chunks.length) {
+if (config.SCM_GRAPH_RERANK_ENABLED && graphContext && chunks.length) {
   const W = conceptWeights(graphContext.seeds, graphContext.neighbors);
   const conceptIds = [...W.keys()];
   let bridge: BridgeRow[] = [];
   try {
-    bridge = await withTimeout(fetchConceptChunks(projectId, conceptIds), config.graph_rerank_timeout_ms);
+    bridge = await withTimeout(fetchConceptChunks(projectId, conceptIds), config.SCM_GRAPH_RERANK_TIMEOUT_MS);
   } catch { console.warn("graph_rerank_skipped: bridge_timeout"); }
   // expansion = bridged chunks not already candidates, top-M by g_raw
   const candIds = new Set(chunks.map((c) => c.id));
   const gRaw = new Map<number, number>();
   for (const b of bridge) { const wk = W.get(b.concept_id); if (wk) gRaw.set(b.chunk_id, (gRaw.get(b.chunk_id) ?? 0) + wk * b.w_ck); }
   const expandIds = [...gRaw.entries()].filter(([id]) => !candIds.has(id))
-    .sort((a, b) => b[1] - a[1]).slice(0, config.graph_rerank_expand).map(([id]) => id);
+    .sort((a, b) => b[1] - a[1]).slice(0, config.SCM_GRAPH_RERANK_EXPAND).map(([id]) => id);
   let expansion: typeof chunks = [];
-  if (expandIds.length) { try { expansion = await withTimeout(fetchChunksByIds(projectId, expandIds, queryVec), config.graph_rerank_timeout_ms); } catch { console.warn("graph_rerank_skipped: expansion_timeout"); } }
-  results = rerank({ candidates: chunks, expansion, conceptWeights: W, bridge, params: { alpha: config.graph_rerank_alpha, expand: config.graph_rerank_expand } });
+  if (expandIds.length) { try { expansion = await withTimeout(fetchChunksByIds(projectId, expandIds, queryVec), config.SCM_GRAPH_RERANK_TIMEOUT_MS); } catch { console.warn("graph_rerank_skipped: expansion_timeout"); } }
+  results = rerank({ candidates: chunks, expansion, conceptWeights: W, bridge, params: { alpha: config.SCM_GRAPH_RERANK_ALPHA, expand: config.SCM_GRAPH_RERANK_EXPAND } });
 }
 results = results.slice(0, args.limit ?? 5);
 ```
