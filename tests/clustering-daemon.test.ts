@@ -200,7 +200,9 @@ test("C8: smoke — 50 embedded nodes cluster end-to-end with full coverage", as
   assert.equal(r.rows_upserted, 50);
   // K = ceil(sqrt(50)) = 8
   assert.equal(r.kmeans_k, 8, `expected K=ceil(sqrt(50))=8, got ${r.kmeans_k}`);
-  assert.ok(r.duration_ms < 10_000, `50-node smoke should be < 10s, got ${r.duration_ms}ms`);
+  // No wall-clock assertion here: clustering is network-bound (Supabase upserts),
+  // so a duration gate flakes under latency variance. This smoke verifies full
+  // coverage + correctness, not latency (#371).
 
   // Every supernode_id must be in [0, kmeans_k) and every community_id >= 0.
   const { data, error } = await supabase

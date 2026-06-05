@@ -94,24 +94,22 @@ function parseEmbedding(raw: unknown): Float32Array | null {
 }
 
 /**
- * Distinct project IDs whose kg_nodes have at least one embedding. Bounded
- * by `limit` because PostgREST doesn't expose DISTINCT directly — we
- * deduplicate client-side. For typical 1..10 projects per Supabase this is
- * cheap; multi-tenant setups beyond the cap should add a dedicated RPC.
+ * Distinct project IDs whose kg_nodes have at least one embedding. Delegates
+ * the DISTINCT to Postgres via the clustering_discover_projects RPC (migration
+ * 028) so it returns exactly one row per project and is NEVER truncated. This
+ * replaces the old unordered limit(5000) + client-side dedup, which could
+ * silently skip projects once the global embedded-node count exceeded 5000 —
+ * a round-robin gap that also flaked the C8 smoke test (#371).
  */
-export async function discoverProjects(limit = 5000): Promise<string[]> {
-  const { data, error } = await supabase
-    .from("kg_nodes")
-    .select("project_id")
-    .not("embedding", "is", null)
-    .limit(limit);
+export async function discoverProjects(): Promise<string[]> {
+  const { data, error } = await supabase.rpc("clustering_discover_projects");
   if (error || !data) return [];
   const seen = new Set<string>();
-  for (const row of data) {
-    const pid = (row as { project_id?: unknown }).project_id;
+  for (const row of data as Array<{ project_id?: unknown }>) {
+    const pid = row.project_id;
     if (typeof pid === "string" && pid.length > 0) seen.add(pid);
   }
-  return [...seen].sort(); // sort for deterministic round-robin
+  return [...seen].sort(); // RPC already orders; the sort is defensive
 }
 
 /**
