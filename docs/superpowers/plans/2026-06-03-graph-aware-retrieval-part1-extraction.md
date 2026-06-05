@@ -12,6 +12,22 @@
 
 ---
 
+## As-Built Reconciliation (executed in Session 50 — SCM-S50)
+
+Part 1 shipped on `feat/graph-aware-retrieval`. Three TDD-driven deviations from the original draft below, recorded so this plan matches reality (no broken windows):
+
+1. **The garbage source was the primary label, not file-ref matching.** A chunk whose first non-empty line was a structural fragment (`> n161`) became a node literally labeled `> n161` (old `firstNonEmptyLine`). Fix: sanitize the content, then select the first non-empty **non-garbage** prose line (`firstProseLabel`). — `337d6bf`
+2. **`isGarbageLabel` was split out and made precise** (T2a, `4f5e4cd`). The original catch-all `["'\]\[]` wrongly flagged any prose containing a bracket/quote (e.g. `see results[0]`). Replaced with targeted checks — structural keyword / mermaid node-id / arrow / punctuation-dominant (`< 2` alphanumerics) — so it is safe to run against whole-sentence primary labels.
+3. **A chunk's own decision id is excluded from secondary DECISION nodes** (`extractor.ts`), so the draft's `SCM-S16-D1` secondary-node assertion was wrong and was corrected in the shipped test.
+
+**SYMBOL producer (T3, `ec6775b`)** emits nodes **and** `MENTIONS` edges from the primary — a bare node can't bridge chunks, and bridging is the point.
+
+**Task 4 below is rewritten** to a **JS-filter** approach: the SQL-mirror exports (`GARBAGE_SQL_REGEX` / `matchesGarbageSql`) were removed to eliminate TS↔SQL regex drift; the purge now filters in JS via `isGarbageLabel` as the single source of truth.
+
+**Commit trail:** `48b6b6a` (T1) · `4f5e4cd` (T2a) · `337d6bf` (T2b) · `ec6775b` (T3). Full suite 418/418 green.
+
+---
+
 ## File Structure
 
 - **Create** `src/graph/sanitize.ts` — pure `sanitizeForExtraction()` + `isGarbageLabel()` + shared SQL regex. Single responsibility: text hygiene. Imported by both the extractor and the purge script (DRY).
@@ -271,67 +287,67 @@ git commit -m "feat(graph): SYMBOL producer for backticked code identifiers"
 
 ---
 
-### Task 4: One-off purge of poisoned nodes
+### Task 4: One-off purge of poisoned nodes (JS-filter)
 
 **Files:**
 - Create: `scripts/purge-graph-nodes.ts`
-- Test: `tests/graph-purge-predicate.test.ts`
-- Modify: `package.json` (test list)
 
-- [ ] **Step 1: Write the failing test** (SQL regex must flag the same garbage as `isGarbageLabel`)
+**No new unit test.** The discriminating predicate is `isGarbageLabel` (already covered by the T1/T2a tests); the script is one-off DB glue. Its safety gate is the **mandatory dry-run with a row sample** — inspect exactly what will be deleted before `--commit`. `kg_nodes` is *derived* data, so a mistaken delete is recoverable by re-extraction.
 
-```ts
-// tests/graph-purge-predicate.test.ts
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
-import { matchesGarbageSql, isGarbageLabel } from "../src/graph/sanitize.js";
+**Predicate.** A historical node is garbage when `isGarbageLabel(label)` **OR** `isGarbageLabel(sanitizeForExtraction(label).trim())`. The second clause catches pre-fix labels like `> n161` — sanitizing strips the blockquote to `n161`, which `isGarbageLabel` then flags as a mermaid node-id — while a real quoted sentence (`> This is a note`) sanitizes to clean prose and is kept.
 
-describe("purge predicate parity", () => {
-  it("SQL mirror agrees with isGarbageLabel on representative cases", () => {
-    for (const bad of ["n161", "-->", "TD", "ab"]) {
-      assert.equal(matchesGarbageSql(bad), true, `garbage: ${bad}`);
-      assert.equal(isGarbageLabel(bad), true, `garbage: ${bad}`);
-    }
-    for (const ok of ["gate.ts", "search_memory", "SCM-S16-D1"]) {
-      assert.equal(matchesGarbageSql(ok), false, `entity: ${ok}`);
-      assert.equal(isGarbageLabel(ok), false, `entity: ${ok}`);
-    }
-  });
-});
-```
-
-- [ ] **Step 2: Register the test file, run, verify it passes immediately**
-
-`matchesGarbageSql` already exists from Task 1. Append the file to the `test` list.
-Run: `node --import tsx --experimental-test-module-mocks --no-warnings --test tests/graph-purge-predicate.test.ts`
-Expected: PASS (this task's risk is the script, not the predicate — the test locks parity so the SQL can't drift from the TS).
-
-- [ ] **Step 3: Implement `scripts/purge-graph-nodes.ts`** (mirror `scripts/backfill-ledger.ts`)
+- [ ] **Step 1: Implement `scripts/purge-graph-nodes.ts`** (mirror `scripts/backfill-ledger.ts`)
 
 ```ts
 // scripts/purge-graph-nodes.ts — one-off; DRY-RUN unless --commit is passed.
+// Deletes kg_nodes whose label is pre-SCM-S50 structural garbage, scoped to one
+// project. Single source of truth: src/graph/sanitize.ts. kg_nodes is derived —
+// a mistaken delete is recoverable by re-extraction.
 import "dotenv/config";
 import { Client } from "pg";
-import { GARBAGE_SQL_REGEX } from "../src/graph/sanitize.js";
+import { isGarbageLabel, sanitizeForExtraction } from "../src/graph/sanitize.js";
 
 const COMMIT = process.argv.includes("--commit");
-const WHERE = `length(label) < 3 OR label ~* $1`;
+const PROJECT = process.env.SCM_PURGE_PROJECT ?? "claude-memory";
+
+function isHistoricalGarbage(label: string): boolean {
+  return isGarbageLabel(label) || isGarbageLabel(sanitizeForExtraction(label).trim());
+}
 
 async function main(): Promise<void> {
   const client = new Client({ connectionString: process.env.SUPABASE_POOLER_URL });
   await client.connect();
   try {
-    const { rows } = await client.query(
-      `SELECT count(*)::int AS n FROM kg_nodes WHERE ${WHERE}`,
-      [GARBAGE_SQL_REGEX],
+    const { rows } = await client.query<{ id: string; label: string }>(
+      "SELECT id, label FROM kg_nodes WHERE project_id = $1",
+      [PROJECT],
     );
-    console.log(`[purge] ${rows[0].n} garbage node(s) match (edges cascade on delete).`);
-    if (COMMIT) {
-      const res = await client.query(`DELETE FROM kg_nodes WHERE ${WHERE}`, [GARBAGE_SQL_REGEX]);
-      console.log(`[purge] deleted ${res.rowCount} node(s).`);
-    } else {
-      console.log("[purge] DRY RUN — re-run with --commit to delete.");
+    const garbage = rows.filter((r) => isHistoricalGarbage(r.label));
+    const ids = garbage.map((r) => r.id);
+    console.log(`[purge] project=${PROJECT}  total_nodes=${rows.length}  garbage=${garbage.length}`);
+
+    let edgeCount = 0;
+    if (ids.length) {
+      const e = await client.query<{ n: number }>(
+        "SELECT count(*)::int AS n FROM kg_edges WHERE source_id = ANY($1::bigint[]) OR target_id = ANY($1::bigint[])",
+        [ids],
+      );
+      edgeCount = e.rows[0].n;
     }
+    console.log(`[purge] edges that will cascade-delete: ${edgeCount}`);
+    console.log("[purge] sample garbage labels (up to 30):");
+    for (const r of garbage.slice(0, 30)) console.log(`   #${r.id}  ${JSON.stringify(r.label)}`);
+
+    if (!COMMIT) {
+      console.log("[purge] DRY RUN — re-run with --commit to delete.");
+      return;
+    }
+    if (!ids.length) {
+      console.log("[purge] nothing to delete.");
+      return;
+    }
+    const res = await client.query("DELETE FROM kg_nodes WHERE id = ANY($1::bigint[])", [ids]);
+    console.log(`[purge] DELETED ${res.rowCount} node(s); ${edgeCount} edge(s) cascaded.`);
   } finally {
     await client.end();
   }
@@ -343,16 +359,16 @@ main().catch((e) => {
 });
 ```
 
-- [ ] **Step 4: Verify (dry-run) + commit**
+- [ ] **Step 2: Dry-run, inspect, then commit the live purge**
 
 ```bash
 npx tsc
-npx tsx scripts/purge-graph-nodes.ts          # dry run: prints match count, deletes nothing
-git add scripts/purge-graph-nodes.ts tests/graph-purge-predicate.test.ts package.json
-git commit -m "feat(graph): one-off purge script for poisoned kg_nodes (dry-run default)"
+npx tsx scripts/purge-graph-nodes.ts            # dry run: counts + 30 sample labels, deletes nothing
+# inspect the sample — confirm they are structural fragments, not real entities — then:
+npx tsx scripts/purge-graph-nodes.ts --commit   # permanently deletes; edges cascade
 ```
 
-> **Operational note (spec §9.2):** after Tasks 1–3 ship, run `npx tsx scripts/purge-graph-nodes.ts --commit` **once** against the live DB to clear historical garbage. The fixed daemon repopulates clean nodes on subsequent ticks.
+> **Operational note (spec §9.2):** the fixed daemon repopulates clean nodes on subsequent ticks. A full historical re-extraction to backfill SYMBOL nodes for *old* chunks is a separate, optional follow-up before the eval can show the SYMBOL-bridge benefit.
 
 ---
 
