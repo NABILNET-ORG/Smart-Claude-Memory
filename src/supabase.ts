@@ -298,6 +298,89 @@ export async function searchChunks(
   return (data ?? []) as MatchRow[];
 }
 
+// ─── concept-bridge re-rank (SCM-S50) ─────────────────────────────────────
+
+export interface BridgeRow {
+  concept_id: number;
+  chunk_id: number;
+  w_ck: number;
+}
+
+/** pgvector arrives as a JSON-ish string over PostgREST; normalize to number[]. */
+export function parseVector(v: unknown): number[] {
+  if (Array.isArray(v)) return v as number[];
+  if (typeof v === "string") {
+    try {
+      return JSON.parse(v) as number[];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+export function cosineSim(a: number[], b: number[]): number {
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  return na && nb ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
+}
+
+/** Pure mapper: a memory_chunks row + the query vector → a scored MatchRow. */
+export function rowToMatch(
+  row: {
+    id: number;
+    content: string;
+    file_origin: string;
+    chunk_index: number;
+    metadata: unknown;
+    embedding: unknown;
+  },
+  queryEmbedding: number[],
+): MatchRow {
+  return {
+    id: row.id,
+    content: row.content,
+    file_origin: row.file_origin,
+    chunk_index: row.chunk_index,
+    metadata: row.metadata as MatchRow["metadata"],
+    similarity: cosineSim(queryEmbedding, parseVector(row.embedding)),
+  };
+}
+
+/** Concept-bridge: concept node ids → chunks that mention them (kg_bridge_chunks RPC). */
+export async function fetchConceptChunks(projectId: string, conceptIds: number[]): Promise<BridgeRow[]> {
+  if (!conceptIds.length) return [];
+  const { data, error } = await supabase.rpc("kg_bridge_chunks", {
+    p_concept_ids: conceptIds,
+    p_project_id: projectId,
+  });
+  if (error || !data) return [];
+  return data as BridgeRow[];
+}
+
+/** Recall expansion: fetch specific chunks and score them vs the query vector. */
+export async function fetchChunksByIds(
+  projectId: string,
+  ids: number[],
+  queryEmbedding: number[],
+): Promise<MatchRow[]> {
+  if (!ids.length) return [];
+  const { data, error } = await supabase
+    .from("memory_chunks")
+    .select("id,content,file_origin,chunk_index,metadata,embedding")
+    .eq("project_id", projectId)
+    .in("id", ids);
+  if (error || !data) return [];
+  return data.map((r) => rowToMatch(r as never, queryEmbedding));
+}
+
 // ─── cloud_backlog ────────────────────────────────────────────────────────
 
 export type BacklogStatus = "todo" | "in_progress" | "blocked" | "done";
