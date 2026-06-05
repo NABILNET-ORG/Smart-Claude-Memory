@@ -188,3 +188,64 @@ gold shares a high-`W(k)·w_ck` FILE/SYMBOL/DECISION bridge with the query's top
 | `scripts/eval-graph-rerank.ts` / `src/tools/metrics.ts` | Eval harness; recall@3 / MRR |
 | `docs/superpowers/specs/s16-d1-eval-queries.json` | Old 6-query fixture (unwinnable; superseded) |
 | `src/config.ts` | `:50-64` α/pool/expand/timeout; flip target for `SCM_GRAPH_RERANK_ENABLED` |
+
+---
+
+## 8. Results & Verdict (SCM-S52-D3)
+
+Executed 2026-06-05. Definitive run against **frozen** fixture copies (clobber-proof — see §9) with
+`SCM_GRAPH_RERANK_TIMEOUT_MS=30000` so the treatment fully executed (no silent `rerank_timeout`
+fallback). Both ship-gate arms scored the same 70 cases.
+
+### Ship-gate (decides the flip)
+
+| Metric | OFF (vector) | ON (rerank α=0.7) | Δ |
+|---|---|---|---|
+| overall recall@3 | 0.6429 | 0.7000 | +0.0571 |
+| overall MRR | 0.5397 | 0.4715 | **−0.0682** |
+| control recall@3 (n=45) | 1.0000 | 0.9556 | **−0.0444** |
+| control MRR (n=45) | 0.7815 | 0.6406 | −0.1409 |
+| lift recall@3 (n=25) | 0.0000 | 0.2400 | +0.2400 |
+| lift MRR (n=25) | 0.1044 | 0.1671 | +0.0627 |
+
+### Capability (telemetry only — does NOT vote)
+
+| Metric | OFF | ON |
+|---|---|---|
+| recall@3 (n=5) | 0.0000 | 1.0000 |
+| MRR (n=5) | 0.2233 | 0.6333 |
+
+### Verdict: KEEP `SCM_GRAPH_RERANK_ENABLED = false`
+
+The flip rule (§2.4) requires recall@3 ↑ **AND** MRR not ↓ **AND** no control regression. **Two of three
+fail:** overall MRR drops (−0.068) and the control partition regresses (1.0 → 0.956 — the rerank demotes
+2/45 golds pure vector already placed in top-3). **Flip denied.**
+
+### What the data actually says (nuance — not "the feature is useless")
+- The bridge rerank **recovers 6/25** representative hard queries the vector pool missed (lift recall@3
+  0 → 0.24), and the capability set proves it fires reliably (0 → 1.0) when a high-weight bridge to the
+  gold exists. The mechanism works.
+- But at the shipped **α=0.7 it is too aggressive globally**: it reorders well-served queries harmfully,
+  costing overall MRR and 2 control golds. A feature that helps the hard tail but degrades the common
+  case must not be ON by default.
+- **Density ↔ latency:** Phase-1 densification (bridge_rows up to ~878) pushed bridge-fetch past the
+  default 1500 ms guard (2/70 timed out at default) — a real latency cost for any default-ON, independent
+  of the quality result.
+
+### Future directions (NOT this session)
+1. Gate the rerank to low-confidence queries (skip when vector top-1 is strong) so it never touches the control case.
+2. Tune α / adopt a non-demoting fusion that can only *promote* bridge-recovered chunks, never demote a strong vector top-3.
+3. Curb bridge-fetch cost (cap bridge_rows / index) to fit a latency budget before reconsidering default-ON.
+
+---
+
+## 9. Process hazard encountered (recorded for future runs)
+
+Two delegated workers wrote the Phase-2 generator correctly but launched it as a **background job and
+returned**, orphaning the process. The orphan ran to completion ~1.5 h later and **overwrote the
+committed fixtures mid-eval** (ship-gate 70 → 81; capability → `[]`), corrupting the first two eval runs.
+A near-miss: it almost produced a verdict on shifting inputs. Resolution: restore from git, run the
+definitive eval against **frozen copies at generator-immune paths**, and confirm no live producer via a
+Windows-level `Get-CimInstance Win32_Process` scan (git-bash `ps` cannot see sub-agent-spawned Windows
+processes). **Lesson:** freeze eval inputs to immutable paths and verify no background producer is alive
+before trusting any shared mutable artifact.
