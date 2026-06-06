@@ -276,7 +276,19 @@ export async function searchMemory(args: {
   // Flag-gated; alpha=1 ≡ pure vector. Extra queries are timeout-guarded with a
   // pure-vector fallback so the graph layer can never block a search.
   let results = candidates;
-  if (config.SCM_GRAPH_RERANK_ENABLED && graphContext && candidates.length) {
+  // SCM-S53 confidence gate (margin signal): skip the graph bridge for queries
+  // whose pure-vector neighborhood is PEAKED (margin = top1 - top2 ≥ threshold).
+  // `candidates` is similarity-desc from searchChunks, so [0]/[1] are the true
+  // vector top-1/top-2. A peaked neighborhood ⇒ the vector is confident ⇒ never
+  // touch it (protects the control set + skips the two bridge round-trips). A
+  // flat neighborhood (small margin) ⇒ the vector is guessing ⇒ engage the graph.
+  // Probe v2 (SCM-S53) chose abs margin over absolute similarity (which v1 proved
+  // cannot separate control from lift) and over the relative margin (abs is
+  // marginally sharper here and simpler — Simplicity-First).
+  const vTop1 = candidates[0]?.similarity ?? 0;
+  const vTop2 = candidates[1]?.similarity ?? 0;
+  const lowConfidence = vTop1 - vTop2 < config.SCM_GRAPH_MARGIN_THRESHOLD;
+  if (config.SCM_GRAPH_RERANK_ENABLED && lowConfidence && graphContext && candidates.length) {
     const W = conceptWeights(graphContext.seeds, graphContext.neighbors);
     const conceptIds = [...W.keys()];
     if (conceptIds.length) {

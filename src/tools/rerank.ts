@@ -44,10 +44,29 @@ export function rerank(input: RerankInput): MatchRow[] {
   const gNorm = minmax(U.map((r) => g.get(r.id) ?? 0));
   const { alpha } = input.params;
 
-  return U.map((r) => ({
+  const ranked = U.map((r) => ({
     r,
     score: alpha * vNorm(r.similarity) + (1 - alpha) * gNorm(g.get(r.id) ?? 0),
-  }))
-    .sort((a, b) => b.score - a.score)
-    .map((x) => x.r);
+  })).sort((a, b) => b.score - a.score);
+
+  // SCM-S53 non-demoting anchor: pin the pure-vector top-1 to rank 1 so fusion
+  // may reorder ranks 2+ to recover recall@3 without ever sacrificing the
+  // strongest semantic anchor. (Pinning the full vector top-3 would LOCK the
+  // recall@3 metric — graph could only ever reach rank 4; pinning only top-1
+  // leaves slots 2-3 open for graph-recovered chunks. Trade-off: a graph-
+  // recovered gold can reach rank 2 at best, capping its MRR contribution at
+  // 0.5 — intentional; overall MRR then leans on the margin gate protecting
+  // control.) No-op when candidates is empty (expansion-only union).
+  // The anchor is the pure-vector top-1 = the highest-similarity candidate.
+  // Resolve by MAX similarity (not positional [0]) so the pin is correct
+  // regardless of input order — preserves the alpha=1 ≡ pure-vector invariant.
+  // In production searchChunks is already similarity-desc, so this equals [0].
+  const top = input.candidates.length
+    ? input.candidates.reduce((best, c) => (c.similarity > best.similarity ? c : best))
+    : undefined;
+  if (!top) return ranked.map((x) => x.r);
+  const anchorIdx = ranked.findIndex((x) => x.r.id === top.id);
+  if (anchorIdx <= 0) return ranked.map((x) => x.r); // anchor already rank 1, or absent from union
+  const [anchorEntry] = ranked.splice(anchorIdx, 1);
+  return [anchorEntry.r, ...ranked.map((x) => x.r)];
 }

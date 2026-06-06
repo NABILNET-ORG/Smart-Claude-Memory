@@ -62,6 +62,15 @@ const Env = z.object({
   // before the first RPC returned and the rerank silently fell back to pure
   // vector on EVERY query — the feature never actually ran. 1500ms = ~7x headroom.
   SCM_GRAPH_RERANK_TIMEOUT_MS: z.coerce.number().int().positive().default(1500),
+  // SCM-S53 — confidence gate (margin signal). Skip the graph bridge entirely
+  // when the pure-vector neighborhood is PEAKED: margin = top1 - top2 ≥ this
+  // value ⇒ the vector is confident ⇒ return pure vector (protects the control
+  // set from rerank demotion + saves the two bridge round-trips). Probe v1
+  // proved ABSOLUTE top-1 similarity cannot separate control from lift (medians
+  // 0.7131 vs 0.6941, no gap — nomic-embed packs everything into a narrow band);
+  // Probe v2 showed the abs MARGIN does (control 1.79× higher at median, 3.1× at
+  // p75). 0.02 sits mid-overlap; tune via scripts/probe-margin-signal.ts.
+  SCM_GRAPH_MARGIN_THRESHOLD: z.coerce.number().min(0).max(1).default(0.02),
 }).refine((v) => Boolean(v.SUPABASE_POOLER_URL) || Boolean(v.SUPABASE_DB_URL), {
   message:
     "At least one of SUPABASE_POOLER_URL (preferred, IPv4) or SUPABASE_DB_URL must be set",

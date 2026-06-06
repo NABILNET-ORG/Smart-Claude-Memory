@@ -28,20 +28,27 @@ describe("rerank (concept-bridge)", () => {
     assert.deepEqual(out.map((r) => r.id), [20, 10]);
   });
 
-  it("alpha=0.3 lifts a concept-sharing chunk over a higher-vector unconnected one", () => {
-    // chunk 20 shares hot concept 100 (g_raw=1.5); chunk 88 shares nothing but higher vector.
+  it("alpha=0.3 lifts a concept-sharing chunk over a lower unconnected one, never past the pinned top-1 (SCM-S53)", () => {
+    // chunk 88 is the vector top-1 (unconnected) → PINNED. chunk 20 shares hot
+    // concept 100 (g_raw=1.5); chunk 50 is unconnected with a higher vector than
+    // 20. At alpha=0.3 the bridge lifts 20 over 50 (to rank 2), but the non-
+    // demoting pin keeps 88 at rank 1 — graph may reorder ranks 2+, never the anchor.
     const out = rerank({
-      candidates: [row(20, 0.5), row(88, 0.55)],
+      candidates: [row(88, 0.55), row(50, 0.52), row(20, 0.5)],
       expansion: [],
       conceptWeights: W,
       bridge,
       params: { alpha: 0.3 },
     });
-    assert.equal(out[0].id, 20);
+    assert.deepEqual(out.map((r) => r.id), [88, 20, 50]);
   });
 
-  it("merges an expansion chunk into the ranking (the S16-D1 cure)", () => {
-    // chunk 99 is bridged (g_raw=1.5) but only arrives via expansion; at alpha=0.3 it tops a low-vector candidate.
+  it("merges an expansion chunk into the ranking, bounded by the top-1 pin (SCM-S53)", () => {
+    // chunk 99 is bridged (g_raw=1.5) but only arrives via expansion; at alpha=0.3
+    // its fused score beats the lone low-vector candidate. Under the SCM-S53 non-
+    // demoting pin the vector top-1 (chunk 7) stays at rank 1; the recovered
+    // expansion chunk still merges in — promoted to rank 2 (the S16-D1 cure,
+    // bounded so it can never sacrifice the strongest semantic anchor).
     const out = rerank({
       candidates: [row(7, 0.4)],
       expansion: [row(99, 0.3)],
@@ -49,6 +56,6 @@ describe("rerank (concept-bridge)", () => {
       bridge,
       params: { alpha: 0.3 },
     });
-    assert.equal(out[0].id, 99);
+    assert.deepEqual(out.map((r) => r.id), [7, 99]);
   });
 });
