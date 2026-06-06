@@ -254,11 +254,11 @@ The GUI surface (M8.2, v2.2.0) is **not** an MCP tool — it's an HTTP server (`
 2. Pulls the last 5 archived rows via `listArchive`.
 3. Replaces the `### 🚀 Recent Progress
 
+* [DONE] Epic: Re-evaluate graph-rerank under confidence-gating / non-demoting fusion. Make α dynamic so the graph only intervenes when pure-vector confidence is low. (archived at 2026-06-06).
+* [DONE] Epic: Densify KG via historical re-extraction and build bridge-aware eval fixture to unlock SCM_GRAPH_RERANK_ENABLED (archived at 2026-06-06).
 * [DONE] Fix browser-fatigue regression in init_project: stop launching new browser tabs if GUI TCP probe is already active (archived at 2026-06-05).
 * [DONE] SCM-S50 ship-gate: populate eval fixture, run off/on eval, flip SCM_GRAPH_RERANK_ENABLED default (archived at 2026-06-05).
 * [DONE] Foundation fix: flaky clustering smoke test C8 (tests/clustering-daemon.test.ts:195) times out in isolation (archived at 2026-06-05).
-* [DONE] Wire budget-integration.test.ts and establish a safe DB-integration test lane (setup/teardown/test-db) (archived at 2026-06-03).
-* [DONE] Web research: multi-page docs crawler (bounded depth + rate-limit/politeness + crawl budget) (archived at 2026-06-03).
 ### 🚀 Recent Progress
 
 * [DONE] Fix login form validation (archived at 2026-04-24).
@@ -1109,7 +1109,7 @@ For inquiries, integrations, or sovereign-grade Claude Code tooling, visit [nabi
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-06-06T06:54:05.686Z for `smart-claude-memory`._
+_Auto-synced at 2026-06-06T17:24:34.123Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
@@ -1194,7 +1194,7 @@ flowchart TD
   n15 --> n39
   n40["SESSION-34-REPORT.md"]
   n15 --> n40
-  n41["… (23 more)"]
+  n41["… (24 more)"]
   n15 --> n41
   n42["specs/"]
   n5 --> n42
@@ -1320,7 +1320,7 @@ flowchart TD
   n78 --> n102
   n103["025_security_advisor_compliance.sql"]
   n78 --> n103
-  n104["… (45 more)"]
+  n104["… (49 more)"]
   n78 --> n104
   n105["src/"]
   n0 --> n105

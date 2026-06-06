@@ -1054,7 +1054,7 @@ flowchart TD
   n15 --> n39
   n40["SESSION-34-REPORT.md"]
   n15 --> n40
-  n41["… (23 more)"]
+  n41["… (24 more)"]
   n15 --> n41
   n42["specs/"]
   n5 --> n42
@@ -1180,7 +1180,7 @@ flowchart TD
   n78 --> n102
   n103["025_security_advisor_compliance.sql"]
   n78 --> n103
-  n104["… (45 more)"]
+  n104["… (49 more)"]
   n78 --> n104
   n105["src/"]
   n0 --> n105
