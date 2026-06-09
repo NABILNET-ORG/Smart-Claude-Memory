@@ -152,6 +152,30 @@ flowchart LR
 
 The `metadata @>` predicate is index-driven: migration `007_metadata_typed_retrieval.sql` ships a GIN index using `jsonb_path_ops` (smaller and ~2–3× faster than the default `jsonb_ops` for containment), and the planner bitmap-ANDs it with the existing `(project_id)` btree. Cost on the Supabase Free Tier stays $0; no external metadata service is involved.
 
+### 4.1.1 Rerank stage — confidence-gated LLM listwise precision layer (SCM-S54)
+
+The vector ORDER BY above is high-recall but order-noisy when the top candidates have near-tied similarity. `src/tools/search.ts` adds an optional precision layer at the existing rerank seam, fired **only** on low-confidence queries (top-1/top-2 similarity gap below `SCM_GRAPH_MARGIN_THRESHOLD` — the same flat-margin signal the graph reranker reuses). It is mutually exclusive with the (still-OFF) graph rerank.
+
+```mermaid
+flowchart LR
+  V[vector recall<br/>ORDER BY embedding] --> G{flat margin?<br/>gap &lt; threshold}
+  G -->|no| L[slice to limit]
+  G -->|yes| B{budget gate<br/>checkTaskBudget}
+  B -->|block| F[strict vector-order fallback]
+  B -->|ok| C[chat&#40;&#41; LLM listwise rerank<br/>candidates labeled 1..N]
+  C -->|parse-fail / timeout| F
+  C -->|ok| H[heal: drop hallucinated,<br/>append missing in vector order]
+  H --> P[non-demoting top-1 pin]
+  P --> L
+  F --> L
+```
+
+`src/tools/llm-rerank.ts` is **listwise**: candidates are labeled `[1..N]` and the server `chat()` LLM (Ollama `format:json`, `temperature 0`) returns an index permutation `{"ranking":[...]}`. The parse is **healed** — hallucinated indices are dropped, any missing index is appended in original vector order — so the reranker can never drop or duplicate a result. A **non-demoting top-1 pin** (`SCM_LLM_RERANK_PIN_TOP1`) then anchors the max-similarity candidate at rank 1; the LLM is only trusted to reorder ranks 2+. Every reranker path is routed through the budget gate (`src/budget/gate.ts`); on parse-fail, timeout, or budget-block the stage falls back strictly to pure vector order.
+
+**Config knobs** (`src/config.ts`): `SCM_LLM_RERANK_ENABLED` (default `true`), `SCM_RERANK_MODEL` (default `qwen3-coder:480b-cloud`), `SCM_LLM_RERANK_PIN_TOP1` (default `true`), `SCM_LLM_RERANK_POOL` (12), `SCM_LLM_RERANK_SNIPPET` (400 chars), `SCM_LLM_RERANK_TIMEOUT_MS` (8000).
+
+**Bake-off verdict (SCM-S54, frozen-recall drift-controlled).** `qwen3-coder:480b-cloud` + pin clears the strict flip-rule (overall recall@3 +0.086, MRR +0.026, control no-regression, lift recall@3 0.08→0.28) at 0% parse-fail and ~1.5s/call — chosen over `minimax-m3:cloud` (marginally higher lift but 16.9s/call and 7.1% parse-fail). Shipped **enabled** by default.
+
 ### 4.2 Write path
 
 `save_memory` is the canonical and only write side: it embeds `content` via Ollama, then calls the `upsert_memory_rule(p_project_id, p_file_origin, p_chunk_index, p_content, p_embedding, p_metadata)` RPC. Its tool description prompts the calling agent to set `metadata.type` on every save.
@@ -1054,7 +1078,7 @@ flowchart TD
   n15 --> n39
   n40["SESSION-34-REPORT.md"]
   n15 --> n40
-  n41["… (24 more)"]
+  n41["… (26 more)"]
   n15 --> n41
   n42["specs/"]
   n5 --> n42
@@ -1180,7 +1204,7 @@ flowchart TD
   n78 --> n102
   n103["025_security_advisor_compliance.sql"]
   n78 --> n103
-  n104["… (49 more)"]
+  n104["… (50 more)"]
   n78 --> n104
   n105["src/"]
   n0 --> n105
@@ -1300,17 +1324,17 @@ flowchart TD
   n143 --> n162
   n163["list-global-patterns.ts"]
   n143 --> n163
-  n164["metrics.ts"]
+  n164["llm-rerank.ts"]
   n143 --> n164
-  n165["orchestrator.ts"]
+  n165["metrics.ts"]
   n143 --> n165
-  n166["policy.ts"]
+  n166["orchestrator.ts"]
   n143 --> n166
-  n167["prune.ts"]
+  n167["policy.ts"]
   n143 --> n167
-  n168["refactor.ts"]
+  n168["prune.ts"]
   n143 --> n168
-  n169["… (13 more)"]
+  n169["… (14 more)"]
   n143 --> n169
   n170["trajectory/"]
   n105 --> n170
@@ -1418,7 +1442,7 @@ flowchart TD
   n193 --> n221
   n222["graph-sanitize.test.ts"]
   n193 --> n222
-  n223["… (20 more)"]
+  n223["… (21 more)"]
   n193 --> n223
   n224[".env.example"]
   n0 --> n224

@@ -521,6 +521,12 @@ Set in your project's `.env` file or your shell. Documented checks live in `src/
 | `OBS_ERR_RATE_DEGRADED_DEFAULT` / `_DOWN_DEFAULT` / `OBS_STALENESS_MULTIPLIER_DEFAULT` | — | `0.20` / `0.50` / `2.0` | Per-daemon health-derivation thresholds |
 | `TELEMETRY_PRUNER_INTERVAL_MS` / `_RETENTION_DAYS` | — | `21600000` (6h) / `30` | `telemetry_pruner` cadence + retention window |
 | `GRAPH_EXTRACTOR_INTERVAL_MS` / `_BATCH` | — | `120000` (2m) / `10` | M8.1 knowledge-graph daemon cadence + per-tick batch |
+| `SCM_LLM_RERANK_ENABLED` | — | `true` | LLM listwise reranker (SCM-S54): on low-confidence (flat-margin) `search_memory` queries, re-orders vector candidates via the server `chat()` LLM. Strict fallback to pure vector order on parse-fail/timeout/budget-block |
+| `SCM_RERANK_MODEL` | — | `qwen3-coder:480b-cloud` | Model used by the listwise reranker (bake-off winner — clears the flip-rule, 0% parse-fail, ~1.5s/call) |
+| `SCM_LLM_RERANK_PIN_TOP1` | — | `true` | Non-demoting top-1 pin — anchors the max-similarity candidate at rank 1; the LLM may only reorder ranks 2+ |
+| `SCM_LLM_RERANK_POOL` | — | `12` | Max candidates sent to the reranker |
+| `SCM_LLM_RERANK_SNIPPET` | — | `400` | Per-candidate snippet length (chars) included in the rerank prompt |
+| `SCM_LLM_RERANK_TIMEOUT_MS` | — | `8000` | Rerank call timeout before strict vector-order fallback |
 
 ### Quick troubleshooting
 
@@ -1109,7 +1115,7 @@ For inquiries, integrations, or sovereign-grade Claude Code tooling, visit [nabi
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-06-06T17:24:34.123Z for `smart-claude-memory`._
+_Auto-synced at 2026-06-09T12:25:32.761Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
@@ -1194,7 +1200,7 @@ flowchart TD
   n15 --> n39
   n40["SESSION-34-REPORT.md"]
   n15 --> n40
-  n41["… (24 more)"]
+  n41["… (26 more)"]
   n15 --> n41
   n42["specs/"]
   n5 --> n42
@@ -1320,7 +1326,7 @@ flowchart TD
   n78 --> n102
   n103["025_security_advisor_compliance.sql"]
   n78 --> n103
-  n104["… (49 more)"]
+  n104["… (50 more)"]
   n78 --> n104
   n105["src/"]
   n0 --> n105
@@ -1440,17 +1446,17 @@ flowchart TD
   n143 --> n162
   n163["list-global-patterns.ts"]
   n143 --> n163
-  n164["metrics.ts"]
+  n164["llm-rerank.ts"]
   n143 --> n164
-  n165["orchestrator.ts"]
+  n165["metrics.ts"]
   n143 --> n165
-  n166["policy.ts"]
+  n166["orchestrator.ts"]
   n143 --> n166
-  n167["prune.ts"]
+  n167["policy.ts"]
   n143 --> n167
-  n168["refactor.ts"]
+  n168["prune.ts"]
   n143 --> n168
-  n169["… (13 more)"]
+  n169["… (14 more)"]
   n143 --> n169
   n170["trajectory/"]
   n105 --> n170
@@ -1558,7 +1564,7 @@ flowchart TD
   n193 --> n221
   n222["graph-sanitize.test.ts"]
   n193 --> n222
-  n223["… (20 more)"]
+  n223["… (21 more)"]
   n193 --> n223
   n224[".env.example"]
   n0 --> n224
