@@ -1,4 +1,4 @@
-import { embed } from "../ollama.js";
+import { embed, chat } from "../ollama.js";
 import {
   supabase,
   searchChunks,
@@ -14,6 +14,9 @@ import { kgHybridSearch, type KgSeed, type KgNeighbor } from "./kg.js";
 import { config } from "../config.js";
 import { conceptWeights } from "./bridge.js";
 import { rerank } from "./rerank.js";
+import { llmRerank } from "./llm-rerank.js";
+import { checkDaemonBudget } from "../budget/gate.js";
+import { BudgetExceededError } from "../budget/types.js";
 
 /** Pure-number queries (e.g. "11468") -> direct SQL fetch by id. Bypasses
  *  vector ranking, which can fail to surface a known row when its embedding
@@ -247,11 +250,23 @@ export async function searchMemory(args: {
         reason: e instanceof Error ? e.message : String(e),
       }));
 
+  // Candidate-pool sizing. The LLM listwise reranker (SCM-S54) needs a deeper
+  // pool than the caller's limit so it has real reordering headroom; the graph
+  // bridge has its own (larger) pool. LLM and graph rerank are mutually
+  // exclusive (LLM takes precedence when its flag is on), so pick the pool for
+  // whichever path is active. With both flags off this is exactly `limit`
+  // (regression invariant: unchanged from today).
+  const candidatePool = config.SCM_LLM_RERANK_ENABLED
+    ? Math.max(limit, config.SCM_LLM_RERANK_POOL)
+    : config.SCM_GRAPH_RERANK_ENABLED
+      ? config.SCM_GRAPH_RERANK_POOL
+      : limit;
+
   const [resultsSettled, graphSettled] = await Promise.allSettled([
     searchChunks(
       projectId,
       queryVec,
-      config.SCM_GRAPH_RERANK_ENABLED ? config.SCM_GRAPH_RERANK_POOL : limit,
+      candidatePool,
       args.min_similarity ?? 0.0,
       args.metadata_filter ?? null,
       includeGlobal,
@@ -288,7 +303,53 @@ export async function searchMemory(args: {
   const vTop1 = candidates[0]?.similarity ?? 0;
   const vTop2 = candidates[1]?.similarity ?? 0;
   const lowConfidence = vTop1 - vTop2 < config.SCM_GRAPH_MARGIN_THRESHOLD;
-  if (config.SCM_GRAPH_RERANK_ENABLED && lowConfidence && graphContext && candidates.length) {
+
+  // SCM-S54 LLM listwise rerank. MUTUALLY EXCLUSIVE with the graph bridge: when
+  // the LLM flag is on we take this path and never run graph-rerank. Same
+  // confidence gate as the graph path — fire ONLY when the vector neighborhood
+  // is FLAT (low margin ⇒ the vector is guessing). When peaked, skip → pure
+  // vector order. The LLM call is routed through the ARM daemon budget gate
+  // (server-side tool call, no parent task) and can NEVER throw out of
+  // searchMemory: every failure mode degrades to the vector floor.
+  if (config.SCM_LLM_RERANK_ENABLED && lowConfidence && candidates.length > 1) {
+    const model = config.SCM_RERANK_MODEL || process.env.OLLAMA_CHAT_MODEL || "qwen3-coder:480b-cloud";
+    let blocked = false;
+    try {
+      // Daemons never throw on block (gate.ts) — inspect the decision; also
+      // defensively treat a thrown BudgetExceededError as a block.
+      const gate = await checkDaemonBudget("llm_rerank", "ollama_calls", 1);
+      if (gate.decision === "block") blocked = true;
+    } catch (e) {
+      if (e instanceof BudgetExceededError) blocked = true;
+      else
+        console.warn(
+          "llm_rerank_budget_check_failed: proceeding without gate —",
+          e instanceof Error ? e.message : String(e),
+        );
+    }
+    if (blocked) {
+      console.warn(
+        `llm_rerank fired=false outcome=budget_block model=${model} pool=${candidates.length}`,
+      );
+    } else {
+      const out = await llmRerank(args.query, candidates, {
+        chat,
+        model,
+        snippetChars: config.SCM_LLM_RERANK_SNIPPET,
+        timeoutMs: config.SCM_LLM_RERANK_TIMEOUT_MS,
+        pinTop1: config.SCM_LLM_RERANK_PIN_TOP1,
+      });
+      results = out.ranked;
+      console.warn(
+        `llm_rerank fired=true outcome=${out.outcome} model=${out.firedModel} latency_ms=${out.latencyMs} pool=${candidates.length}`,
+      );
+    }
+  } else if (
+    config.SCM_GRAPH_RERANK_ENABLED &&
+    lowConfidence &&
+    graphContext &&
+    candidates.length
+  ) {
     const W = conceptWeights(graphContext.seeds, graphContext.neighbors);
     const conceptIds = [...W.keys()];
     if (conceptIds.length) {

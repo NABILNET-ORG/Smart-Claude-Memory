@@ -38,7 +38,15 @@ const VISION_MODEL = process.env.OLLAMA_VISION_MODEL ?? "moondream";
 
 export async function chat(
   messages: ChatMessage[],
-  opts: { model?: string; temperature?: number; timeoutMs?: number } = {},
+  opts: {
+    model?: string;
+    temperature?: number;
+    timeoutMs?: number;
+    // SCM-S54: optional Ollama structured-output hint. "json" forces strict
+    // JSON; a JSON Schema object constrains the shape. Omitted ⇒ free text
+    // (every existing caller is unaffected — the field is simply absent).
+    format?: "json" | Record<string, unknown>;
+  } = {},
 ): Promise<string> {
   const model = opts.model ?? CHAT_MODEL;
   const controller = new AbortController();
@@ -53,6 +61,7 @@ export async function chat(
         messages,
         stream: false,
         options: opts.temperature != null ? { temperature: opts.temperature } : undefined,
+        ...(opts.format != null ? { format: opts.format } : {}),
       }),
       signal: controller.signal,
     });

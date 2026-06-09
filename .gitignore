@@ -6,6 +6,7 @@ dist/
 *.tgz
 backups/
 docs/scm-memory/
+scripts/.eval-out/
 
 # Windows reserved-device leakage. `> nul` redirects under pwsh/cmd
 # occasionally materialize a literal file named `nul` in the worktree

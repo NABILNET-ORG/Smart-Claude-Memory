@@ -29,11 +29,43 @@ let kgBehavior: () => Promise<unknown> = async () => ({
   ],
 });
 
+// SCM-S54: the LLM reranker ships ON by default, so this Graph-RAG splice test
+// MUST pin the flag state it intends to verify instead of inheriting the global
+// default. We mock config with the LLM reranker EXPLICITLY OFF (and the graph
+// rerank OFF too — this file only exercises the graph_context splice, not either
+// rerank path). Every config key read by src/tools/search.ts is supplied so the
+// real env never leaks in. The throwing chat() stub below then proves chat()
+// never fires on the disabled path.
+mock.module("../src/config.js", {
+  namedExports: {
+    config: {
+      SCM_LLM_RERANK_ENABLED: false,
+      SCM_RERANK_MODEL: "",
+      SCM_LLM_RERANK_POOL: 12,
+      SCM_LLM_RERANK_SNIPPET: 400,
+      SCM_LLM_RERANK_TIMEOUT_MS: 8000,
+      SCM_LLM_RERANK_PIN_TOP1: true,
+      SCM_GRAPH_RERANK_ENABLED: false,
+      SCM_GRAPH_RERANK_ALPHA: 0.7,
+      SCM_GRAPH_RERANK_POOL: 40,
+      SCM_GRAPH_RERANK_EXPAND: 10,
+      SCM_GRAPH_RERANK_TIMEOUT_MS: 1500,
+      SCM_GRAPH_MARGIN_THRESHOLD: 0.02,
+    },
+    memoryRoots: [],
+  },
+});
+
 mock.module("../src/ollama.js", {
   namedExports: {
     embed: async () => {
       embedCalls += 1;
       return [[0.1, 0.2, 0.3]];
+    },
+    // SCM-S54: search.ts now imports chat() for the LLM reranker. The LLM flag
+    // is OFF here, so chat() must never be invoked — throw if it is.
+    chat: async () => {
+      throw new Error("chat() must not be called when SCM_LLM_RERANK_ENABLED is off");
     },
   },
 });

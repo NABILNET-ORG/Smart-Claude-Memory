@@ -71,6 +71,33 @@ const Env = z.object({
   // Probe v2 showed the abs MARGIN does (control 1.79× higher at median, 3.1× at
   // p75). 0.02 sits mid-overlap; tune via scripts/probe-margin-signal.ts.
   SCM_GRAPH_MARGIN_THRESHOLD: z.coerce.number().min(0).max(1).default(0.02),
+  // ─── LLM listwise reranker (SCM-S54) ─────────────────────────────────────
+  // Confidence-gated precision layer atop nomic-embed vector recall. Ships ON
+  // (SCM-S54 bake-off verdict): qwen3-coder:480b-cloud + the non-demoting top-1
+  // pin cleanly clears the strict flip-rule (recall@3 lift with zero confident-
+  // gold regression). It fires ONLY on FLAT vector neighborhoods (reuses
+  // SCM_GRAPH_MARGIN_THRESHOLD — the same low-confidence gate as the graph
+  // bridge) and is MUTUALLY EXCLUSIVE with the graph rerank. The winning model
+  // is the default; set SCM_RERANK_MODEL to override, or SCM_LLM_RERANK_ENABLED
+  // =false to fall back to pure vector order.
+  SCM_LLM_RERANK_ENABLED: z
+    .string()
+    .default("true")
+    .transform((v) => v.toLowerCase() === "true"),
+  SCM_RERANK_MODEL: z.string().default("qwen3-coder:480b-cloud"),
+  SCM_LLM_RERANK_POOL: z.coerce.number().int().positive().default(12),
+  SCM_LLM_RERANK_SNIPPET: z.coerce.number().int().positive().default(400),
+  SCM_LLM_RERANK_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
+  // SCM-S54 non-demoting top-1 pin (ports the SCM-S53 graph-rerank anchor to the
+  // LLM path). Default TRUE: when the LLM permutation demotes the strongest
+  // semantic anchor (MAX vector similarity) out of rank 1, re-pin it to rank 1
+  // and keep the LLM's relative order for the rest. The qwen bake-off recovered
+  // recall@3 0→0.24 but regressed control by one confident top-1 gold; this pin
+  // protects that case. No effect when SCM_LLM_RERANK_ENABLED=false.
+  SCM_LLM_RERANK_PIN_TOP1: z
+    .string()
+    .default("true")
+    .transform((v) => v.toLowerCase() !== "false"),
 }).refine((v) => Boolean(v.SUPABASE_POOLER_URL) || Boolean(v.SUPABASE_DB_URL), {
   message:
     "At least one of SUPABASE_POOLER_URL (preferred, IPv4) or SUPABASE_DB_URL must be set",
