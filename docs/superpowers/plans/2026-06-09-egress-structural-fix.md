@@ -12,6 +12,16 @@
 
 ---
 
+## ⚠️ PIVOT — Commit A re-architected (2026-06-13)
+
+**Server-side K-Means (the original Commit A) is ABORTED.** Applying + running migration `029`'s PL/pgSQL Lloyd's loop (`CREATE TEMP TABLE` + per-iteration `UPDATE`) thrashed WAL/Disk-IO and **depleted the Supabase Free-Tier Disk-IO budget**, taking the DB offline — the "outage" we hit mid-build was self-inflicted. Postgres on a constrained tier is the wrong engine for heavy iterative vector math.
+
+**Replacement (shipped, commit `d46f595`):** keep K-Means **client-side** in `src/clustering/kmeans.ts` (in-RAM, zero DB IO) and add a **delta-gate** to `isDirty()` — re-cluster only if no clusters exist yet, OR `|embedded-node − cluster| delta > SCM_CLUSTERING_DELTA_THRESHOLD` (default 100), OR `SCM_CLUSTERING_COOLDOWN_MS` (default 24h) has elapsed. Running rarely drops the embedding-pull egress to near-zero **and** adds no IO. (This is the delta-gate the audit doc first proposed and we wrongly dropped as "YAGNI" when we chased the server-side approach.)
+
+**Status:** delta-gate committed + spec/quality-reviewed + offline-unit-verified (5/5 mocked). Live integration verify, and dropping the now-dead deployed `kg_kmeans_assign` function, are **deferred until the Supabase Disk-IO budget recovers**. Commits B (graph server-side copy — IO-safe, no temp-tables/loops) and C still stand.
+
+**Tasks A1–A7 below (server-side K-Means) are SUPERSEDED** — retained for history/context only.
+
 ## Risks & Decisions (read first)
 
 - **Determinism:** the server-side K-Means will NOT be bit-identical to the TS `kmeans.ts` (no mulberry32 in Postgres). **Tests assert invariants** (every node assigned exactly once; `k = ceil(sqrt(n))`; same seed → same output within a session), NOT golden vectors.

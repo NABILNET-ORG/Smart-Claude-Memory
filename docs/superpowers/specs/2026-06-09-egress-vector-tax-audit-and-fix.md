@@ -15,6 +15,12 @@
 
 ---
 
+## 1.5 UPDATE (2026-06-13) — server-side K-Means ABORTED; the delta-gate is the fix
+
+The §4.1(b) "move K-Means server-side" recommendation was implemented and **failed catastrophically**: the PL/pgSQL Lloyd's loop (temp tables + per-iteration `UPDATE`) thrashed WAL/Disk-IO and **depleted the Supabase Free-Tier Disk-IO budget**, knocking the DB offline. **Aborted** (migration `029` deleted; daemon reverted to client-side). The §4.1(a) **delta-gate** — which §4.1 listed but we deprioritized as YAGNI — is the correct fix, shipped in `d46f595`: keep K-Means client-side (in-RAM, zero DB IO) and re-cluster only on a 24h cooldown OR a >100-node delta. Near-zero egress (runs rarely), zero added IO.
+
+**Lesson (save_memory candidate when DB recovers — likely GLOBAL / Cross-Project):** do NOT move iterative vector math (K-Means / Lloyd's) into PL/pgSQL on a constrained or Free-Tier Postgres — `CREATE TEMP TABLE` + per-iteration `UPDATE` loops melt the Disk-IO/WAL budget and can take the instance offline. Keep heavy in-memory compute client-side (Node handles it trivially); control egress by gating the *frequency* of the operation, not by relocating the compute into the database.
+
 ## 2. Evidence — the search path is CLEAN (hypothesis refuted)
 
 | Surface | Return shape | Embedding? | Ref |
