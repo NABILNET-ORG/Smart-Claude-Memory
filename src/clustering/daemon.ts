@@ -38,6 +38,8 @@ const DEFAULT_UPSERT_BATCH = 500;
 const DEFAULT_KNN_K = 15;
 const DEFAULT_KNN_MIN_SIM = 0.5;
 const DEFAULT_KMEANS_MAX_ITERS = 50;
+const DEFAULT_DELTA_THRESHOLD = 100;
+const DEFAULT_COOLDOWN_MS = 86_400_000; // 24 h
 
 function readIntEnv(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -45,6 +47,9 @@ function readIntEnv(name: string, fallback: number): number {
   const n = Number.parseInt(raw, 10);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
+
+const DELTA_THRESHOLD = readIntEnv("SCM_CLUSTERING_DELTA_THRESHOLD", DEFAULT_DELTA_THRESHOLD);
+const COOLDOWN_MS = readIntEnv("SCM_CLUSTERING_COOLDOWN_MS", DEFAULT_COOLDOWN_MS);
 
 function resolveConfig() {
   return {
@@ -113,10 +118,20 @@ export async function discoverProjects(): Promise<string[]> {
 }
 
 /**
- * Dirty if (a) count(embedded kg_nodes) ≠ count(kg_node_clusters) OR (b) the
- * most recent kg_node update is newer than the most recent cluster computation.
- * Returns true conservatively on transient errors so a real change is never
- * silently masked.
+ * Delta-gated dirty check — re-cluster only when it's actually worth it:
+ *   1. kgCount=0 → skip (nothing to cluster).
+ *   2. clCount=0 → run (never clustered yet — initial pass).
+ *   3. |kgCount - clCount| > DELTA_THRESHOLD → run (significant growth/shrink).
+ *   4. lastComputedAt is null → run (defensive).
+ *   5. elapsed >= COOLDOWN_MS → run (cooldown expired).
+ *   6. Otherwise → skip (within cooldown AND small delta → saves egress + IO).
+ *
+ * Returns true conservatively on transient query errors so a real change is
+ * never silently masked.
+ *
+ * Knobs (env-overridable):
+ *   SCM_CLUSTERING_DELTA_THRESHOLD  default 100
+ *   SCM_CLUSTERING_COOLDOWN_MS      default 86_400_000 (24 h)
  */
 export async function isDirty(projectId: string): Promise<boolean> {
   const [kgRes, clRes] = await Promise.all([
@@ -133,30 +148,22 @@ export async function isDirty(projectId: string): Promise<boolean> {
   if (kgRes.error || clRes.error) return true;
   const kgCount = kgRes.count ?? 0;
   const clCount = clRes.count ?? 0;
-  if (kgCount !== clCount) return true;
-  if (kgCount === 0) return false;
 
-  const [kgMax, clMax] = await Promise.all([
-    supabase
-      .from("kg_nodes")
-      .select("updated_at")
-      .eq("project_id", projectId)
-      .not("embedding", "is", null)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("kg_node_clusters")
-      .select("computed_at")
-      .eq("project_id", projectId)
-      .order("computed_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
-  if (kgMax.error || clMax.error) return true;
-  const kgTs = kgMax.data?.updated_at ? Date.parse(kgMax.data.updated_at) : 0;
-  const clTs = clMax.data?.computed_at ? Date.parse(clMax.data.computed_at) : 0;
-  return kgTs > clTs;
+  if (kgCount === 0) return false;                          // nothing to cluster
+  if (clCount === 0) return true;                           // never clustered → initial run
+  if (Math.abs(kgCount - clCount) > DELTA_THRESHOLD) return true; // significant growth/shrink
+
+  const clMax = await supabase
+    .from("kg_node_clusters")
+    .select("computed_at")
+    .eq("project_id", projectId)
+    .order("computed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (clMax.error) return true;
+  const lastComputedAt = clMax.data?.computed_at ?? null;
+  if (lastComputedAt === null) return true;                 // defensive
+  return (Date.now() - new Date(lastComputedAt).getTime()) >= COOLDOWN_MS; // cooldown elapsed?
 }
 
 // ─── core pipeline ────────────────────────────────────────────────────────
