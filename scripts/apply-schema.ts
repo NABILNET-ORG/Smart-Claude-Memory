@@ -34,9 +34,11 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Local Postgres (supabase start / Docker) does not support SSL; cloud Supabase requires it.
+  const isLocalDb = /localhost|127\.0\.0\.1/.test(connectionString);
   const client = new Client({
     connectionString,
-    ssl: { rejectUnauthorized: false },
+    ssl: isLocalDb ? false : { rejectUnauthorized: false },
   });
 
   await client.connect();
