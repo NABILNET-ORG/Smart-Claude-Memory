@@ -1,11 +1,12 @@
 // M8 Phase 3 — Knowledge Graph access layer.
 //
-// Thin async wrappers around the three SQL RPCs introduced in migration
-// 020_knowledge_graph.sql:
+// Thin async wrappers around the SQL RPCs introduced in migrations
+// 020_knowledge_graph.sql and 029_kg_upsert_node_from_chunk.sql:
 //
-//   - kg_upsert_node    → upsertKgNode
-//   - kg_upsert_edge    → upsertKgEdge
-//   - kg_hybrid_search  → kgHybridSearch
+//   - kg_upsert_node             → upsertKgNode
+//   - kg_upsert_node_from_chunk  → upsertKgNodeFromChunk  (SCM-S55)
+//   - kg_upsert_edge             → upsertKgEdge
+//   - kg_hybrid_search           → kgHybridSearch
 //
 // Plus two enumeration helpers (listKgNodes / listKgEdges) for the
 // Sovereign Command Center and downstream audit. The handlers follow the
@@ -88,6 +89,51 @@ export async function upsertKgNode(input: UpsertKgNodeInput): Promise<UpsertKgNo
   const nodeId = Number(data);
   if (!Number.isFinite(nodeId) || nodeId <= 0) {
     return { ok: false, reason: "kg_upsert_node_invalid_response" };
+  }
+  return { ok: true, node_id: nodeId };
+}
+
+// ─── upsertKgNodeFromChunk ───────────────────────────────────────────────
+// SCM-S55 — Server-side embedding copy. Calls kg_upsert_node_from_chunk RPC
+// which reads memory_chunks.embedding inside Postgres, so the 768-dim vector
+// never crosses the wire. Use this from the graph-extractor daemon instead of
+// upsertKgNode when a source_chunk_id is available.
+
+export type UpsertKgNodeFromChunkInput = {
+  project_id: string;
+  type: string;
+  label: string;
+  properties?: Record<string, unknown>;
+  source_chunk_id: number;
+};
+
+export async function upsertKgNodeFromChunk(
+  input: UpsertKgNodeFromChunkInput,
+): Promise<UpsertKgNodeOutput> {
+  if (!input.project_id || input.project_id.trim().length === 0) {
+    return { ok: false, reason: "project_id_required" };
+  }
+  if (!input.type || input.type.trim().length === 0) {
+    return { ok: false, reason: "type_required" };
+  }
+  if (!input.label || input.label.trim().length === 0) {
+    return { ok: false, reason: "label_required" };
+  }
+
+  const { data, error } = await supabase.rpc("kg_upsert_node_from_chunk", {
+    p_project_id: input.project_id,
+    p_type: input.type,
+    p_label: input.label,
+    p_properties: input.properties ?? {},
+    p_source_chunk_id: input.source_chunk_id,
+  });
+
+  if (error) {
+    return { ok: false, reason: `kg_upsert_node_from_chunk_db_error: ${error.message}` };
+  }
+  const nodeId = Number(data);
+  if (!Number.isFinite(nodeId) || nodeId <= 0) {
+    return { ok: false, reason: "kg_upsert_node_from_chunk_invalid_response" };
   }
   return { ok: true, node_id: nodeId };
 }

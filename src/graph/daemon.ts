@@ -18,7 +18,7 @@
 // Boundary Invariant: zero LLM imports. Only supabase + tools/kg.
 
 import { supabase } from "../supabase.js";
-import { upsertKgNode, upsertKgEdge } from "../tools/kg.js";
+import { upsertKgNode, upsertKgNodeFromChunk, upsertKgEdge } from "../tools/kg.js";
 import { extractFromChunk } from "./extractor.js";
 
 const DEFAULT_INTERVAL_MS = 120_000;
@@ -84,32 +84,12 @@ function resolveConfig(): { intervalMs: number; batch: number } {
   };
 }
 
-// pgvector cells round-trip as either number[] (when Supabase decodes the
-// vector type natively) or as the textual "[...]" representation. Normalise.
-function coerceEmbedding(raw: unknown): number[] | null {
-  if (raw == null) return null;
-  if (Array.isArray(raw)) {
-    return raw.every((v) => typeof v === "number") ? (raw as number[]) : null;
-  }
-  if (typeof raw === "string" && raw.startsWith("[")) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.every((v) => typeof v === "number")) {
-        return parsed as number[];
-      }
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
 
 type UnprocessedChunk = {
   id: number;
   project_id: string;
   content: string;
   metadata: Record<string, unknown> | null;
-  embedding: number[] | null;
 };
 
 async function fetchUnprocessed(batch: number): Promise<UnprocessedChunk[]> {
@@ -126,7 +106,7 @@ async function fetchUnprocessed(batch: number): Promise<UnprocessedChunk[]> {
 
   const { data: chunkRows, error: chunkErr } = await supabase
     .from("memory_chunks")
-    .select("id, project_id, content, metadata, embedding")
+    .select("id, project_id, content, metadata")
     .order("id", { ascending: false })
     .limit(batch * OVERFETCH_MULT);
   if (chunkErr) throw new Error(`memory_chunks scan failed: ${chunkErr.message}`);
@@ -137,7 +117,6 @@ async function fetchUnprocessed(batch: number): Promise<UnprocessedChunk[]> {
     project_id: string;
     content: string;
     metadata: Record<string, unknown> | null;
-    embedding: unknown;
   }>) {
     if (out.length >= batch) break;
     if (typeof row.id !== "number" || typeof row.content !== "string") continue;
@@ -147,7 +126,6 @@ async function fetchUnprocessed(batch: number): Promise<UnprocessedChunk[]> {
       project_id: row.project_id,
       content: row.content,
       metadata: row.metadata ?? null,
-      embedding: coerceEmbedding(row.embedding),
     });
   }
   return out;
@@ -174,7 +152,9 @@ async function processChunk(
 
     if (result.skipped) {
       // Sentinel: anchor the chunk so it doesn't re-enter the queue.
-      const sentinel = await upsertKgNode({
+      // SCM-S55: sentinel anchor uses server-side RPC (embedding copy is a no-op
+      // for skipped chunks but keeps the call path uniform).
+      const sentinel = await upsertKgNodeFromChunk({
         project_id: chunk.project_id,
         type: "NOTE",
         label: `skipped:${chunk.id}`,
@@ -191,12 +171,12 @@ async function processChunk(
     const [primary, ...secondaries] = result.nodes;
     if (!primary) return;
 
-    const primaryRes = await upsertKgNode({
+    // SCM-S55: use server-side RPC so embedding is copied inside Postgres.
+    const primaryRes = await upsertKgNodeFromChunk({
       project_id: chunk.project_id,
       type: primary.type,
       label: primary.label,
       properties: primary.properties,
-      embedding: primary.embedding ?? null,
       source_chunk_id: primary.source_chunk_id ?? chunk.id,
     });
     if (!primaryRes.ok) {
