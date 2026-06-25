@@ -608,7 +608,7 @@ async function runMigrationsCheck(): Promise<{
   const isLocalDb = /localhost|127\.0\.0\.1/.test(cs);
   const client = new Client({
     connectionString: cs,
-    ssl: isLocalDb ? false : { rejectUnauthorized: false },
+    ssl: isLocalDb ? false : { rejectUnauthorized: true },
   });
   const total = loadMigrationFiles().length;
   try {

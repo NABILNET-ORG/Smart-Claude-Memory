@@ -38,7 +38,7 @@ async function main(): Promise<void> {
   const isLocalDb = /localhost|127\.0\.0\.1/.test(connectionString);
   const client = new Client({
     connectionString,
-    ssl: isLocalDb ? false : { rejectUnauthorized: false },
+    ssl: isLocalDb ? false : { rejectUnauthorized: true },
   });
 
   await client.connect();

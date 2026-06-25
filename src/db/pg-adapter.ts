@@ -118,12 +118,12 @@ function resolveConnectionString(): string {
 function getPool(): pg.Pool {
   if (sharedPool) return sharedPool;
   const connectionString = resolveConnectionString();
-  // Local Postgres (supabase start / Docker / 127.0.0.1) does not speak SSL;
-  // cloud poolers require it. Mirror scripts/apply-schema.ts:38-42.
+  // Local Postgres (Docker / 127.0.0.1) uses a plain socket — no TLS needed. Any NON-local host
+  // MUST present a verifiable certificate (rejectUnauthorized: true → fail closed); never downgrade TLS.
   const isLocalDb = /localhost|127\.0\.0\.1/.test(connectionString);
   sharedPool = new Pool({
     connectionString,
-    ssl: isLocalDb ? false : { rejectUnauthorized: false },
+    ssl: isLocalDb ? false : { rejectUnauthorized: true },
   });
   // A pooled client emitting 'error' while idle must not crash the process.
   sharedPool.on("error", () => {
