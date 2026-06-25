@@ -198,8 +198,6 @@ type Check = {
 };
 
 const REQUIRED_ENV = [
-  { key: "SUPABASE_URL", desc: "Supabase project URL" },
-  { key: "SUPABASE_SECRET_KEY", desc: "Supabase service-role key" },
   { key: "OLLAMA_HOST", desc: "Ollama endpoint (default http://localhost:11434)" },
   { key: "OLLAMA_EMBED_MODEL", desc: "Embedding model name (default nomic-embed-text)" },
   { key: "MEMORY_ROOTS", desc: "Semicolon-separated folders to sync" },

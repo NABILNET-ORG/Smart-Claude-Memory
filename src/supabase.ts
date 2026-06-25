@@ -1,11 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
-import { config } from "./config.js";
+import { createPgClient } from "./db/pg-adapter.js";
 import { slugify as slugifyProject } from "./project.js";
 
-export const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_SECRET_KEY, {
-  auth: { persistSession: false },
-});
+export const supabase = createPgClient();
 
 // ─── schema presence + keep-alive ────────────────────────────────────────
 

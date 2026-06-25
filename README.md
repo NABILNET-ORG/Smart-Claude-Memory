@@ -2,11 +2,11 @@
 
 # Smart Claude Memory
 
-![Smart Claude Memory v2.4.0 Master Schematic](docs/assets/schematic.png)
+![Smart Claude Memory v2.5.0 Master Schematic](docs/assets/schematic.png)
 
-*Master schematic — the definitive visual reference for the Smart Claude Memory v2.4.x production baseline (v2.4.0 ships four Session-48 epics on top of v2.3.2 — Phase 1 interactive drag-drop Backlog Kanban + `PATCH /api/backlog/:id`; Phase 2 deterministic GLOBAL vault export/import via `export_global_vault` / `import_global_vault` with canonical-JSON + sha256 `content_digest` + no-override merge; broken-window fixes wiring `budget-gate.test.ts` (+21 tests) and removing the dead `pretty` arg; and the Agentic Superpowers MVP — `fetch_url` / `research_url` + an SSRF guard + the `html-to-text` runtime dependency, see [ARCHITECTURE.md §4.14](ARCHITECTURE.md#414-web-research-agentic-superpowers-mvp--scm-s48). Prior baselines: v2.3.0 M8.3 Semantic Clustering ([§4.13](ARCHITECTURE.md#413-m83-semantic-clustering-mission-10--scm-s41-d1d7)); v2.3.1 Active Backlog Kanban + `/api/backlog` + Epic G `file_watcher` daemon; v2.3.2 Supabase Security Advisor compliance via migrations `025` + `026`.)*
+*Master schematic — the definitive visual reference for the Smart Claude Memory v2.5.x production baseline (v2.5.0 migrates the data layer off Supabase onto a self-hosted **plain PostgreSQL 17 + pgvector** database — a `pg.Pool`-backed adapter (`src/db/pg-adapter.ts`) now sits behind the unchanged `src/supabase.ts` doorway, so all ~127 call sites and the entire tool surface are byte-for-byte identical; only the backend changed. Prior baselines: v2.4.0 four Session-48 epics — Phase 1 drag-drop Backlog Kanban + `PATCH /api/backlog/:id`, Phase 2 GLOBAL vault export/import via `export_global_vault` / `import_global_vault`, and the Agentic Superpowers MVP `fetch_url` / `research_url` / `crawl_docs` (see [ARCHITECTURE.md §4.14](ARCHITECTURE.md#414-web-research-agentic-superpowers-mvp--scm-s48)); v2.3.0 M8.3 Semantic Clustering ([§4.13](ARCHITECTURE.md#413-m83-semantic-clustering-mission-10--scm-s41-d1d7)); v2.3.1 Active Backlog Kanban + `/api/backlog` + Epic G `file_watcher` daemon.)*
 
-**Hybrid cloud-local memory for Claude — semantic retrieval instead of context bloat.**
+**Local-first persistent memory for Claude — semantic retrieval instead of context bloat.**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-43853d?logo=node.js&logoColor=white)](https://nodejs.org/)
@@ -14,7 +14,7 @@
 [![pgvector](https://img.shields.io/badge/pgvector-HNSW-336791?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Ollama](https://img.shields.io/badge/Ollama-local%20embeddings-000)](https://ollama.com/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](#license)
-[![Version](https://img.shields.io/badge/version-2.4.0-green)](#)
+[![Version](https://img.shields.io/badge/version-2.5.0-green)](#)
 [![Developer](https://img.shields.io/badge/developer-NABILNET.AI-6e56cf?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyTDIgNy4xN0wxMiAxMi4zM0wyMiA3LjE3WiIvPjwvc3ZnPg==)](https://nabilnet.ai)
 
 **Developed by [NABILNET.AI](https://nabilnet.ai)**
@@ -29,7 +29,7 @@ Claude sessions load `memory.md`, `rules.md`, `cloud.md`, and a dozen other cont
 
 ## What this does
 
-`smart-claude-memory` is a **Model Context Protocol server** that replaces "read every .md at startup" with "search them on demand." It chunks your markdown notes, embeds them with a local Ollama model, stores them in Supabase (pgvector), and exposes **sixty-three MCP tools** to Claude spanning memory, vision, backlog, hygiene, orchestration, system health, transactional checkpoints (M4), autonomous curriculum (M5), observability + telemetry pruning (M6), human-gated skill graduation to GLOBAL (M7), a Hybrid-RAG knowledge graph with a browser dashboard (M8.1/M8.2), on-disk → KG auto-sync (Epic G `file_watcher`), and bounded web research (`fetch_url` / `research_url` / `crawl_docs`). The elevator pitch:
+`smart-claude-memory` is a **Model Context Protocol server** that replaces "read every .md at startup" with "search them on demand." It chunks your markdown notes, embeds them with a local Ollama model, stores them in a plain PostgreSQL 17 + pgvector database (no Supabase — migrated in v2.5.0, see [ARCHITECTURE.md §7](ARCHITECTURE.md#7-plugin-distribution)), and exposes **sixty-three MCP tools** to Claude spanning memory, vision, backlog, hygiene, orchestration, system health, transactional checkpoints (M4), autonomous curriculum (M5), observability + telemetry pruning (M6), human-gated skill graduation to GLOBAL (M7), a Hybrid-RAG knowledge graph with a browser dashboard (M8.1/M8.2), on-disk → KG auto-sync (Epic G `file_watcher`), and bounded web research (`fetch_url` / `research_url` / `crawl_docs`). The elevator pitch:
 
 | Tool | Purpose |
 |---|---|
@@ -67,9 +67,9 @@ Published as [`smart-claude-memory-mcp`](https://www.npmjs.com/package/smart-cla
 npm install git+https://github.com/NABILNET-ORG/Smart-Claude-Memory.git
 ```
 
-Installs straight from the canonical repo without a registry round-trip. The `prepare` script declared in [package.json](package.json) auto-runs the full `npm run build` chain (`lint:boundaries` → `tsc` → `copy:gui`) on install, so the TypeScript sources compile to `dist/` and the `smart-claude-memory-mcp` binary lands fully resolved on the consumer's `node_modules/.bin/` — no `npm run build` follow-up needed. Pin a tag (`...Smart-Claude-Memory.git#v2.4.0`) or commit SHA for reproducible installs.
+Installs straight from the canonical repo without a registry round-trip. The `prepare` script declared in [package.json](package.json) auto-runs the full `npm run build` chain (`lint:boundaries` → `tsc` → `copy:gui`) on install, so the TypeScript sources compile to `dist/` and the `smart-claude-memory-mcp` binary lands fully resolved on the consumer's `node_modules/.bin/` — no `npm run build` follow-up needed. Pin a tag (`...Smart-Claude-Memory.git#v2.5.0`) or commit SHA for reproducible installs.
 
-All three paths require an empty Supabase project + a local Ollama install with `moondream` and `nomic-embed-text` pulled. See [Bootstrap](#bootstrap-3-step-setup-5-minutes) for the three-step setup ritual.
+All three paths require a reachable PostgreSQL 17 + pgvector database (spin one up locally via `infra/plain-pg/docker-compose.yml`) + a local Ollama install with `moondream` and `nomic-embed-text` pulled. See [Bootstrap](#bootstrap-3-step-setup-5-minutes) for the three-step setup ritual.
 
 ---
 
@@ -79,10 +79,10 @@ The system operates under the Sovereign Orchestrator pattern with Autonomous Sel
 
 **Two independent planes by design:**
 
-- **Local plane — Ollama.** Every byte of your notes is embedded on your own machine. Content never leaves your device in plaintext for vectorization. No per-token API fees, no third-party seeing your prompts.
-- **Cloud plane — Supabase.** Durable storage, indexable across devices, cheap. Only the vectors + the source text live here — and only the text you explicitly choose to sync.
+- **Inference plane — Ollama.** Every byte of your notes is embedded on your own machine. Content never leaves your device in plaintext for vectorization. No per-token API fees, no third-party seeing your prompts.
+- **Storage plane — plain PostgreSQL 17 + pgvector.** Durable storage with HNSW vector indexing. As of v2.5.0 this is a self-hosted Postgres (Docker, `infra/plain-pg/docker-compose.yml`) — Supabase (cloud and the local self-hosted stack) has been retired from the data path. Only the vectors + the source text live here — and only the text you explicitly choose to sync.
 
-You get the privacy posture of local inference with the durability and cross-machine access of a managed Postgres.
+You get the privacy posture of local inference with the durability of a real Postgres you control end to end.
 
 ### Delegation Flow
 
@@ -197,7 +197,7 @@ search_memory({ query: "auth flow", project_id: "acme-api" })
 | `check_rule_conflicts` | Guardian | Opt-in LLM-based intent conflict detection between a proposed change and retrieved rules |
 | `raise_verification_gate` | Guardian | Arm the Hard Stop flag after a risky edit |
 | `confirm_verification` | Guardian | Clear or reassert the Hard Stop gate — Claude must call this after manual verification |
-| `check_system_health` | Ops | Supabase reachability (memory_chunks count) + Ollama reachability + required-model presence (moondream, nomic-embed-text) + background keep-alive state |
+| `check_system_health` | Ops | Postgres reachability (memory_chunks count) + Ollama reachability + required-model presence (moondream, nomic-embed-text) + background keep-alive state |
 | `init_project` | Ops | Readiness report for a workspace: required env vars, md-policy.py hook, MCP registration in settings, compiled dist. Also runs a **smart-scout pass** over `.claude/rules/*.md` and emits a `recommendations.hydrate_policies` block with batch-hydration candidates when any are found (key omitted entirely otherwise). Returns `ready` / `partial` / `not_ready` with fix instructions per check. |
 | `batch_freeze_patterns` | Guardian | Bulk-hydrate the frozen-pattern cache from globs or a `## Frozen Patterns` markdown section in a rule file. Strict line-by-line extraction, atomic writes, dedup with first-writer-wins, optional `dry_run`. |
 | `list_frozen` | Guardian | List all frozen pattern entries for the current project (returns `pattern`, `source`, `added_at`). Use before touching any structural-looking file. |
@@ -213,7 +213,7 @@ search_memory({ query: "auth flow", project_id: "acme-api" })
 | `confirm_promotion` | Graduation | **HUMAN-GATED PROMOTION TO GLOBAL** — the sole `is_global=true` mint path outside of `save_memory({is_global:true})`. Calls the `apply_graduation` SQL RPC: atomic INSERT of a GLOBAL `agent_skills` clone + UPDATE `state='approved'` in ONE transaction. PostgreSQL `now()` collapses `graduation.decided_at === new_skill.created_at` to the microsecond (C4 atomic-tx proof). Source skill UNTOUCHED. |
 | `reject_graduation` | Graduation | M7 veto. TS-only UPDATE `WHERE state IN ('proposed','composed')`. Diverges from `reject_curriculum_task`: a second reject on an already-rejected row returns `ok:false` (reason='invalid_state_transition') instead of silently overwriting — GLOBAL rejection reasons carry audit weight. |
 
-### Full tool roster — 63 MCP tools by domain (v2.4.0)
+### Full tool roster — 63 MCP tools by domain (v2.5.0)
 
 The table above documents the canonical headline surface. The complete roster, grouped by subsystem, follows. Each tool is registered in [src/index.ts](src/index.ts) and consumed via the MCP `tools/list` + `tools/call` protocol.
 
@@ -334,15 +334,22 @@ Verified by [scripts/e2e-incremental-test.ts](scripts/e2e-incremental-test.ts), 
 
 ## Bootstrap (3-step setup, ~5 minutes)
 
-> Resolves the `#bootstrap` anchor referenced from the [Install](#install) section above. This is the **post-install** setup ritual — apply once per new Supabase project.
+> Resolves the `#bootstrap` anchor referenced from the [Install](#install) section above. This is the **post-install** setup ritual — apply once per machine.
 
 ### 1. Install the plugin from the marketplace
 
 In Claude Code, open the plugin marketplace and install **smart-claude-memory** (or, while the marketplace listing is being prepared, clone this repo and `claude plugin add <path>` it locally). The plugin manifest at `.claude-plugin/plugin.json` auto-wires both the MCP server and the `md-policy.py` PreToolUse hook. **No `~/.claude.json` or `~/.claude/settings.json` edits required.**
 
-### 2. Create an empty Supabase project + Ollama models
+### 2. Start the Postgres datastore + Ollama models
 
-- Create a free Supabase project at [supabase.com](https://supabase.com).
+- Bring up the bundled **plain PostgreSQL 17 + pgvector** database (Docker, exposed on host port `5433`):
+
+```bash
+docker compose -f infra/plain-pg/docker-compose.yml up -d
+```
+
+> As of v2.5.0 the data layer is a self-hosted plain Postgres — Supabase (cloud and the local self-hosted stack) is no longer part of the data path.
+
 - Install [Ollama](https://ollama.com/) and pull the two required models:
 
 ```bash
@@ -350,13 +357,15 @@ ollama pull moondream
 ollama pull nomic-embed-text
 ```
 
-### 3. Set 3 env vars in your project's `.env`
+### 3. Set the DB connection in your project's `.env`
 
 ```env
-SUPABASE_URL=https://<your-project-ref>.supabase.co
-SUPABASE_SECRET_KEY=<service-role-key>
-SUPABASE_POOLER_URL=postgres://postgres:<password>@<pooler-host>:6543/postgres
+SUPABASE_DB_URL=postgres://postgres:<password>@localhost:5433/postgres
+# Optional: a pooler/alternate URL (preferred when set). Either var satisfies the connection requirement.
+SUPABASE_POOLER_URL=postgres://postgres:<password>@localhost:5433/postgres
 ```
+
+> **Note on the `SUPABASE_` prefix.** These variable *names* retain the `SUPABASE_` prefix for now even though Supabase is retired — a rename is tracked as future work. Only the `*_DB_URL` / `*_POOLER_URL` connection strings are read; the old REST config (`SUPABASE_URL` / `SUPABASE_SECRET_KEY`) was removed in v2.5.0.
 
 Then call `init_project()` from Claude Code. The plugin **auto-applies all 28 schema migrations** (through `scripts/028_clustering_discover_projects.sql`) to your empty DB on the first call, verifies your Ollama models are pulled, and reports `overall: pending → healthy` within a few minutes. Zero manual `npm run schema`, zero hand-edited settings.
 
@@ -369,7 +378,7 @@ Then call `init_project()` from Claude Code. The plugin **auto-applies all 28 sc
 | `EMBED_DIM` | `768` | Embedding vector dimension |
 | `MEMORY_ROOTS` | (empty) | Semicolon-separated folders to sync |
 
-> **Why a pooler URL?** Supabase's `db.<ref>.supabase.co` endpoint is **IPv6-only** on projects created after early 2024. If your network doesn't route public IPv6 (most home/office Windows boxes don't), direct connects fail with `ENETUNREACH`. The **transaction pooler** at `aws-1-<region>.pooler.supabase.com:6543` is IPv4-reachable and is what the auto-migration loop uses.
+> **Which URL is used?** The adapter prefers `SUPABASE_POOLER_URL` when set and otherwise falls back to `SUPABASE_DB_URL`; at least one must be present. Against the bundled local Postgres both point at `localhost:5433`, so a single `SUPABASE_DB_URL` line is enough. (The legacy Supabase-pooler/IPv6 guidance no longer applies — the datastore is a plain Postgres you run yourself.)
 
 ### First-run index your notes
 
@@ -394,7 +403,7 @@ The plugin has **two surfaces**: MCP tools you invoke **inside a Claude Code ses
 
 ### Quick command reference (CLI)
 
-Every command runs from the repo root. None require sudo. None create permanent state outside `~/.claude-memory/` and your Supabase project.
+Every command runs from the repo root. None require sudo. None create permanent state outside `~/.claude-memory/` and your PostgreSQL database.
 
 | Command | What it does | When you'd run it |
 |---|---|---|
@@ -403,10 +412,10 @@ Every command runs from the repo root. None require sudo. None create permanent 
 | `npm run dev` | Run the MCP server via `tsx` (no compile step, fast iteration) | Editing TypeScript and want hot-feedback |
 | `npm run start` | Run the **compiled** MCP server (`node dist/index.js`) | Reproducing what an npm consumer sees |
 | `npm run gui` | Boot the Sovereign Command Center dashboard at `http://127.0.0.1:7788/` (loopback only) | Visual triage of M7 graduations + M8.1 knowledge graph |
-| `npm run test` | Run the full 246-case hermetic suite (no live Supabase / Ollama required) | Before committing, before publishing |
+| `npm run test` | Run the full 246-case hermetic suite (no live Postgres / Ollama required) | Before committing, before publishing |
 | `npm run lint:boundaries` | Statically asserts `src/sleep/**`, `src/curriculum/**`, `src/graduation/**` contain NO LLM imports (Single Brain Boundary) | Runs automatically in `build`; useful standalone after touching those subsystems |
 | `npm run copy:gui` | Mirror `src/gui/public/` → `dist/gui/public/` via `fs.cpSync` (zero-dep) | Runs automatically in `build`; useful if you edit GUI assets and want them in `dist/` without a full rebuild |
-| `npm run schema` | Apply pending SQL migrations to your Supabase pooler URL (idempotent — re-runs are no-ops) | Manual recovery only — `init_project` does this automatically on first boot |
+| `npm run schema` | Apply pending SQL migrations to your Postgres database (idempotent — re-runs are no-ops) | Manual recovery only — `init_project` does this automatically on first boot |
 | `npm run backup` | Dry-run scan + zip of every `.md` file in `MEMORY_ROOTS`, written to `~/.claude-memory/backups/` | Before deleting any `.md` you've already indexed |
 | `npm run smoke:m4` | End-to-end smoke for M4 transactional checkpoints | Sanity check after touching `src/transactions/` |
 | `npm run smoke:m5-rollback` / `smoke:m5-stale` / `smoke:m5-consumer` | Smoke each M5 curriculum signal-source | After touching `src/curriculum/` |
@@ -418,7 +427,7 @@ Every MCP tool is invoked the same way: type the tool name with arguments inside
 
 ```text
 init_project()                                          # boot — readiness + auto-migrate
-check_system_health()                                   # Supabase + Ollama + 6 daemons status
+check_system_health()                                   # Postgres + Ollama + 6 daemons status
 search_memory({ query: "...", k: 10 })                  # dual-scope semantic search
 search_memory({ query: "...", metadata_filter: { type: "DECISION" } })   # typed filter
 save_memory({ content: "...", metadata: { type: "DECISION" } })          # project-scoped
@@ -507,9 +516,8 @@ Set in your project's `.env` file or your shell. Documented checks live in `src/
 
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
-| `SUPABASE_URL` | ✅ | — | `https://<project-ref>.supabase.co` |
-| `SUPABASE_SECRET_KEY` | ✅ | — | `sb_secret_*` service-role key (bypasses RLS) |
-| `SUPABASE_POOLER_URL` | ✅ | — | IPv4-reachable pooler URL — `init_project`'s auto-migration loop uses this |
+| `SUPABASE_DB_URL` | ✅* | — | Postgres connection string, e.g. `postgres://postgres:<pw>@localhost:5433/postgres`. *At least one of `SUPABASE_DB_URL` / `SUPABASE_POOLER_URL` is required (name retains the `SUPABASE_` prefix; rename is future work) |
+| `SUPABASE_POOLER_URL` | ✅* | — | Alternate/pooled Postgres URL — **preferred when set**; `init_project`'s auto-migration loop uses this. *See note above |
 | `OLLAMA_HOST` | — | `http://localhost:11434` | Ollama endpoint |
 | `OLLAMA_EMBED_MODEL` | — | `nomic-embed-text` | Embedding model |
 | `EMBED_DIM` | — | `768` | Embedding vector dimension (must match the model) |
@@ -533,7 +541,7 @@ Set in your project's `.env` file or your shell. Documented checks live in `src/
 | Symptom | First check |
 |---|---|
 | `init_project` returns `not_ready` with env miss | Set the listed variable; re-run |
-| `npm run schema` fails `ENETUNREACH` | You're using `db.<ref>.supabase.co` (IPv6-only). Switch to the **pooler URL** (`aws-1-<region>.pooler.supabase.com:6543`) |
+| `npm run schema` fails to connect | Confirm the Postgres container is up (`docker compose -f infra/plain-pg/docker-compose.yml ps`) and `SUPABASE_DB_URL` points at the right host:port (default `localhost:5433`) |
 | `npm run gui` fails `EADDRINUSE :7788` | Another GUI process is bound. Set `SCM_GUI_PORT=7789` or stop the holder |
 | `check_system_health` shows daemon `pending` | Within 15-min grace window after MCP boot. Re-check after one daemon interval |
 | Tests fail in `tests/migrations.test.ts` | A new SQL migration lacks an idempotency guard (`OR REPLACE` / `IF NOT EXISTS`) — fix the migration, not the test |
@@ -616,7 +624,9 @@ src/
 ├── project.ts            project_id detection + slugification
 ├── project-detect.ts     Multi-stack project root detection
 ├── ollama.ts             POST /api/embed client
-├── supabase.ts           Table + RPC wrappers + frozen-pattern cache
+├── supabase.ts           Unchanged data doorway — table + RPC wrappers + frozen-pattern cache (now backed by src/db/pg-adapter.ts)
+├── db/
+│   └── pg-adapter.ts     Plain-`pg` adapter — pg.Pool-backed, PostgREST-shaped query builder + .rpc (v2.5.0; replaces @supabase/supabase-js)
 ├── chunker.ts            Markdown-aware splitter
 ├── verification-gate.ts  Hard-stop verification flag (PreToolUse blocker)
 ├── version.ts            Version SSOT — re-exports from package.json
@@ -625,7 +635,7 @@ src/
     ├── batch-freeze-patterns.ts  batch_freeze_patterns (bulk-hydrate from globs or rule file)
     ├── conflict.ts               check_rule_conflicts
     ├── frozen-cache.ts           Shared loader for the frozen-pattern cache (atomic writes, dedup)
-    ├── health.ts                 check_system_health (Supabase + Ollama + keep-alive + orchestrator)
+    ├── health.ts                 check_system_health (Postgres + Ollama + keep-alive + orchestrator)
     ├── hygiene.ts                check_code_hygiene (750-line ceiling, N-split refactor plans)
     ├── image.ts                  index_image (Moondream caption → embed → upsert)
     ├── orchestrator.ts           delegate_task + sync_artefacts (Sovereign Orchestrator pattern)
@@ -1073,7 +1083,7 @@ flowchart TD
 | `npm run dev` | Run the MCP server via `tsx` (no build step) |
 | `npm run start` | Run the compiled MCP server (`node dist/index.js`) |
 | `npm run gui` | Boot the Sovereign Command Center dashboard standalone on `127.0.0.1:7788` (`tsx src/gui/server.ts`). Cross-platform ESM entry-point guard (SCM-S37-P1). |
-| `npm run test` | Full hermetic suite via `node --test` — 414 tests spanning M2…M8.3 + budget gate + Web Research + bounded crawler (stubbed Supabase + Ollama; no live infra needed); cluster Suites A–D land in v2.3.0 |
+| `npm run test` | Full hermetic suite via `node --test` — 414 tests spanning M2…M8.3 + budget gate + Web Research + bounded crawler (stubbed DB + Ollama; no live infra needed); cluster Suites A–D land in v2.3.0 |
 | `npm run test:integration` | Zero-infra DB-integration lane (gated by `RUN_DB_TESTS=1` via `.env.test`) — real-DB budget-gate + crawler coverage on a disposable namespace; teardown asserts 0 residual rows |
 | `npm run schema` | Apply `001_schema.sql` (or pass `-- <file>` for another) |
 | `npm run backup` | Dry-run backup of all `.md` in `MEMORY_ROOTS` |
@@ -1084,9 +1094,9 @@ flowchart TD
 ## Design decisions worth knowing
 
 - **Embedding model is load-bearing.** `EMBED_DIM` must match the model's output. Swapping `nomic-embed-text` (768) for `mxbai-embed-large` (1024) means dropping and rebuilding the `embedding` column. Don't mix dimensions.
-- **Service-role key, no RLS.** The MCP server runs locally with no user context; it uses `sb_secret_*` which bypasses RLS. If you expose this server to untrusted callers, add RLS plus a `user_id` column.
+- **Single trusted DB role, no per-user context.** The MCP server runs locally and connects to PostgreSQL with one privileged role (the connection string in `SUPABASE_DB_URL` / `SUPABASE_POOLER_URL`); there is no end-user identity in the data path. If you expose this server to untrusted callers, add row-level security plus a `user_id` column.
 - **Chunking is heading-aware, not token-aware.** Sections split on `##` / `###`; long sections slide-window at `CHUNK_SIZE` with `CHUNK_OVERLAP`. Good enough for most prose; swap in a tokenizer-driven chunker if you're indexing code.
-- **Sync is incremental by default.** Unchanged files are skipped via `file_hash` comparison; no embedding calls, no writes. Pass `force: true` to re-embed everything. Chunks are flushed in 100-row batches to minimize Supabase round-trips.
+- **Sync is incremental by default.** Unchanged files are skipped via `file_hash` comparison; no embedding calls, no writes. Pass `force: true` to re-embed everything. Chunks are flushed in 100-row batches to minimize database round-trips.
 - **Orphans are reported by `sync_local_memory` and pruned by `prune_memory`.** Files removed from disk stay in the DB and show up in `orphan_files`. To clean them, call `prune_memory({ explicit_paths: [...], confirm: true })` — wildcards are rejected, `inline:*` synthetic origins from `save_memory` are always skipped, `project_id='GLOBAL'` is refused, and every confirmed delete writes a forensic manifest to `~/.claude-memory/prune-backups/<stamp>-<project>/manifest.json`. The manifest is the archive — reversal is a re-sync away. This reconciles with the "Archive, never delete" rule (SCM-S17-D1): that rule bans content mutation of immutable HNSW-indexed rows, not row-lifecycle reaping of confirmed orphans.
 - **Version is a single source of truth.** [src/version.ts](src/version.ts) reads `version` from `package.json` via `createRequire(import.meta.url)` and re-exports it. The MCP server registration in [src/index.ts](src/index.ts), the `check_system_health` orchestrator block, and the `delegate_task` response envelope all import that one constant — no hard-coded literals anywhere. Bumping `package.json` propagates through the next build with zero drift between `npm view` and what the tool surface reports.
 - **Policy hydration is bulk + idempotent.** [src/tools/batch-freeze-patterns.ts](src/tools/batch-freeze-patterns.ts) accepts globs or a markdown rule file, scans only the section under an exact `## Frozen Patterns` heading, strips backticks/list markers, and writes through the shared loader at [src/tools/frozen-cache.ts](src/tools/frozen-cache.ts). Cache entries are now `{ pattern, source, added_at }` objects (legacy strings are lazily migrated on read), all writes go through `<file>.tmp` + `rename`, and dedup is first-writer-wins on trimmed pattern equality — so re-running against the same rule file is a no-op. The `source` field is what powers smart-scout suppression.
@@ -1096,7 +1106,7 @@ flowchart TD
 ## Security
 
 - `.env` is git-ignored. Never commit it.
-- Rotate `SUPABASE_SECRET_KEY` and your database password anytime they touch a log, a terminal history, or a chat transcript.
+- Rotate your PostgreSQL database password (embedded in `SUPABASE_DB_URL` / `SUPABASE_POOLER_URL`) anytime it touches a log, a terminal history, or a chat transcript.
 - The backup script writes unencrypted `.zip` files to `backups/` (also git-ignored). If your notes are sensitive, encrypt the archive before uploading anywhere.
 
 ---
