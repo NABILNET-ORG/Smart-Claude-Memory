@@ -998,476 +998,506 @@ The Mermaid block below is refreshed by `sync_artefacts` after every worker succ
 %% Auto-generated. Do not edit between the MEMORY:ARCH markers.
 flowchart TD
   n0["Claude-Memory/"]
-  n1[".claude/"]
+  n1[".github/"]
   n0 --> n1
-  n2[".github/"]
-  n0 --> n2
-  n3["workflows/"]
+  n2["workflows/"]
+  n1 --> n2
+  n3["ci.yml"]
   n2 --> n3
-  n4["ci.yml"]
-  n3 --> n4
-  n5["docs/"]
-  n0 --> n5
-  n6["assets/"]
+  n4["docs/"]
+  n0 --> n4
+  n5["assets/"]
+  n4 --> n5
+  n6["schematic.png"]
   n5 --> n6
-  n7["schematic.png"]
-  n6 --> n7
-  n8["ide-templates/"]
-  n5 --> n8
-  n9["cline.mcp_settings.json.example"]
-  n8 --> n9
-  n10["cursor.mcp.json.example"]
-  n8 --> n10
-  n11["windsurf.mcp_config.json.example"]
-  n8 --> n11
-  n12["scm-memory/"]
-  n5 --> n12
-  n13["legacy_claude.md"]
-  n12 --> n13
-  n14["legacy_memory.md"]
-  n12 --> n14
-  n15["session-reports/"]
-  n5 --> n15
-  n16["SESSION-10-REPORT.md"]
-  n15 --> n16
-  n17["SESSION-11-REPORT.md"]
-  n15 --> n17
-  n18["SESSION-12-REPORT.md"]
-  n15 --> n18
-  n19["SESSION-13-REPORT.md"]
-  n15 --> n19
-  n20["SESSION-14-REPORT.md"]
-  n15 --> n20
-  n21["SESSION-15-REPORT.md"]
-  n15 --> n21
-  n22["SESSION-16-REPORT.md"]
-  n15 --> n22
-  n23["SESSION-17-REPORT.md"]
-  n15 --> n23
-  n24["SESSION-18-REPORT.md"]
-  n15 --> n24
-  n25["SESSION-19-REPORT.md"]
-  n15 --> n25
-  n26["SESSION-20-REPORT.md"]
-  n15 --> n26
-  n27["SESSION-21-REPORT.md"]
-  n15 --> n27
-  n28["SESSION-22-REPORT.md"]
-  n15 --> n28
-  n29["SESSION-23-REPORT.md"]
-  n15 --> n29
-  n30["SESSION-24-REPORT.md"]
-  n15 --> n30
-  n31["SESSION-25-REPORT.md"]
-  n15 --> n31
-  n32["SESSION-26-REPORT.md"]
-  n15 --> n32
-  n33["SESSION-27-REPORT.md"]
-  n15 --> n33
-  n34["SESSION-28-REPORT.md"]
-  n15 --> n34
-  n35["SESSION-29-REPORT.md"]
-  n15 --> n35
-  n36["SESSION-30-REPORT.md"]
-  n15 --> n36
-  n37["SESSION-31-REPORT.md"]
-  n15 --> n37
-  n38["SESSION-32-REPORT.md"]
-  n15 --> n38
-  n39["SESSION-33-REPORT.md"]
-  n15 --> n39
-  n40["SESSION-34-REPORT.md"]
-  n15 --> n40
-  n41["… (26 more)"]
-  n15 --> n41
-  n42["specs/"]
-  n5 --> n42
-  n43["m4-checkpoints-phase-b.md"]
-  n42 --> n43
-  n44["m5-curriculum-consumer.md"]
-  n42 --> n44
-  n45["m5-rollback-repro.md"]
-  n42 --> n45
-  n46["m5-stale-candidates.md"]
-  n42 --> n46
-  n47["m7-skill-graduation-phase-a.md"]
-  n42 --> n47
-  n48["m8.3-semantic-clustering.md"]
-  n42 --> n48
-  n49["prune-memory-tool.md"]
-  n42 --> n49
-  n50["superpowers/"]
-  n5 --> n50
-  n51["plans/"]
+  n7["ide-templates/"]
+  n4 --> n7
+  n8["cline.mcp_settings.json.example"]
+  n7 --> n8
+  n9["cursor.mcp.json.example"]
+  n7 --> n9
+  n10["windsurf.mcp_config.json.example"]
+  n7 --> n10
+  n11["scm-memory/"]
+  n4 --> n11
+  n12["legacy_claude.md"]
+  n11 --> n12
+  n13["legacy_memory.md"]
+  n11 --> n13
+  n14["session-reports/"]
+  n4 --> n14
+  n15["SESSION-10-REPORT.md"]
+  n14 --> n15
+  n16["SESSION-11-REPORT.md"]
+  n14 --> n16
+  n17["SESSION-12-REPORT.md"]
+  n14 --> n17
+  n18["SESSION-13-REPORT.md"]
+  n14 --> n18
+  n19["SESSION-14-REPORT.md"]
+  n14 --> n19
+  n20["SESSION-15-REPORT.md"]
+  n14 --> n20
+  n21["SESSION-16-REPORT.md"]
+  n14 --> n21
+  n22["SESSION-17-REPORT.md"]
+  n14 --> n22
+  n23["SESSION-18-REPORT.md"]
+  n14 --> n23
+  n24["SESSION-19-REPORT.md"]
+  n14 --> n24
+  n25["SESSION-20-REPORT.md"]
+  n14 --> n25
+  n26["SESSION-21-REPORT.md"]
+  n14 --> n26
+  n27["SESSION-22-REPORT.md"]
+  n14 --> n27
+  n28["SESSION-23-REPORT.md"]
+  n14 --> n28
+  n29["SESSION-24-REPORT.md"]
+  n14 --> n29
+  n30["SESSION-25-REPORT.md"]
+  n14 --> n30
+  n31["SESSION-26-REPORT.md"]
+  n14 --> n31
+  n32["SESSION-27-REPORT.md"]
+  n14 --> n32
+  n33["SESSION-28-REPORT.md"]
+  n14 --> n33
+  n34["SESSION-29-REPORT.md"]
+  n14 --> n34
+  n35["SESSION-30-REPORT.md"]
+  n14 --> n35
+  n36["SESSION-31-REPORT.md"]
+  n14 --> n36
+  n37["SESSION-32-REPORT.md"]
+  n14 --> n37
+  n38["SESSION-33-REPORT.md"]
+  n14 --> n38
+  n39["SESSION-34-REPORT.md"]
+  n14 --> n39
+  n40["… (28 more)"]
+  n14 --> n40
+  n41["specs/"]
+  n4 --> n41
+  n42["m4-checkpoints-phase-b.md"]
+  n41 --> n42
+  n43["m5-curriculum-consumer.md"]
+  n41 --> n43
+  n44["m5-rollback-repro.md"]
+  n41 --> n44
+  n45["m5-stale-candidates.md"]
+  n41 --> n45
+  n46["m7-skill-graduation-phase-a.md"]
+  n41 --> n46
+  n47["m8.3-semantic-clustering.md"]
+  n41 --> n47
+  n48["prune-memory-tool.md"]
+  n41 --> n48
+  n49["superpowers/"]
+  n4 --> n49
+  n50["plans/"]
+  n49 --> n50
+  n51["2026-05-12-observability-telemetry.md"]
   n50 --> n51
-  n52["2026-05-12-observability-telemetry.md"]
-  n51 --> n52
-  n53["2026-05-14-marketplace-packaging.md"]
-  n51 --> n53
-  n54["2026-05-15-v2.1.0-global-vault-ux.md"]
-  n51 --> n54
-  n55["2026-05-17-agentic-superpowers-integration.md"]
-  n51 --> n55
-  n56["2026-06-03-graph-aware-retrieval-part1-extraction.md"]
-  n51 --> n56
-  n57["2026-06-03-graph-aware-retrieval-part2-rerank-eval.md"]
-  n51 --> n57
-  n58["specs/"]
+  n52["2026-05-14-marketplace-packaging.md"]
+  n50 --> n52
+  n53["2026-05-15-v2.1.0-global-vault-ux.md"]
+  n50 --> n53
+  n54["2026-05-17-agentic-superpowers-integration.md"]
+  n50 --> n54
+  n55["2026-06-03-graph-aware-retrieval-part1-extraction.md"]
+  n50 --> n55
+  n56["2026-06-03-graph-aware-retrieval-part2-rerank-eval.md"]
+  n50 --> n56
+  n57["2026-06-09-egress-structural-fix.md"]
+  n50 --> n57
+  n58["2026-06-13-data-rescue-cloud-to-local.md"]
   n50 --> n58
-  n59["2026-05-13-telemetry-retention-design.md"]
-  n58 --> n59
-  n60["2026-05-14-marketplace-packaging-design.md"]
-  n58 --> n60
-  n61["2026-06-02-budget-integration-test-lane-design.md"]
-  n58 --> n61
-  n62["2026-06-02-docs-crawler-design.md"]
-  n58 --> n62
-  n63["2026-06-02-global-vault-export-import-design.md"]
-  n58 --> n63
-  n64["2026-06-03-graph-aware-retrieval-design.md"]
-  n58 --> n64
-  n65["2026-06-05-graph-rerank-fair-eval-design.md"]
-  n58 --> n65
-  n66["s16-d1-eval-queries.json"]
-  n58 --> n66
-  n67["s52-capability-eval.json"]
-  n58 --> n67
-  n68["s52-shipgate-eval.json"]
-  n58 --> n68
-  n69["IDE-INTEGRATION.md"]
-  n5 --> n69
-  n70["NEXT-SESSION-PROMPT.md"]
-  n5 --> n70
-  n71["release-notes-v2.1.0.md"]
-  n5 --> n71
-  n72["SCM-MASTER-DOSSIER.md"]
-  n5 --> n72
-  n73["hooks/"]
-  n0 --> n73
-  n74["md-policy.py"]
-  n73 --> n74
-  n75["README.md"]
-  n73 --> n75
-  n76["images/"]
-  n0 --> n76
-  n77["GPT SMC v2.0-rc1.png"]
-  n76 --> n77
-  n78["scripts/"]
-  n0 --> n78
-  n79["001_schema.sql"]
-  n78 --> n79
-  n80["002_multi_project.sql"]
-  n78 --> n80
-  n81["003_file_hash.sql"]
-  n78 --> n81
-  n82["004_backlog_frozen.sql"]
-  n78 --> n82
-  n83["005_archive_backlog.sql"]
-  n78 --> n83
-  n84["006_security_hardening.sql"]
-  n78 --> n84
-  n85["007_metadata_typed_retrieval.sql"]
-  n78 --> n85
-  n86["008_global_scope.sql"]
-  n78 --> n86
-  n87["009_fix_rpc_dual_scope.sql"]
-  n78 --> n87
-  n88["010_agent_skills.sql"]
-  n78 --> n88
-  n89["011_trajectory_compaction.sql"]
-  n78 --> n89
-  n90["012_sleep_learning.sql"]
-  n78 --> n90
-  n91["013_archive_backlog_chunk_link.sql"]
-  n78 --> n91
-  n92["014_workflow_checkpoints.sql"]
-  n78 --> n92
-  n93["015_curriculum_tasks.sql"]
-  n78 --> n93
-  n94["016_daemon_telemetry.sql"]
-  n78 --> n94
-  n95["017_explicit_service_role_grants.sql"]
-  n78 --> n95
-  n96["017_skill_graduations.sql"]
-  n78 --> n96
-  n97["018_telemetry_retention.sql"]
-  n78 --> n97
-  n98["019_telemetry_graduation_daemon.sql"]
-  n78 --> n98
-  n99["020_knowledge_graph.sql"]
-  n78 --> n99
-  n100["021_agent_budgets.sql"]
-  n78 --> n100
-  n101["023_kg_clustering.sql"]
-  n78 --> n101
-  n102["024_telemetry_file_watcher_daemon.sql"]
-  n78 --> n102
-  n103["025_security_advisor_compliance.sql"]
-  n78 --> n103
-  n104["… (50 more)"]
-  n78 --> n104
-  n105["src/"]
-  n0 --> n105
-  n106["budget/"]
-  n105 --> n106
-  n107["gate.ts"]
-  n106 --> n107
-  n108["store.ts"]
-  n106 --> n108
-  n109["types.ts"]
-  n106 --> n109
-  n110["clustering/"]
-  n105 --> n110
-  n111["clusters.ts"]
-  n110 --> n111
-  n112["daemon.ts"]
-  n110 --> n112
-  n113["kmeans.ts"]
-  n110 --> n113
-  n114["louvain.ts"]
-  n110 --> n114
-  n115["curriculum/"]
-  n105 --> n115
-  n116["daemon.ts"]
+  n59["2026-06-13-go-fully-local-retire-supabase.md"]
+  n50 --> n59
+  n60["2026-06-25-S56-organic-learning-backfill.md"]
+  n50 --> n60
+  n61["2026-06-25-S56-plain-pg-migration-design.md"]
+  n50 --> n61
+  n62["specs/"]
+  n49 --> n62
+  n63["2026-05-13-telemetry-retention-design.md"]
+  n62 --> n63
+  n64["2026-05-14-marketplace-packaging-design.md"]
+  n62 --> n64
+  n65["2026-06-02-budget-integration-test-lane-design.md"]
+  n62 --> n65
+  n66["2026-06-02-docs-crawler-design.md"]
+  n62 --> n66
+  n67["2026-06-02-global-vault-export-import-design.md"]
+  n62 --> n67
+  n68["2026-06-03-graph-aware-retrieval-design.md"]
+  n62 --> n68
+  n69["2026-06-05-graph-rerank-fair-eval-design.md"]
+  n62 --> n69
+  n70["2026-06-09-egress-vector-tax-audit-and-fix.md"]
+  n62 --> n70
+  n71["2026-06-09-organic-learning-loop-design.md"]
+  n62 --> n71
+  n72["s16-d1-eval-queries.json"]
+  n62 --> n72
+  n73["s52-capability-eval.json"]
+  n62 --> n73
+  n74["s52-shipgate-eval.json"]
+  n62 --> n74
+  n75["IDE-INTEGRATION.md"]
+  n4 --> n75
+  n76["NEXT-SESSION-PROMPT.md"]
+  n4 --> n76
+  n77["release-notes-v2.1.0.md"]
+  n4 --> n77
+  n78["SCM-MASTER-DOSSIER.md"]
+  n4 --> n78
+  n79["hooks/"]
+  n0 --> n79
+  n80["md-policy.py"]
+  n79 --> n80
+  n81["README.md"]
+  n79 --> n81
+  n82["images/"]
+  n0 --> n82
+  n83["GPT SMC v2.0-rc1.png"]
+  n82 --> n83
+  n84["infra/"]
+  n0 --> n84
+  n85["plain-pg/"]
+  n84 --> n85
+  n86[".env.example"]
+  n85 --> n86
+  n87["docker-compose.yml"]
+  n85 --> n87
+  n88["scripts/"]
+  n0 --> n88
+  n89["001_schema.sql"]
+  n88 --> n89
+  n90["002_multi_project.sql"]
+  n88 --> n90
+  n91["003_file_hash.sql"]
+  n88 --> n91
+  n92["004_backlog_frozen.sql"]
+  n88 --> n92
+  n93["005_archive_backlog.sql"]
+  n88 --> n93
+  n94["006_security_hardening.sql"]
+  n88 --> n94
+  n95["007_metadata_typed_retrieval.sql"]
+  n88 --> n95
+  n96["008_global_scope.sql"]
+  n88 --> n96
+  n97["009_fix_rpc_dual_scope.sql"]
+  n88 --> n97
+  n98["010_agent_skills.sql"]
+  n88 --> n98
+  n99["011_trajectory_compaction.sql"]
+  n88 --> n99
+  n100["012_sleep_learning.sql"]
+  n88 --> n100
+  n101["013_archive_backlog_chunk_link.sql"]
+  n88 --> n101
+  n102["014_workflow_checkpoints.sql"]
+  n88 --> n102
+  n103["015_curriculum_tasks.sql"]
+  n88 --> n103
+  n104["016_daemon_telemetry.sql"]
+  n88 --> n104
+  n105["017_explicit_service_role_grants.sql"]
+  n88 --> n105
+  n106["017_skill_graduations.sql"]
+  n88 --> n106
+  n107["018_telemetry_retention.sql"]
+  n88 --> n107
+  n108["019_telemetry_graduation_daemon.sql"]
+  n88 --> n108
+  n109["020_knowledge_graph.sql"]
+  n88 --> n109
+  n110["021_agent_budgets.sql"]
+  n88 --> n110
+  n111["023_kg_clustering.sql"]
+  n88 --> n111
+  n112["024_telemetry_file_watcher_daemon.sql"]
+  n88 --> n112
+  n113["025_security_advisor_compliance.sql"]
+  n88 --> n113
+  n114["… (49 more)"]
+  n88 --> n114
+  n115["src/"]
+  n0 --> n115
+  n116["budget/"]
   n115 --> n116
-  n117["scanner.ts"]
-  n115 --> n117
-  n118["graduation/"]
-  n105 --> n118
-  n119["daemon.ts"]
-  n118 --> n119
-  n120["scanner.ts"]
-  n118 --> n120
-  n121["graph/"]
-  n105 --> n121
+  n117["gate.ts"]
+  n116 --> n117
+  n118["store.ts"]
+  n116 --> n118
+  n119["types.ts"]
+  n116 --> n119
+  n120["clustering/"]
+  n115 --> n120
+  n121["clusters.ts"]
+  n120 --> n121
   n122["daemon.ts"]
-  n121 --> n122
-  n123["extractor.ts"]
-  n121 --> n123
-  n124["sanitize.ts"]
-  n121 --> n124
-  n125["gui/"]
-  n105 --> n125
-  n126["public/"]
+  n120 --> n122
+  n123["kmeans.ts"]
+  n120 --> n123
+  n124["louvain.ts"]
+  n120 --> n124
+  n125["curriculum/"]
+  n115 --> n125
+  n126["daemon.ts"]
   n125 --> n126
-  n127["app.js"]
-  n126 --> n127
-  n128["index.html"]
-  n126 --> n128
-  n129["style.css"]
-  n126 --> n129
-  n130["backlog-write.ts"]
-  n125 --> n130
-  n131["server.ts"]
-  n125 --> n131
-  n132["lib/"]
-  n105 --> n132
-  n133["migrations.ts"]
-  n132 --> n133
-  n134["sleep/"]
-  n105 --> n134
-  n135["daemon.ts"]
-  n134 --> n135
-  n136["miner.ts"]
-  n134 --> n136
-  n137["sync/"]
-  n105 --> n137
-  n138["file-watcher-daemon.ts"]
+  n127["scanner.ts"]
+  n125 --> n127
+  n128["db/"]
+  n115 --> n128
+  n129["pg-adapter.ts"]
+  n128 --> n129
+  n130["graduation/"]
+  n115 --> n130
+  n131["daemon.ts"]
+  n130 --> n131
+  n132["scanner.ts"]
+  n130 --> n132
+  n133["graph/"]
+  n115 --> n133
+  n134["daemon.ts"]
+  n133 --> n134
+  n135["extractor.ts"]
+  n133 --> n135
+  n136["sanitize.ts"]
+  n133 --> n136
+  n137["gui/"]
+  n115 --> n137
+  n138["public/"]
   n137 --> n138
-  n139["telemetry/"]
-  n105 --> n139
-  n140["emit.ts"]
-  n139 --> n140
-  n141["pruner.ts"]
-  n139 --> n141
-  n142["types.ts"]
-  n139 --> n142
-  n143["tools/"]
-  n105 --> n143
-  n144["backlog.ts"]
-  n143 --> n144
-  n145["batch-freeze-patterns.ts"]
-  n143 --> n145
-  n146["bloat-audit.ts"]
-  n143 --> n146
-  n147["bridge.ts"]
-  n143 --> n147
-  n148["budget.ts"]
-  n143 --> n148
-  n149["checkpoint.ts"]
-  n143 --> n149
-  n150["compact.ts"]
-  n143 --> n150
-  n151["conflict.ts"]
-  n143 --> n151
-  n152["crawl-docs.ts"]
-  n143 --> n152
-  n153["curriculum.ts"]
-  n143 --> n153
-  n154["fetch-url.ts"]
-  n143 --> n154
-  n155["frozen-cache.ts"]
-  n143 --> n155
-  n156["global-vault-export.ts"]
-  n143 --> n156
-  n157["global-vault-import.ts"]
-  n143 --> n157
-  n158["graduation.ts"]
-  n143 --> n158
-  n159["health.ts"]
-  n143 --> n159
-  n160["hygiene.ts"]
-  n143 --> n160
-  n161["image.ts"]
-  n143 --> n161
-  n162["kg.ts"]
-  n143 --> n162
-  n163["list-global-patterns.ts"]
-  n143 --> n163
-  n164["llm-rerank.ts"]
-  n143 --> n164
-  n165["metrics.ts"]
-  n143 --> n165
-  n166["orchestrator.ts"]
-  n143 --> n166
-  n167["policy.ts"]
-  n143 --> n167
-  n168["prune.ts"]
-  n143 --> n168
-  n169["… (14 more)"]
-  n143 --> n169
-  n170["trajectory/"]
-  n105 --> n170
-  n171["daemon.ts"]
-  n170 --> n171
-  n172["stripper.ts"]
-  n170 --> n172
-  n173["summarizer.ts"]
-  n170 --> n173
-  n174["transactions/"]
-  n105 --> n174
-  n175["checkpoint.ts"]
-  n174 --> n175
-  n176["web/"]
-  n105 --> n176
-  n177["crawl.ts"]
-  n176 --> n177
-  n178["fetch.ts"]
-  n176 --> n178
-  n179["ingest.ts"]
-  n176 --> n179
-  n180["links.ts"]
-  n176 --> n180
-  n181["robots.ts"]
-  n176 --> n181
-  n182["ssrf-guard.ts"]
-  n176 --> n182
-  n183["canonical-json.ts"]
-  n105 --> n183
-  n184["chunker.ts"]
-  n105 --> n184
-  n185["config.ts"]
-  n105 --> n185
-  n186["index.ts"]
-  n105 --> n186
-  n187["ollama.ts"]
-  n105 --> n187
-  n188["project-detect.ts"]
-  n105 --> n188
-  n189["project.ts"]
-  n105 --> n189
-  n190["supabase.ts"]
-  n105 --> n190
-  n191["verification-gate.ts"]
-  n105 --> n191
-  n192["version.ts"]
-  n105 --> n192
-  n193["tests/"]
-  n0 --> n193
-  n194["fixtures/"]
-  n193 --> n194
-  n195["m4.ts"]
-  n194 --> n195
-  n196["prune.ts"]
-  n194 --> n196
-  n197["sql_fixtures/"]
-  n193 --> n197
-  n198["006_smoke.sql"]
-  n197 --> n198
-  n199["006_verify.sql"]
-  n197 --> n199
-  n200["bridge-concepts.test.ts"]
-  n193 --> n200
-  n201["bridge-fetch.test.ts"]
-  n193 --> n201
-  n202["budget-gate.test.ts"]
-  n193 --> n202
-  n203["budget-integration.test.ts"]
-  n193 --> n203
-  n204["capabilities.test.ts"]
-  n193 --> n204
-  n205["checkpoint.test.ts"]
-  n193 --> n205
-  n206["clustering-daemon.test.ts"]
-  n193 --> n206
-  n207["clustering-kmeans.test.ts"]
-  n193 --> n207
-  n208["clustering-louvain.test.ts"]
-  n193 --> n208
-  n209["clustering-routes.test.ts"]
-  n193 --> n209
-  n210["config-rerank.test.ts"]
-  n193 --> n210
-  n211["crawl-docs-integration.test.ts"]
-  n193 --> n211
-  n212["crawl.test.ts"]
-  n193 --> n212
-  n213["curriculum-consumer.test.ts"]
-  n193 --> n213
-  n214["curriculum-scanner.test.ts"]
-  n193 --> n214
-  n215["file-watcher-daemon.test.ts"]
-  n193 --> n215
-  n216["global-vault.test.ts"]
-  n193 --> n216
-  n217["graduation-daemon.test.ts"]
-  n193 --> n217
-  n218["graduation-handlers.test.ts"]
-  n193 --> n218
-  n219["graduation-scanner.test.ts"]
-  n193 --> n219
-  n220["graph-daemon.test.ts"]
-  n193 --> n220
-  n221["graph-extractor.test.ts"]
-  n193 --> n221
-  n222["graph-sanitize.test.ts"]
-  n193 --> n222
-  n223["… (21 more)"]
-  n193 --> n223
-  n224[".env.example"]
-  n0 --> n224
-  n225[".gitignore"]
-  n0 --> n225
-  n226["ARCHITECTURE.md"]
-  n0 --> n226
-  n227["CHANGELOG.md"]
-  n0 --> n227
-  n228["CLAUDE.md"]
-  n0 --> n228
-  n229["LICENSE"]
-  n0 --> n229
-  n230["marketplace.json"]
-  n0 --> n230
-  n231["package-lock.json"]
-  n0 --> n231
-  n232["package.json"]
-  n0 --> n232
-  n233["project_file_architecture.md"]
-  n0 --> n233
-  n234["README.md"]
-  n0 --> n234
-  n235["tsconfig.json"]
-  n0 --> n235
+  n139["app.js"]
+  n138 --> n139
+  n140["index.html"]
+  n138 --> n140
+  n141["style.css"]
+  n138 --> n141
+  n142["backlog-write.ts"]
+  n137 --> n142
+  n143["server.ts"]
+  n137 --> n143
+  n144["lib/"]
+  n115 --> n144
+  n145["migrations.ts"]
+  n144 --> n145
+  n146["sleep/"]
+  n115 --> n146
+  n147["daemon.ts"]
+  n146 --> n147
+  n148["miner.ts"]
+  n146 --> n148
+  n149["sync/"]
+  n115 --> n149
+  n150["file-watcher-daemon.ts"]
+  n149 --> n150
+  n151["telemetry/"]
+  n115 --> n151
+  n152["emit.ts"]
+  n151 --> n152
+  n153["pruner.ts"]
+  n151 --> n153
+  n154["types.ts"]
+  n151 --> n154
+  n155["tools/"]
+  n115 --> n155
+  n156["backlog.ts"]
+  n155 --> n156
+  n157["batch-freeze-patterns.ts"]
+  n155 --> n157
+  n158["bloat-audit.ts"]
+  n155 --> n158
+  n159["bridge.ts"]
+  n155 --> n159
+  n160["budget.ts"]
+  n155 --> n160
+  n161["checkpoint.ts"]
+  n155 --> n161
+  n162["compact.ts"]
+  n155 --> n162
+  n163["conflict.ts"]
+  n155 --> n163
+  n164["crawl-docs.ts"]
+  n155 --> n164
+  n165["curriculum.ts"]
+  n155 --> n165
+  n166["fetch-url.ts"]
+  n155 --> n166
+  n167["frozen-cache.ts"]
+  n155 --> n167
+  n168["global-vault-export.ts"]
+  n155 --> n168
+  n169["global-vault-import.ts"]
+  n155 --> n169
+  n170["graduation.ts"]
+  n155 --> n170
+  n171["health.ts"]
+  n155 --> n171
+  n172["hygiene.ts"]
+  n155 --> n172
+  n173["image.ts"]
+  n155 --> n173
+  n174["kg.ts"]
+  n155 --> n174
+  n175["list-global-patterns.ts"]
+  n155 --> n175
+  n176["llm-rerank.ts"]
+  n155 --> n176
+  n177["metrics.ts"]
+  n155 --> n177
+  n178["orchestrator.ts"]
+  n155 --> n178
+  n179["policy.ts"]
+  n155 --> n179
+  n180["prune.ts"]
+  n155 --> n180
+  n181["… (14 more)"]
+  n155 --> n181
+  n182["trajectory/"]
+  n115 --> n182
+  n183["daemon.ts"]
+  n182 --> n183
+  n184["stripper.ts"]
+  n182 --> n184
+  n185["summarizer.ts"]
+  n182 --> n185
+  n186["transactions/"]
+  n115 --> n186
+  n187["checkpoint.ts"]
+  n186 --> n187
+  n188["web/"]
+  n115 --> n188
+  n189["crawl.ts"]
+  n188 --> n189
+  n190["fetch.ts"]
+  n188 --> n190
+  n191["ingest.ts"]
+  n188 --> n191
+  n192["links.ts"]
+  n188 --> n192
+  n193["robots.ts"]
+  n188 --> n193
+  n194["ssrf-guard.ts"]
+  n188 --> n194
+  n195["canonical-json.ts"]
+  n115 --> n195
+  n196["chunker.ts"]
+  n115 --> n196
+  n197["config.ts"]
+  n115 --> n197
+  n198["index.ts"]
+  n115 --> n198
+  n199["ollama.ts"]
+  n115 --> n199
+  n200["project-detect.ts"]
+  n115 --> n200
+  n201["project.ts"]
+  n115 --> n201
+  n202["supabase.ts"]
+  n115 --> n202
+  n203["verification-gate.ts"]
+  n115 --> n203
+  n204["version.ts"]
+  n115 --> n204
+  n205["supabase/"]
+  n0 --> n205
+  n206[".gitignore"]
+  n205 --> n206
+  n207["config.toml"]
+  n205 --> n207
+  n208["tests/"]
+  n0 --> n208
+  n209["fixtures/"]
+  n208 --> n209
+  n210["m4.ts"]
+  n209 --> n210
+  n211["prune.ts"]
+  n209 --> n211
+  n212["sql_fixtures/"]
+  n208 --> n212
+  n213["006_smoke.sql"]
+  n212 --> n213
+  n214["006_verify.sql"]
+  n212 --> n214
+  n215["bridge-concepts.test.ts"]
+  n208 --> n215
+  n216["bridge-fetch.test.ts"]
+  n208 --> n216
+  n217["budget-gate.test.ts"]
+  n208 --> n217
+  n218["budget-integration.test.ts"]
+  n208 --> n218
+  n219["capabilities.test.ts"]
+  n208 --> n219
+  n220["checkpoint.test.ts"]
+  n208 --> n220
+  n221["clustering-daemon.test.ts"]
+  n208 --> n221
+  n222["clustering-delta-gate.test.ts"]
+  n208 --> n222
+  n223["clustering-kmeans.test.ts"]
+  n208 --> n223
+  n224["clustering-louvain.test.ts"]
+  n208 --> n224
+  n225["clustering-routes.test.ts"]
+  n208 --> n225
+  n226["config-rerank.test.ts"]
+  n208 --> n226
+  n227["crawl-docs-integration.test.ts"]
+  n208 --> n227
+  n228["crawl.test.ts"]
+  n208 --> n228
+  n229["curriculum-consumer.test.ts"]
+  n208 --> n229
+  n230["curriculum-scanner.test.ts"]
+  n208 --> n230
+  n231["file-watcher-daemon.test.ts"]
+  n208 --> n231
+  n232["global-vault.test.ts"]
+  n208 --> n232
+  n233["graduation-daemon.test.ts"]
+  n208 --> n233
+  n234["graduation-handlers.test.ts"]
+  n208 --> n234
+  n235["graduation-scanner.test.ts"]
+  n208 --> n235
+  n236["graph-daemon.test.ts"]
+  n208 --> n236
+  n237["graph-extractor.test.ts"]
+  n208 --> n237
+  n238["… (24 more)"]
+  n208 --> n238
+  n239[".env.example"]
+  n0 --> n239
+  n240[".gitignore"]
+  n0 --> n240
+  n241["ARCHITECTURE.md"]
+  n0 --> n241
+  n242["CHANGELOG.md"]
+  n0 --> n242
+  n243["CLAUDE.md"]
+  n0 --> n243
+  n244["LICENSE"]
+  n0 --> n244
+  n245["marketplace.json"]
+  n0 --> n245
+  n246["package-lock.json"]
+  n0 --> n246
+  n247["package.json"]
+  n0 --> n247
+  n248["project_file_architecture.md"]
+  n0 --> n248
+  n249["README.md"]
+  n0 --> n249
+  n250["tsconfig.json"]
+  n0 --> n250
 ```
 
 <!-- MEMORY:ARCH:END -->
@@ -1488,7 +1518,7 @@ flowchart TD
 | **v1.1.4** | **Architecture Guard + Automatic Session Handoff — Core 3 audit on init_project, session-end regenerates per-section diagrams, next_session_command_markdown handoff** |
 | **v2.0.0-rc1** | **Release Candidate — bundles Typed Retrieval + Strict Project Isolation (Sovereign Taxonomy on memory_chunks.metadata, GIN(jsonb_path_ops) index, match_memory_chunks p_metadata_filter, save_memory tool with category-prompting description) AND Global Knowledge Vault + Multi-IDE (reserved 'GLOBAL' project_id, dual-scope match_memory_chunks p_include_global, save_memory metadata.is_global, init_project Capabilities Header, docs/IDE-INTEGRATION.md for Cursor/Windsurf/Cline). $0 — pure pgvector + JSONB + same Ollama infra. Originally tagged as a separate milestone but folded back into rc1 — release candidate semantics, not yet a stable major.** |
 | **v2.1.0** | **GLOBAL Vault UX — browse-only `list_global_patterns` MCP tool (tiered output: preview default + `include_content:true` opt-in; full JSONB `metadata_filter` matching `search_memory`; offset/limit pagination defaulting to 10 with `created_at DESC, id DESC`; pure SQL — zero embedding cost). `init_project.capabilities` extended: `global_scope` gains `browse_tool` + `browse_args`, `context_gathering_hints` gains a GLOBAL-browse exemplar, `protocol` bumped to `smart-claude-memory/v2.1.0`. Zero new dependencies, zero new indexes, zero new migrations — reuses the existing GIN(jsonb_path_ops) index and `pg` pool.** |
-| **v2.5.0** | **Session 56 (SCM-S56) — data-layer migration off Supabase onto a self-hosted plain PostgreSQL 17 + pgvector database (Docker, host port `5433`, `infra/plain-pg/docker-compose.yml`). Supabase — both the cloud project and the local self-hosted stack — is retired from the data path. Mechanism: a new `pg.Pool`-backed adapter `src/db/pg-adapter.ts` (a PostgREST-shaped query builder + `.rpc`) sits behind the **unchanged** `src/supabase.ts` doorway, so all ~127 call sites and every helper export are byte-for-byte identical — only the DB backend changed. Removed: the `@supabase/supabase-js` dependency and the unused `SUPABASE_URL` / `SUPABASE_SECRET_KEY` REST config (stripped from `src/config.ts`, `src/tools/setup.ts`, `.env`). The app connects via `SUPABASE_DB_URL` / `SUPABASE_POOLER_URL` (now `:5433`; the variable *names* keep the `SUPABASE_` prefix for now — a rename is tracked as future work). Feature surface unchanged: same 63 MCP tools, same memory / search / KG / backlog / skills, same 28 schema migrations, same test suite. This is a pure data-layer swap, not a feature change.** |
+| **v2.5.0** | **Session 56 (SCM-S56) — data-layer migration off Supabase onto a self-hosted plain PostgreSQL 17 + pgvector database (Docker, host port `5433`, `infra/plain-pg/docker-compose.yml`). Supabase — both the cloud project and the local self-hosted stack — is retired from the data path. Mechanism: a new `pg.Pool`-backed adapter `src/db/pg-adapter.ts` (a PostgREST-shaped query builder + `.rpc`) sits behind the **unchanged** `src/supabase.ts` doorway, so all ~127 call sites and every helper export are byte-for-byte identical — only the DB backend changed. Removed: the `@supabase/supabase-js` dependency and the unused `SUPABASE_URL` / `SUPABASE_SECRET_KEY` REST config (stripped from `src/config.ts`, `src/tools/setup.ts`, `.env`). The app connects via `SUPABASE_DB_URL` / `SUPABASE_POOLER_URL` (now `:5433`; the variable *names* keep the `SUPABASE_` prefix for now — a rename is tracked as future work). Feature surface unchanged: same 63 MCP tools, same memory / search / KG / backlog / skills, 30 schema migrations (through `030_grant_execute_to_service_role.sql`), same test suite. This is a pure data-layer swap, not a feature change.** |
 | **v2.4.0** | **Session 48 — four-epic feature minor on top of the v2.3.2 security baseline. (1) Phase 1 interactive Backlog Kanban: drag-drop card movement wired to a new `PATCH /api/backlog/:id` route reusing the `GuiHandlers` seam (commit `f2182ff`). (2) Phase 2 deterministic GLOBAL vault export/import (§4.3.1) — `export_global_vault` serializes the reserved `GLOBAL` project_id (memories + skills) to a portable canonical-JSON document with a sha256 `content_digest`; `import_global_vault` ingests it under a strict no-override merge (existing GLOBAL rows never clobbered, re-import is a no-op), `format_version="1.0.0"`, embeddings ride along so the destination never re-embeds (commit `1111f38`). (3) Broken-window fixes — wired the previously-orphaned `tests/budget-gate.test.ts` into the `npm test` manifest (+21 tests) and removed the dead `pretty` argument (commit `8bee21c`). (4) Agentic Superpowers MVP (§4.14) — `fetch_url` (SSRF-guarded HTTP(S) fetch → clean text via the new `html-to-text` dependency) and `research_url` (fetch → chunk → embed → searchable project memory) backed by `src/web/{fetch.ts,ssrf-guard.ts}`; the guard enforces http/https-only, blocks private/loopback/link-local IPv4+IPv6, re-validates every redirect hop, and bounds max-bytes/timeout/content-type, all tunable via `SCM_FETCH_*` env (commit `1558006`). Surface growth: MCP tools 58 → **62** · schema migrations unchanged at 26 (through `026`) · test suite 292 → **360** across **83** suites · **one** new runtime dependency (`html-to-text`), the first since the v2.0.x foundation.** |
 | **v2.3.2** | **Security Compliance Sprint (Session 46, SCM-S46-F1 + SCM-S46-F2). Patch-level security release closing every finding in the Supabase Security Advisor report. Two forward-only, idempotent migrations: `scripts/025_security_advisor_compliance.sql` (RLS enabled on `workflow_checkpoints` + `schema_migrations`; `security_invoker=true` flipped on `kg_supernodes` + `v_daemon_budget_health` + `v_task_budget_health` — Postgres views default to `SECURITY DEFINER` which silently bypasses underlying-table RLS; `search_path = public, extensions, pg_catalog` pinned on `skill_graduations_touch_updated_at` + `match_chunks` + `kg_nodes_touch_updated_at` + `increment_daemon_bucket` to close the CVE-2018-1058 mutable-`search_path` attack surface; `REVOKE EXECUTE … FROM PUBLIC` on all 23 user-defined functions/procedures in `public` via signature-agnostic DO block enumerating `pg_proc.pg_get_function_identity_arguments`) and `scripts/026_revoke_anon_authenticated.sql` (follow-up DO block stripping the auto-applied PostgREST grants — Supabase auto-grants EXECUTE to `anon` + `authenticated` on `CREATE FUNCTION`, which the catch-all PUBLIC revoke did not touch; post-apply state 0/23 anon, 0/23 authenticated EXECUTE while `postgres` + `service_role` retain 23/23). Surface unchanged: still 58 MCP tools, test suite 292/292, zero new runtime dependencies; schema migrations now through `026` (was 024). Documented `service_role`-only call pattern preserved end-to-end via explicit role grants + BYPASSRLS. Plus new DECISION `SCM-S46-D1` — backup-script sweep verdict for `scripts/backup-and-remove.ts` retained as production tooling (memory id 22800), 4-condition retention rule encoded for future `init_project.legacy_sweep` candidates.** |
 | **v2.3.1** | **Post-Mega-Sprint Roll-Up + Polish Sprint (Sessions 43 Part 2 + 44). Patch-level release surfacing the four post-v2.3.0 commits from Session 43 Part 2 (Epic F Active Backlog Kanban + `/api/backlog` HTTP route in `src/gui/server.ts` reusing the `GuiHandlers` seam · Epic G `file_watcher` KG auto-sync daemon in `src/sync/file-watcher.ts` with `fs.watch` debouncer + `MEMORY_ROOTS` hot-mirror + ARM-budget gate · tech-debt sweep tightening daemon stderr emits · v2.1.11 governance pivot stripping the prior `context_pct` self-report gate from `manage_backlog({action:'session_end'})` and replacing it with the explicit-human-command-only Zero-Autonomy Rule) plus Session 44 (Active Backlog Kanban relocated to the very top of the dashboard above M7 Graduations + Knowledge Graph; v2.1.11 constitution canonicalized in `src/tools/sovereign-constitution.ts` — `KNOWN_CANONICAL_HASHES["v2.1.11"]=6edf03a5a62b…`, `CANONICAL_CONSTITUTION_VERSION` bumped to `v2.1.11`, drift warning closed; `createRequire ESM Fix for Minified-Mangled Named Exports` packaged as a GLOBAL skill — id 1915 — distilling the glob@13 packaging foundation fix into a 7-step cross-project recovery procedure; Windows `nul` reserved-device leak blocked from `.gitignore` and `ARCH_IGNORE`). Surface unchanged: still 58 MCP tools, but schema migrations now through `024` (was 023) and test suite **292/292** across **66** suites (was 277 across 64 — +7 backlog tests + 8 file-watcher tests). Zero new runtime dependencies. Session 45 (2026-05-25) release-prep sweep adds `*.tgz` to `.gitignore` so packed releases can never be committed by accident, ships a `prepare` npm-lifecycle script wrapping `npm run build` so git-based installs (`npm install git+https://github.com/NABILNET-ORG/Smart-Claude-Memory.git`) auto-compile TypeScript → `dist/` on the consumer side and `npm pack` / `npm publish` always ship fresh builds, and expands npm `keywords` 7 → 17 (adds `claude`, `anthropic`, `model-context-protocol`, `long-term-memory`, `sovereign-memory`, `rag`, `vector-database`, `embeddings`, `knowledge-graph`, `llm`, `agent`) for public-registry discoverability — no code, schema, MCP, or test-surface change (commit `cd67204`).** |
