@@ -20,6 +20,7 @@ import { buildSummaryRow } from "../src/trajectory/backfill-row.js";
 const PROJECT = process.env.SCM_BACKFILL_PROJECT ?? "claude-memory";
 const CONFIRM = process.env.SCM_BACKFILL_CONFIRM === "1";
 const LIMIT = readIntEnv("SCM_BACKFILL_LIMIT", 1000);
+const SAFETY_CAP = 20000; // bound the in-memory working set; successful_chunks is precision-filtered (small by design). For a project exceeding this, switch to a server-side NOT EXISTS anti-join RPC.
 
 function readIntEnv(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -34,7 +35,8 @@ async function fetchPending(limit: number): Promise<PendingChunk[]> {
   const { data: succ, error: succErr } = await supabase
     .from("successful_chunks")
     .select("chunk_id")
-    .eq("project_id", PROJECT);
+    .eq("project_id", PROJECT)
+    .limit(SAFETY_CAP);
   if (succErr) throw new Error(`successful_chunks scan failed: ${succErr.message}`);
   const succIds = (succ ?? []).map((r: { chunk_id: number }) => r.chunk_id);
   if (succIds.length === 0) return [];
@@ -42,7 +44,8 @@ async function fetchPending(limit: number): Promise<PendingChunk[]> {
   const { data: done, error: doneErr } = await supabase
     .from("trajectory_summaries")
     .select("source_chunk_id")
-    .eq("project_id", PROJECT);
+    .eq("project_id", PROJECT)
+    .limit(SAFETY_CAP);
   if (doneErr) throw new Error(`trajectory_summaries scan failed: ${doneErr.message}`);
   const doneSet = new Set((done ?? []).map((r: { source_chunk_id: number }) => r.source_chunk_id));
 
