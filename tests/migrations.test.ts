@@ -90,7 +90,7 @@ describe("DB-backed: ensureLedger + listPendingMigrations (temp schema)", () => 
     if (!RUN_DB_TESTS) return;
     client = new Client({
       connectionString,
-      ssl: { rejectUnauthorized: false },
+      ssl: /localhost|127\.0\.0\.1/.test(connectionString ?? "") ? false : { rejectUnauthorized: true },
     });
     await client.connect();
     await client.query(`CREATE SCHEMA IF NOT EXISTS "${TEST_SCHEMA}"`);

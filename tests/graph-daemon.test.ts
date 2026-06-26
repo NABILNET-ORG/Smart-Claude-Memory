@@ -83,6 +83,17 @@ mock.module("../src/tools/kg.js", {
       nodeIdCounter += 1;
       return { ok: true, node_id: nodeIdCounter };
     },
+    upsertKgNodeFromChunk: async (input: { label: string }) => {
+      upsertNodeCalls.push(input);
+      if (nodeThrowOnLabel && input.label === nodeThrowOnLabel) {
+        throw new Error("simulated upsert throw");
+      }
+      if (nodeFailOnLabel && input.label === nodeFailOnLabel) {
+        return { ok: false, reason: "simulated_fail" };
+      }
+      nodeIdCounter += 1;
+      return { ok: true, node_id: nodeIdCounter };
+    },
     upsertKgEdge: async (input: unknown) => {
       upsertEdgeCalls.push(input);
       edgeIdCounter += 1;
