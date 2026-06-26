@@ -1,6 +1,7 @@
 // Sleep Learning — cluster miner (Agentic OS 2026 / Mission 3 / SCM-S19-D1).
-// Pure function: reads trajectory_summaries INNER JOIN archive_backlog WHERE
-// status='success', clusters by (a) 3-gram content hash AND (b) cosine ≥ 0.85
+// Pure function: reads trajectory_summaries, keeps only summaries whose
+// source_chunk_id is in the successful_chunks view (SCM-S58 metadata-driven
+// success gate), then clusters by (a) 3-gram content hash AND (b) cosine ≥ 0.85
 // over summary_embedding centroids, emits CandidateStub[]. NO writes.
 //
 // Returning shape conforms to scripts/012_sleep_learning.sql's
