@@ -7,11 +7,12 @@ import { test, after } from "node:test";
 import { strict as assert } from "node:assert";
 import { randomUUID } from "node:crypto";
 import { supabase } from "../src/supabase.js";
-import { upsertKgNode } from "../src/tools/kg.js";
 import {
   runClusteringForProject,
   isDirty,
   discoverProjects,
+  bulkUpsertClusters,
+  type ClusterRow,
 } from "../src/clustering/daemon.js";
 
 const createdProjectIds: string[] = [];
@@ -45,13 +46,20 @@ async function seedNodes(
   const seedOff = opts.seedOffset ?? 0;
   const ids: number[] = [];
   for (let i = 0; i < count; i++) {
-    const r = await upsertKgNode({
-      project_id: projectId,
-      type: "TEST",
-      label: `node-${i}-${randomUUID().slice(0, 4)}`,
-      embedding: withEmb ? unitVector(seedOff + i) : null,
-    });
-    if (r.ok) ids.push(r.node_id);
+    // Use direct insert to avoid the kg_upsert_node RPC permission requirement
+    // on local Supabase. The RPC lacks an explicit EXECUTE GRANT for service_role
+    // on the local stack; direct DML works fine with the service key.
+    const { data, error } = await supabase
+      .from("kg_nodes")
+      .insert({
+        project_id: projectId,
+        type: "TEST",
+        label: `node-${i}-${randomUUID().slice(0, 4)}`,
+        embedding: withEmb ? unitVector(seedOff + i) : null,
+      })
+      .select("id")
+      .single();
+    if (!error && data) ids.push(Number(data.id));
   }
   return ids;
 }
@@ -123,10 +131,11 @@ test("C5: ARM gate writes a daemon_budget_buckets row for clustering_scanner", a
   await seedNodes(pid, 4);
   // Force the budget gate to register (mode='off' short-circuits without an
   // increment write). Restore env immediately after.
+  // Use force:true so the delta-gate doesn't short-circuit on small node counts.
   const prevMode = process.env.SCM_BUDGET_ENFORCEMENT_MODE;
   process.env.SCM_BUDGET_ENFORCEMENT_MODE = "warn";
   try {
-    const r = await runClusteringForProject(pid);
+    const r = await runClusteringForProject(pid, { force: true });
     assert.equal(r.status, "clustered");
   } finally {
     if (prevMode === undefined) delete process.env.SCM_BUDGET_ENFORCEMENT_MODE;
@@ -155,7 +164,8 @@ test("C6: a clustering run on project A does NOT touch project B's clusters", as
   await seedNodes(pidA, 5, { seedOffset: 200 });
   await seedNodes(pidB, 5, { seedOffset: 300 });
 
-  const rA = await runClusteringForProject(pidA);
+  // force:true bypasses delta-gate (small node counts are below threshold)
+  const rA = await runClusteringForProject(pidA, { force: true });
   assert.equal(rA.status, "clustered");
 
   const [{ count: cA }, { count: cB }] = await Promise.all([
@@ -173,12 +183,17 @@ test("C6: a clustering run on project A does NOT touch project B's clusters", as
 });
 
 // ─── C7: Idempotent re-run returns not_dirty without doing work ──────────
+// Delta-gate semantics: after a successful first run, node count == cluster
+// count so delta=0 < threshold, and computed_at is fresh (< 24h), so not_dirty.
 test("C7: a second run with no changes returns status='not_dirty'", async () => {
   const pid = newProject("c7");
   await seedNodes(pid, 6);
-  const r1 = await runClusteringForProject(pid);
+  // First run via force:true so the initial cluster write completes regardless
+  // of node count vs. threshold. After this, clCount=6 = kgCount=6 → delta=0.
+  const r1 = await runClusteringForProject(pid, { force: true });
   assert.equal(r1.status, "clustered");
 
+  // Second run (no force): delta=0 < 100 threshold AND computed_at fresh → not_dirty.
   const r2 = await runClusteringForProject(pid);
   assert.equal(r2.status, "not_dirty", `second run should short-circuit, got ${r2.status}`);
   assert.equal(r2.rows_upserted, 0, "no UPSERTs on a no-op tick");
@@ -194,7 +209,10 @@ test("C8: smoke — 50 embedded nodes cluster end-to-end with full coverage", as
   const found = await discoverProjects();
   assert.ok(found.includes(pid), "discoverProjects must surface the test project_id");
 
-  const r = await runClusteringForProject(pid);
+  // force:true: 50 nodes < 100 delta-threshold, so without force the gate
+  // would return not_dirty (no prior clusters means initial run IS triggered —
+  // but be explicit for smoke clarity).
+  const r = await runClusteringForProject(pid, { force: true });
   assert.equal(r.status, "clustered");
   assert.equal(r.embeddings_loaded, 50);
   assert.equal(r.rows_upserted, 50);
@@ -218,4 +236,65 @@ test("C8: smoke — 50 embedded nodes cluster end-to-end with full coverage", as
     );
     assert.ok(row.community_id >= 0, `community_id must be >= 0, got ${row.community_id}`);
   }
+});
+
+// ─── C9: Delta-gate live — small delta + fresh cooldown → not_dirty ──────
+// After a successful cluster run, kgCount == clCount (delta=0) and computed_at
+// is fresh (< 24h). isDirty must return false WITHOUT needing to add 100+ nodes.
+test("C9: isDirty returns false after cluster run when delta is small and cooldown fresh", async () => {
+  const pid = newProject("c9");
+  await seedNodes(pid, 10, { seedOffset: 2000 });
+  // force:true ensures the cluster rows are written regardless of prior state.
+  const r1 = await runClusteringForProject(pid, { force: true });
+  assert.equal(r1.status, "clustered", `first run must cluster, got ${r1.status}`);
+
+  // Now kgCount=10, clCount=10 → delta=0 < 100 threshold, computed_at=just now.
+  const dirty = await isDirty(pid);
+  assert.equal(dirty, false, "delta=0 + fresh computed_at must NOT be dirty");
+
+  // Add 5 more nodes (delta=5 < 100 threshold) — still not dirty.
+  await seedNodes(pid, 5, { seedOffset: 3000 });
+  const dirty2 = await isDirty(pid);
+  assert.equal(dirty2, false, "delta=5 (< threshold=100) + fresh cooldown must still be not dirty");
+});
+
+// ─── C10: FK-safe bulkUpsertClusters — deleted node is silently skipped ──
+// Validates the existence-check guard: seed N nodes, cluster them, then delete
+// one node mid-flight (simulating a race). Re-running the upsert with the
+// original row set (including the deleted node_id) must complete without FK
+// error and only persist survivor rows.
+test("C10: bulkUpsertClusters skips deleted nodes without FK error", async () => {
+  const pid = newProject("c10");
+  const nodeIds = await seedNodes(pid, 8, { seedOffset: 4000 });
+  assert.equal(nodeIds.length, 8, "all 8 nodes must be seeded");
+
+  // Build cluster rows for ALL 8 nodes (as K-Means would have computed).
+  const rows: ClusterRow[] = nodeIds.map((id, i) => ({
+    project_id: pid,
+    node_id: id,
+    supernode_id: i % 3,
+    community_id: 0,
+  }));
+
+  // Delete ONE node from the DB to simulate a race with a concurrent delete.
+  const deletedId = nodeIds[3];
+  const { error: delErr } = await supabase
+    .from("kg_nodes")
+    .delete()
+    .eq("id", deletedId);
+  assert.equal(delErr, null, "node deletion must succeed");
+
+  // bulkUpsertClusters must complete without throwing despite the stale row.
+  await assert.doesNotReject(
+    () => bulkUpsertClusters(rows, 500),
+    "bulkUpsertClusters must not throw when one node_id no longer exists",
+  );
+
+  // Only the 7 surviving rows must appear in kg_node_clusters.
+  const { count, error: countErr } = await supabase
+    .from("kg_node_clusters")
+    .select("*", { count: "exact", head: true })
+    .eq("project_id", pid);
+  assert.equal(countErr, null);
+  assert.equal(count, 7, "only 7 survivor rows must be written; deleted node silently skipped");
 });

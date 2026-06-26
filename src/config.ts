@@ -7,8 +7,6 @@ const here = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(here, "..", ".env"), quiet: true });
 
 const Env = z.object({
-  SUPABASE_URL: z.string().url(),
-  SUPABASE_SECRET_KEY: z.string().min(10),
   SUPABASE_POOLER_URL: z.string().min(10).optional(),
   SUPABASE_DB_URL: z.string().min(10).optional(),
   OLLAMA_HOST: z.string().url().default("http://localhost:11434"),

@@ -12,3 +12,6 @@ scripts/.eval-out/
 # occasionally materialize a literal file named `nul` in the worktree
 # (last seen Session 44). Block it from tracking on every host.
 nul
+
+# cloud->local data-rescue dump (real chunks + embeddings — never commit)
+scm_cloud_data.sql

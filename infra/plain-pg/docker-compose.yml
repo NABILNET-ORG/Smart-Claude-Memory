@@ -1,0 +1,28 @@
+# Plain PostgreSQL 17 + pgvector — the target datastore for retiring Supabase (SCM-S56).
+# Runs ALONGSIDE the local Supabase stack during migration (port 5433 vs Supabase's 54322),
+# and becomes the SOLE database once the cutover is proven and Supabase is removed (Phase 8).
+#
+# Setup:      cp infra/plain-pg/.env.example infra/plain-pg/.env   (the .env is gitignored; it holds SCM_PG_PASSWORD)
+# Bring up:   docker compose --env-file infra/plain-pg/.env -f infra/plain-pg/docker-compose.yml up -d
+# Connect:    postgresql://postgres:$SCM_PG_PASSWORD@127.0.0.1:5433/postgres   (password from infra/plain-pg/.env)
+services:
+  scm-postgres:
+    image: pgvector/pgvector:pg17
+    container_name: scm_plain_pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${SCM_PG_PASSWORD:?set SCM_PG_PASSWORD in infra/plain-pg/.env (copy from .env.example)}
+      POSTGRES_DB: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - scm_plain_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  scm_plain_pg_data:

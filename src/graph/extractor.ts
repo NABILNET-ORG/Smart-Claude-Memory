@@ -110,7 +110,7 @@ export function extractFromChunk(chunk: {
   id: number;
   content: string;
   metadata: Record<string, unknown> | null;
-  embedding: number[] | null;
+  embedding?: number[] | null;
 }): ExtractionResult {
   const meta = chunk.metadata ?? {};
   const metaType = typeof meta.type === "string" ? (meta.type as string) : null;

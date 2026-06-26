@@ -38,6 +38,8 @@ const DEFAULT_UPSERT_BATCH = 500;
 const DEFAULT_KNN_K = 15;
 const DEFAULT_KNN_MIN_SIM = 0.5;
 const DEFAULT_KMEANS_MAX_ITERS = 50;
+const DEFAULT_DELTA_THRESHOLD = 100;
+const DEFAULT_COOLDOWN_MS = 86_400_000; // 24 h
 
 function readIntEnv(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -52,6 +54,8 @@ function resolveConfig() {
     pageSize: readIntEnv("SCM_CLUSTERING_PAGE_SIZE", DEFAULT_PAGE_SIZE),
     upsertBatch: readIntEnv("SCM_CLUSTERING_UPSERT_BATCH", DEFAULT_UPSERT_BATCH),
     knnK: readIntEnv("SCM_CLUSTERING_KNN_K", DEFAULT_KNN_K),
+    deltaThreshold: readIntEnv("SCM_CLUSTERING_DELTA_THRESHOLD", DEFAULT_DELTA_THRESHOLD),
+    cooldownMs: readIntEnv("SCM_CLUSTERING_COOLDOWN_MS", DEFAULT_COOLDOWN_MS),
   };
 }
 
@@ -113,12 +117,51 @@ export async function discoverProjects(): Promise<string[]> {
 }
 
 /**
- * Dirty if (a) count(embedded kg_nodes) ≠ count(kg_node_clusters) OR (b) the
- * most recent kg_node update is newer than the most recent cluster computation.
- * Returns true conservatively on transient errors so a real change is never
- * silently masked.
+ * Delta-gated dirty check — re-cluster only when it's actually worth it:
+ *   1. kgCount=0 → skip (nothing to cluster).
+ *   2. clCount=0 → run (never clustered yet — initial pass).
+ *   3. |kgCount - clCount| > DELTA_THRESHOLD → run (significant growth/shrink).
+ *   4. lastComputedAt is null → run (defensive).
+ *   5. elapsed >= COOLDOWN_MS → run (cooldown expired).
+ *   6. Otherwise → skip (within cooldown AND small delta → saves egress + IO).
+ *
+ * Returns true conservatively on transient query errors so a real change is
+ * never silently masked.
+ *
+ * Knobs (env-overridable):
+ *   SCM_CLUSTERING_DELTA_THRESHOLD  default 100
+ *   SCM_CLUSTERING_COOLDOWN_MS      default 86_400_000 (24 h)
  */
+/**
+ * Pure decision function — separated from I/O so it can be unit-tested without
+ * any DB mocking infrastructure.  All inputs are already-resolved values.
+ *
+ * Rules (in evaluation order):
+ *   1. kgCount=0  → false  (nothing to cluster)
+ *   2. clCount=0  → true   (never clustered — initial run)
+ *   3. |kgCount − clCount| > deltaThreshold → true  (significant growth/shrink)
+ *   4. lastComputedAt=null → true  (defensive)
+ *   5. elapsed >= cooldownMs → true  (cooldown expired)
+ *   6. Otherwise → false  (within cooldown + small delta)
+ */
+export function decideDirty(
+  kgCount: number,
+  clCount: number,
+  lastComputedAt: string | null,
+  nowMs: number,
+  deltaThreshold: number,
+  cooldownMs: number,
+): boolean {
+  if (kgCount === 0) return false;
+  if (clCount === 0) return true;
+  if (Math.abs(kgCount - clCount) > deltaThreshold) return true;
+  if (lastComputedAt === null) return true;
+  return nowMs - new Date(lastComputedAt).getTime() >= cooldownMs;
+}
+
 export async function isDirty(projectId: string): Promise<boolean> {
+  const { deltaThreshold, cooldownMs } = resolveConfig();
+
   const [kgRes, clRes] = await Promise.all([
     supabase
       .from("kg_nodes")
@@ -130,33 +173,25 @@ export async function isDirty(projectId: string): Promise<boolean> {
       .select("*", { count: "exact", head: true })
       .eq("project_id", projectId),
   ]);
-  if (kgRes.error || clRes.error) return true;
+  if (kgRes.error || clRes.error) return true;   // fail-open on transient errors
   const kgCount = kgRes.count ?? 0;
   const clCount = clRes.count ?? 0;
-  if (kgCount !== clCount) return true;
-  if (kgCount === 0) return false;
 
-  const [kgMax, clMax] = await Promise.all([
-    supabase
-      .from("kg_nodes")
-      .select("updated_at")
-      .eq("project_id", projectId)
-      .not("embedding", "is", null)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("kg_node_clusters")
-      .select("computed_at")
-      .eq("project_id", projectId)
-      .order("computed_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
-  if (kgMax.error || clMax.error) return true;
-  const kgTs = kgMax.data?.updated_at ? Date.parse(kgMax.data.updated_at) : 0;
-  const clTs = clMax.data?.computed_at ? Date.parse(clMax.data.computed_at) : 0;
-  return kgTs > clTs;
+  // Fast path — no need to hit DB a third time if already decided.
+  if (kgCount === 0 || clCount === 0 || Math.abs(kgCount - clCount) > deltaThreshold) {
+    return decideDirty(kgCount, clCount, null, Date.now(), deltaThreshold, cooldownMs);
+  }
+
+  const clMax = await supabase
+    .from("kg_node_clusters")
+    .select("computed_at")
+    .eq("project_id", projectId)
+    .order("computed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (clMax.error) return true;                  // fail-open on transient errors
+  const lastComputedAt = clMax.data?.computed_at ?? null;
+  return decideDirty(kgCount, clCount, lastComputedAt, Date.now(), deltaThreshold, cooldownMs);
 }
 
 // ─── core pipeline ────────────────────────────────────────────────────────
@@ -189,16 +224,43 @@ async function fetchEmbeddings(projectId: string, pageSize: number): Promise<Emb
   return { ids, embeddings };
 }
 
-type ClusterRow = {
+export type ClusterRow = {
   project_id: string;
   node_id: number;
   supernode_id: number;
   community_id: number;
 };
 
-async function bulkUpsertClusters(rows: ClusterRow[], batchSize: number): Promise<void> {
-  for (let i = 0; i < rows.length; i += batchSize) {
-    const slice = rows.slice(i, i + batchSize);
+/**
+ * FK-safe bulk upsert into kg_node_clusters.
+ *
+ * kg_node_clusters.node_id REFERENCES kg_nodes(id) ON DELETE CASCADE, so a
+ * node deleted between the K-Means read and this write would cause a FK
+ * violation that aborts the whole batch.  We defend by pre-filtering: fetch
+ * the set of still-existing node_ids for this project, then drop any row
+ * whose node_id is no longer present before emitting each UPSERT batch.
+ * Deleted nodes are silently skipped; their cluster rows were already removed
+ * by CASCADE, so no data is lost.
+ */
+export async function bulkUpsertClusters(rows: ClusterRow[], batchSize: number): Promise<void> {
+  if (rows.length === 0) return;
+
+  // Collect all node_ids in this batch and fetch which still exist.
+  const projectId = rows[0].project_id;
+  const nodeIds = rows.map((r) => r.node_id);
+  const { data: existingData, error: existErr } = await supabase
+    .from("kg_nodes")
+    .select("id")
+    .eq("project_id", projectId)
+    .in("id", nodeIds);
+  if (existErr) {
+    throw new Error(`bulkUpsertClusters existence check: ${existErr.message}`);
+  }
+  const existingIds = new Set<number>((existingData ?? []).map((r: { id: number }) => Number(r.id)));
+  const liveRows = rows.filter((r) => existingIds.has(r.node_id));
+
+  for (let i = 0; i < liveRows.length; i += batchSize) {
+    const slice = liveRows.slice(i, i + batchSize);
     const { error } = await supabase
       .from("kg_node_clusters")
       .upsert(slice, { onConflict: "project_id,node_id" });
