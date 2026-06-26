@@ -22,7 +22,7 @@ A coda to Session 56's Supabase → plain-PostgreSQL migration: published the si
 
 ## Remaining / Handover
 - **CI green:** add the Postgres + pgvector service to `ci.yml` (this session) and confirm Build & Test passes.
-- **Rewrite `tests/graph-daemon.test.ts`:** quarantined this session (`describe.skip`) — stale since the S55 server-side-embedding daemon refactor (mock data + assertions assume the old `upsertKgNode` flow). Needs a proper rewrite, then un-skip.
+- **Rewrite `tests/graph-daemon.quarantine.ts`:** quarantined this session (renamed out of the `*.test.ts` glob) — stale since the S55 server-side-embedding daemon refactor (mock data + assertions assume the old `upsertKgNode` flow). Rewrite, rename back to `.test.ts`, and re-add to package.json.
 - **GitGuardian:** the secret is already scrubbed and `.env.example` cleaned (the check passes on PR #9); close the lingering incident on the dashboard if still shown.
 - **Cloud Supabase:** retire the cloud project — data is fully backed up.
 - **Organic-learning backfill:** the scoped build in `docs/superpowers/plans/2026-06-25-S56-organic-learning-backfill.md`.
