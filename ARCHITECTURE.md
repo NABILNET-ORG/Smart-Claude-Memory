@@ -1008,7 +1008,7 @@ flowchart TD
   n0 --> n4
   n5["assets/"]
   n4 --> n5
-  n6["schematic.png"]
+  n6["Signed-SMC-v2.5.png"]
   n5 --> n6
   n7["ide-templates/"]
   n4 --> n7

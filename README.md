@@ -1125,7 +1125,7 @@ For inquiries, integrations, or sovereign-grade Claude Code tooling, visit [nabi
 
 ### 🗺️ File Architecture
 
-_Auto-synced at 2026-06-25T15:58:55.365Z for `smart-claude-memory`._
+_Auto-synced at 2026-06-26T03:57:28.946Z for `smart-claude-memory`._
 
 ```mermaid
 flowchart TD
@@ -1140,7 +1140,7 @@ flowchart TD
   n0 --> n4
   n5["assets/"]
   n4 --> n5
-  n6["schematic.png"]
+  n6["Signed-SMC-v2.5.png"]
   n5 --> n6
   n7["ide-templates/"]
   n4 --> n7
