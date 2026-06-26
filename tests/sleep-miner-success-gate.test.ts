@@ -56,15 +56,14 @@ describe("miner success gate — sourced from successful_chunks", () => {
       { id: 1, project_id: "p", summary: "ship the widget via the gate", summary_embedding: emb, source_chunk_id: 10 },
       { id: 2, project_id: "p", summary: "ship the widget via the gate", summary_embedding: emb, source_chunk_id: 11 },
       { id: 3, project_id: "p", summary: "ship the widget via the gate", summary_embedding: emb, source_chunk_id: 12 },
-      { id: 4, project_id: "p", summary: "unrelated excluded trajectory", summary_embedding: [0, 1, 0], source_chunk_id: 99 },
+      { id: 4, project_id: "p", summary: "ship the widget via the gate", summary_embedding: emb, source_chunk_id: 99 },
     ];
     successfulChunkRows = [{ chunk_id: 10 }, { chunk_id: 11 }, { chunk_id: 12 }];
 
     const stubs = await mineClusters({ projectId: "p", batch: 50, minFreq: 3 });
 
     assert.ok(stubs.length >= 1, "a cluster of 3 successful summaries should yield a candidate");
-    const all = stubs.flatMap((s) => s.source_summary_ids);
-    assert.ok(!all.includes(4), "non-successful summary 4 must never be mined");
+    assert.ok(stubs.every((s) => !s.source_summary_ids.includes(4)), "summary 4 (non-successful chunk) must not appear in any candidate");
     assert.deepEqual(stubs[0]!.source_backlog_ids, [], "backlog provenance is empty post-SCM-S58");
   });
 
