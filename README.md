@@ -2,7 +2,7 @@
 
 # Smart Claude Memory
 
-![Smart Claude Memory v2.5.0 Master Schematic](docs/assets/schematic.png)
+![Smart Claude Memory v2.5.0 Master Schematic](docs/assets/Signed-SMC-v2.5.png)
 
 *Master schematic — the definitive visual reference for the Smart Claude Memory v2.5.x production baseline (v2.5.0 migrates the data layer off Supabase onto a self-hosted **plain PostgreSQL 17 + pgvector** database — a `pg.Pool`-backed adapter (`src/db/pg-adapter.ts`) now sits behind the unchanged `src/supabase.ts` doorway, so all ~127 call sites and the entire tool surface are byte-for-byte identical; only the backend changed. Prior baselines: v2.4.0 four Session-48 epics — Phase 1 drag-drop Backlog Kanban + `PATCH /api/backlog/:id`, Phase 2 GLOBAL vault export/import via `export_global_vault` / `import_global_vault`, and the Agentic Superpowers MVP `fetch_url` / `research_url` / `crawl_docs` (see [ARCHITECTURE.md §4.14](ARCHITECTURE.md#414-web-research-agentic-superpowers-mvp--scm-s48)); v2.3.0 M8.3 Semantic Clustering ([§4.13](ARCHITECTURE.md#413-m83-semantic-clustering-mission-10--scm-s41-d1d7)); v2.3.1 Active Backlog Kanban + `/api/backlog` + Epic G `file_watcher` daemon.)*
 
