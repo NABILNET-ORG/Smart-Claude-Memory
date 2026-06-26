@@ -18,7 +18,7 @@
 //   finally so cleanup ALWAYS executes even on assertion failure, then re-queries
 //   all four tables and logs the residual counts (must be 0).
 //
-// Runtime: node:test + node:assert/strict (Node 20+, loaded via tsx).
+// Runtime: node:test + node:assert/strict (Node 22+, loaded via tsx).
 
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";

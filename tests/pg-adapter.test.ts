@@ -1,6 +1,6 @@
 // tests/pg-adapter.test.ts — live plain-PostgreSQL adapter contract tests.
 //
-// Runtime: node:test + node:assert/strict (Node 20+, loaded via tsx). These
+// Runtime: node:test + node:assert/strict (Node 22+, loaded via tsx). These
 // run against the real plain PG + pgvector instance on 127.0.0.1:5433 and are
 // gated on SKIP_DB_TESTS — set SKIP_DB_TESTS=1 to skip in CI without a DB.
 //

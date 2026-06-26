@@ -1,5 +1,5 @@
 // Integration tests for src/lib/migrations.ts — schema_migrations ledger helpers.
-// Runtime: node:test + node:assert/strict (Node 24+, loaded via tsx).
+// Runtime: node:test + node:assert/strict (Node 22+, loaded via tsx).
 //
 // Test isolation:
 //   The dev DB already has all 18 migrations applied to the public schema

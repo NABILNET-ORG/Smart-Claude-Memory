@@ -4,7 +4,7 @@
 // cloud_backlog.metadata.checkpoint_root_id stamp, and a structured
 // [M4] rollback_signal log line.
 //
-// Runtime: node:test + node:assert/strict (Node 24+, loaded via tsx).
+// Runtime: node:test + node:assert/strict (Node 22+, loaded via tsx).
 // All tests hit live Supabase under a unique project_id namespace per
 // describe block — `after` deletes every row in that namespace.
 

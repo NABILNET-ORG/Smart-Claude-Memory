@@ -1,5 +1,5 @@
 // Unit tests for src/trajectory/stripper.ts — pure heuristic noise stripper.
-// Runtime: node:test + node:assert/strict (Node 24+, loaded via tsx).
+// Runtime: node:test + node:assert/strict (Node 22+, loaded via tsx).
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
