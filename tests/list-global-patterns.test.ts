@@ -1,7 +1,7 @@
 // Unit tests for src/tools/list-global-patterns.ts — browse-only MCP tool
 // over the reserved 'GLOBAL' project_id.
 //
-// Runtime: node:test + node:assert/strict (Node 24+, loaded via tsx).
+// Runtime: node:test + node:assert/strict (Node 22+, loaded via tsx).
 //
 // Test isolation: the stub commit (Task 4) tests only the contract shape
 // — empty result envelope. Real DB tests land in Task 5 once the SELECT

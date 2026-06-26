@@ -1,5 +1,5 @@
 // Unit tests for src/budget/gate.ts — pure decision logic + env resolution.
-// Runtime: node:test + node:assert/strict (Node 24+, loaded via tsx).
+// Runtime: node:test + node:assert/strict (Node 22+, loaded via tsx).
 // Database-touching paths (checkTaskBudget / checkDaemonBudget end-to-end)
 // are covered by the real-DB integration lane in tests/budget-integration.test.ts
 // (run via `npm run test:integration`, gated on RUN_DB_TESTS=1).

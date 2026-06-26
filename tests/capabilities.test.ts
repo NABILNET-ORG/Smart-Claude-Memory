@@ -1,7 +1,7 @@
 // Unit tests for src/tools/setup.ts::buildCapabilities — pure shape
 // contract of the init_project capabilities header.
 //
-// Runtime: node:test + node:assert/strict (Node 24+, loaded via tsx).
+// Runtime: node:test + node:assert/strict (Node 22+, loaded via tsx).
 // No Supabase / Ollama / filesystem access — buildCapabilities is pure.
 
 import { test, describe } from "node:test";

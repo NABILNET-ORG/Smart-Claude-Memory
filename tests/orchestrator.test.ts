@@ -1,5 +1,5 @@
 // Unit tests for src/tools/orchestrator.ts — delegate_task worker-prompt contract.
-// Runtime: node:test + node:assert/strict (Node 24+, loaded via tsx).
+// Runtime: node:test + node:assert/strict (Node 22+, loaded via tsx).
 //
 // Phase 3 of the Agentic Superpowers Integration (Session 29): the orchestrator
 // must nudge spawned workers to call `request_skill` BEFORE tackling the task,

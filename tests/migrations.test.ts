@@ -1,5 +1,5 @@
 // Integration tests for src/lib/migrations.ts — schema_migrations ledger helpers.
-// Runtime: node:test + node:assert/strict (Node 24+, loaded via tsx).
+// Runtime: node:test + node:assert/strict (Node 22+, loaded via tsx).
 //
 // Test isolation:
 //   The dev DB already has all 18 migrations applied to the public schema
@@ -90,7 +90,7 @@ describe("DB-backed: ensureLedger + listPendingMigrations (temp schema)", () => 
     if (!RUN_DB_TESTS) return;
     client = new Client({
       connectionString,
-      ssl: { rejectUnauthorized: false },
+      ssl: /localhost|127\.0\.0\.1/.test(connectionString ?? "") ? false : { rejectUnauthorized: true },
     });
     await client.connect();
     await client.query(`CREATE SCHEMA IF NOT EXISTS "${TEST_SCHEMA}"`);

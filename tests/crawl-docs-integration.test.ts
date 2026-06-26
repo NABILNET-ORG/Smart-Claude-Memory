@@ -17,7 +17,7 @@
 //   finally so cleanup ALWAYS executes even on assertion failure, then re-queries
 //   memory_chunks and logs the residual count (must be 0).
 //
-// Runtime: node:test + node:assert/strict (Node 20+, loaded via tsx).
+// Runtime: node:test + node:assert/strict (Node 22+, loaded via tsx).
 
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";

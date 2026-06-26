@@ -1,5 +1,5 @@
 // Unit tests for src/tools/health.ts — pure status derivation + rollup.
-// Runtime: node:test + node:assert/strict (Node 24+, loaded via tsx).
+// Runtime: node:test + node:assert/strict (Node 22+, loaded via tsx).
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
