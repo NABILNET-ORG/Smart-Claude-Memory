@@ -20,10 +20,24 @@ jobs:
       matrix:
         node: ["20", "22"]
 
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
     env:
-      SUPABASE_URL: https://placeholder.supabase.co
-      SUPABASE_SECRET_KEY: placeholder-service-role-key-for-ci-static-analysis-only
-      SUPABASE_POOLER_URL: postgresql://placeholder:placeholder@placeholder.pooler.supabase.com:6543/postgres
+      SUPABASE_DB_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      SUPABASE_POOLER_URL: postgresql://postgres:postgres@localhost:5432/postgres
       OLLAMA_HOST: http://localhost:11434
       OLLAMA_EMBED_MODEL: nomic-embed-text
       EMBED_DIM: "768"
@@ -81,6 +95,14 @@ jobs:
 
       - name: TypeScript compile
         run: npx tsc
+
+      - name: Provision database schema (pgvector + extensions schema + roles)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client; fi
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/ci-provision.sql
+          npx tsx scripts/apply-schema.ts
 
       - name: Run regression test suite
         run: npm test
