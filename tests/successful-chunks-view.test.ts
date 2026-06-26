@@ -59,7 +59,7 @@ describe("successful_chunks view — metadata-driven success rule", () => {
     const err = await client.query<{ id: number }>(
       `select id from public.memory_chunks
        where metadata->>'type' = 'ERROR'
-         and metadata->>'status' not in ('shipped','applied','implemented','verified','deployed','fixed','verified-live','session-closed')
+         and (metadata->>'status' is null or metadata->>'status' not in ('shipped','applied','implemented','verified','deployed','fixed','verified-live','session-closed'))
          and (metadata->>'is_global' is null or metadata->>'is_global' <> 'true')
        limit 1`,
     );
