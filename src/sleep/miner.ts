@@ -1,6 +1,7 @@
 // Sleep Learning — cluster miner (Agentic OS 2026 / Mission 3 / SCM-S19-D1).
-// Pure function: reads trajectory_summaries INNER JOIN archive_backlog WHERE
-// status='success', clusters by (a) 3-gram content hash AND (b) cosine ≥ 0.85
+// Pure function: reads trajectory_summaries, keeps only summaries whose
+// source_chunk_id is in the successful_chunks view (SCM-S58 metadata-driven
+// success gate), then clusters by (a) 3-gram content hash AND (b) cosine ≥ 0.85
 // over summary_embedding centroids, emits CandidateStub[]. NO writes.
 //
 // Returning shape conforms to scripts/012_sleep_learning.sql's
@@ -41,11 +42,6 @@ type SummaryRow = {
   summary: string;
   summary_embedding: number[] | null;
   source_chunk_id: number;
-};
-
-type ArchiveRow = {
-  id: number;
-  chunk_id: number | null;
 };
 
 // ─── helpers ──────────────────────────────────────────────────────────────
@@ -115,28 +111,22 @@ async function fetchSummariesForProject(
   return rows.filter((r) => typeof r.summary === "string" && r.summary.length > 0);
 }
 
-/**
- * Build a Map<source_chunk_id, archive_backlog.id> for the project where
- * archive_backlog.status='success'. Empty when the archive_backlog table
- * doesn't track chunk_id (older deployments) — that's fine, provenance is
- * advisory.
- */
-async function fetchSuccessArchiveByChunk(
-  projectId: string,
-): Promise<Map<number, number>> {
-  const out = new Map<number, number>();
+// SCM-S58: success is a metadata-driven property of the chunk, exposed by the
+// successful_chunks view (scripts/031). Returns the set of source_chunk_ids that
+// represent successful, learnable work. Replaces the old archive_backlog linkage.
+async function fetchSuccessfulChunkIds(projectId: string): Promise<Set<number>> {
+  const out = new Set<number>();
   const { data, error } = await supabase
-    .from("archive_backlog")
-    .select("id, chunk_id")
-    .eq("project_id", projectId)
-    .eq("status", "done");
+    .from("successful_chunks")
+    .select("chunk_id")
+    .eq("project_id", projectId);
   if (error) {
-    // Older deployments may lack the chunk_id column. Don't fail the daemon
-    // tick — mining still works, source_backlog_ids stays empty for those.
+    // View missing on an un-migrated deployment — don't fail the daemon tick;
+    // mining yields nothing until migration 031 is applied.
     return out;
   }
-  for (const row of (data ?? []) as ArchiveRow[]) {
-    if (typeof row.chunk_id === "number") out.set(row.chunk_id, row.id);
+  for (const row of (data ?? []) as Array<{ chunk_id: number }>) {
+    if (typeof row.chunk_id === "number") out.add(row.chunk_id);
   }
   return out;
 }
@@ -301,13 +291,13 @@ export async function mineClusters(
   const summaries = await fetchSummariesForProject(opts.projectId, batch);
   if (summaries.length === 0) return [];
 
-  const archiveByChunk = await fetchSuccessArchiveByChunk(opts.projectId);
+  const successfulChunkIds = await fetchSuccessfulChunkIds(opts.projectId);
 
-  // INNER JOIN semantics: keep only summaries whose source_chunk_id maps to
-  // a successful archive_backlog row. Pure mining surface — failed/in-flight
-  // tasks must NEVER seed a candidate skill.
+  // INNER JOIN semantics: keep only summaries whose source_chunk_id is marked
+  // successful by the successful_chunks view. Failed/in-flight/non-canonical
+  // work must NEVER seed a candidate skill.
   const successful = summaries.filter((s) =>
-    archiveByChunk.has(s.source_chunk_id),
+    successfulChunkIds.has(s.source_chunk_id),
   );
   if (successful.length === 0) return [];
 
@@ -336,13 +326,9 @@ export async function mineClusters(
     const summaryIds = Array.from(
       new Set(c.summaries.map((s) => s.id)),
     ).sort((a, b) => a - b);
-    const backlogIds = Array.from(
-      new Set(
-        c.summaries
-          .map((s) => archiveByChunk.get(s.source_chunk_id))
-          .filter((v): v is number => typeof v === "number"),
-      ),
-    ).sort((a, b) => a - b);
+    // SCM-S58: success no longer originates from archive_backlog, so there is no
+    // backlog provenance. Lineage is carried by source_summary_ids.
+    const backlogIds: number[] = [];
 
     const centroid = meanVector(
       c.summaries
